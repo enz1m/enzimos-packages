@@ -1,0 +1,44 @@
+# Local workspace notes (kept on disk for development)
+/AGENTS.md
+/.local/
+
+# Generated output and caches
+/target/
+/build/
+/dist/
+/work/
+/artifacts/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+/coverage.xml
+/htmlcov/
+/.coverage
+*.pkg.tar.*
+
+# Local configuration and signing material
+/.env
+/.env.*
+!/.env.example
+!/.env.template
+/keys/
+/offline-keys/
+/secrets/
+*.key
+*.p12
+*.pfx
+
+# Editor and OS debris
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+/*.log
+/*.tmp
+/*.bak

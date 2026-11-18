@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Hold power-profiles-daemon's performance profile while GameMode is active.
+# PPD drops the hold itself when the user picks another profile, so a later
+# manual choice is never overwritten and nothing needs restoring.
+unit=enzimos-gamemode-performance.service
+case "$1" in
+start)
+    systemctl --user --quiet is-active "$unit" && exit 0
+    command -v powerprofilesctl >/dev/null || exit 0
+    # Platforms without a performance profile (most VMs) have nothing to hold;
+    # leave no failed unit behind.
+    powerprofilesctl list 2>/dev/null | grep -Eq '^[* ] performance:' || exit 0
+    systemd-run --user --quiet --collect --unit="$unit" \
+        powerprofilesctl launch --profile performance --reason GameMode \
+        --appid org.enzimos.GameMode -- sleep infinity || true ;;
+end)
+    systemctl --user --quiet stop "$unit" 2>/dev/null || true ;;
+esac
+exit 0

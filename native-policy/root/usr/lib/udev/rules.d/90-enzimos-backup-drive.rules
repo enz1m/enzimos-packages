@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# The enzimOS backup drive: never automount it on the desktop (the backup
+# mounts it itself, privately), and start an owed backup when it is connected.
+ACTION=="remove", GOTO="enzimos_backup_end"
+SUBSYSTEM!="block", GOTO="enzimos_backup_end"
+ENV{ID_FS_TYPE}!="btrfs", GOTO="enzimos_backup_end"
+ENV{ID_FS_UUID}=="", GOTO="enzimos_backup_end"
+PROGRAM!="/usr/lib/enzimos-native/enzimos-history is-backup-drive $env{ID_FS_UUID}", GOTO="enzimos_backup_end"
+ENV{UDISKS_AUTO}="0"
+ACTION=="add", TAG+="systemd", ENV{SYSTEMD_WANTS}+="enzimos-backup-attached@$env{ID_FS_UUID}.service"
+LABEL="enzimos_backup_end"

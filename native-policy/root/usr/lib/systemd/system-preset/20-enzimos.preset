@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT
+enable NetworkManager.service
+enable systemd-resolved.service
+enable chronyd.service
+enable firewalld.service
+enable apparmor.service
+enable linux-modules-cleanup.service
+enable snapper-cleanup.timer
+enable enzimos-home-history.timer
+enable enzimos-history-measure.timer
+enable enzimos-scrub.timer
+enable enzimos-trim.timer
+enable enzimos-deferred.timer
+enable enzimos-generation-retention.timer
+disable systemd-networkd.service
+disable systemd-timesyncd.service
+disable dnsmasq.service
+disable snapper-timeline.timer
+disable fstrim.timer
+disable enzimos-backup.timer
+disable enzimos-backup.service
+enable earlyoom.service
+disable systemd-oomd.service
+disable systemd-oomd.socket

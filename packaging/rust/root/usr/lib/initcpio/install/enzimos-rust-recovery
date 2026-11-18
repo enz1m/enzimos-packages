@@ -1,0 +1,41 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# mkinitcpio's required shell hook; OS recovery policy executes native ELF files.
+build() {
+    local file tool lib site
+    for file in /usr/lib/enzimos-native/enzimos-*; do add_binary "$file"; done
+    add_full_dir /usr/lib/enzimos-native '*.conf'
+    # bash, cp, ls, mkdir and sync serve the installer-media rescue terminal.
+    for tool in cryptsetup blkid findmnt mount umount lsblk modprobe kmod btrfs pacman sbsign sbverify objcopy bash cp ls mkdir sync; do
+        add_binary "/usr/bin/$tool"
+    done
+    # The distribution's UKI assembler remains an external Python dependency.
+    # This does not embed the previous Python OS recovery implementations.
+    add_binary /usr/bin/python
+    lib=$(/usr/bin/python -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')
+    while IFS= read -r -d '' file; do
+        case "$file" in *.so) add_binary "$file";; *) add_file "$file";; esac
+    done < <(find "$lib" \( -path "$lib/site-packages" -o -path "$lib/test" -o -path "$lib/idlelib" -o -path "$lib/tkinter" \
+        -o -path "$lib/turtledemo" -o -path "$lib/ensurepip" -o -path "$lib/config-*" -o -name __pycache__ -o -name '_tkinter*' \) -prune -o -type f -print0)
+    add_binary /usr/bin/ukify
+    add_binary /usr/lib/libcrypt.so.2
+    add_binary /usr/bin/env
+    add_file /usr/lib/systemd/boot/efi/linuxx64.efi.stub
+    add_symlink /usr/lib/systemd/ukify ../../bin/ukify
+    add_symlink /usr/bin/python3 python
+    add_file /usr/share/enzimos/os-release /etc/os-release
+    # Some mkinitcpio versions preserve an existing destination symlink.
+    # Remove only its scratch-tree marker before adding the original OS file.
+    rm -f -- "${BUILDROOT:?}/etc/initrd-release"
+    # IndependentGuard deliberately refuses symlink markers.
+    add_file /usr/share/enzimos/os-release /etc/initrd-release
+    site=$(/usr/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+    add_file "$site/pefile.py"
+    add_full_dir "$site/ordlookup" '*.py'
+    for file in "$site"/_cffi_backend*.so; do add_binary "$file"; done
+    while IFS= read -r -d '' file; do
+        case "$file" in *.so) add_binary "$file";; *) add_file "$file";; esac
+    done < <(find "$site/cryptography" -name __pycache__ -prune -o -type f -print0)
+    add_binary /usr/lib/enzimos-native/enzimos-recovery-image-init /init
+}
+help() { echo 'enzimOS native coordinator recovery image candidate'; }

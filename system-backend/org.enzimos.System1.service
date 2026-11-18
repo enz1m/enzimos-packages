@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+# D-Bus activation: a System1 request starts the backend on demand.
+[D-BUS Service]
+Name=org.enzimos.System1
+Exec=/bin/false
+User=root
+SystemdService=enzimos-system-backend.service

@@ -1,0 +1,8 @@
+# Explicit administrator opt-in: copy to /etc/systemd/coredump.conf.d/60-local.conf.
+# Cores can contain passwords and document contents. No upload is performed.
+[Coredump]
+Storage=external
+ProcessSizeMax=64M
+ExternalSizeMax=64M
+MaxUse=128M
+KeepFree=2G

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Opt-in enzimOS backup schedule
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30m
+[Install]
+WantedBy=timers.target

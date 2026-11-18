@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = enzimos-keyring
+Target = enzui-desktop
+Target = greetd
+Target = enzimos-greetd
+Target = sddm
+Target = gdm
+Target = pambase
+Target = shadow
+
+[Action]
+Description = Configure oo7 login unlocking and password changes
+When = PostTransaction
+Exec = /usr/lib/enzimos-keyring/enzimos-keyring-setup --root /

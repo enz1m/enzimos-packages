@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Ordinary administrators authenticate with their own password.
+%wheel ALL=(ALL:ALL) ALL
+Defaults timestamp_timeout=5
+# visudo and sudoedit otherwise default to vi, which is not installed.
+Defaults editor=/usr/bin/nano

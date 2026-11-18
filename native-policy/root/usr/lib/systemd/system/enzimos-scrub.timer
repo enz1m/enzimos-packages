@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+[Timer]
+OnCalendar=monthly
+Persistent=true
+RandomizedDelaySec=1h
+[Install]
+WantedBy=timers.target

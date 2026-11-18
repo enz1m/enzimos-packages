@@ -1,0 +1,40 @@
+[package]
+name = "enzimos-system-backend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = ["update-worker"]
+update-worker = ["dep:enzimos-policy"]
+native-worker = ["update-worker"]
+
+[dependencies]
+enzimos-platform = { path = "../platform" }
+enzimos-policy = { path = "../policy", optional = true }
+serde_json.workspace = true
+libc.workspace = true
+zeroize = "1"
+zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+serde.workspace = true
+futures-util = { version = "0.3", default-features = false, features = ["std", "async-await"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["process", "io-util"] }
+
+[[bin]]
+name = "enzimos-user-switch"
+path = "src/bin/enzimos-user-switch.rs"
+required-features = ["update-worker"]
+
+[[bin]]
+name = "enzimos-history"
+path = "src/bin/enzimos-history.rs"
+required-features = ["update-worker"]
+
+[lints]
+workspace = true

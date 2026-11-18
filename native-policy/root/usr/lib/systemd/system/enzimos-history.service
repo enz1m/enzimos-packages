@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=enzimOS previous versions (home history)
+After=dbus.service systemd-logind.service polkit.service
+Requires=dbus.service
+[Service]
+Type=dbus
+BusName=org.enzimos.History1
+ExecStart=/usr/lib/enzimos-native/enzimos-history
+User=root
+UMask=0077
+StateDirectory=enzimos-history
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/.snapshots
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_ADMIN
+LimitCORE=0
+MemoryMax=256M
+TasksMax=32
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+TimeoutStartSec=15
+Restart=no

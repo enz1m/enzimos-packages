@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: MIT
+// power-profiles-daemon owns CPU policy on enzimOS; GameMode asks it for the
+// performance profile instead of switching the cpufreq governor itself.
+polkit.addRule(function (action, subject) {
+    if (action.id == "com.feralinteractive.GameMode.governor-helper") {
+        return polkit.Result.NO;
+    }
+});

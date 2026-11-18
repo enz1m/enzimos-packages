@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=enzimOS independent home history
+ConditionPathExists=!/var/lib/enzimos-control/home-history.disabled
+[Service]
+Type=oneshot
+# Make room first (oldest history goes when free space is below the floor);
+# skip this snapshot when there is still no room.
+ExecCondition=/usr/lib/enzimos-native/enzimos-history guard
+ExecStart=/usr/lib/enzimos-native/enzimos-policy home-history create-auto
+# Drop build output, caches and excluded folders from the new snapshot.
+ExecStartPost=-/usr/lib/enzimos-native/enzimos-history prune
+StateDirectory=enzimos-history
+StateDirectoryMode=0700
+UMask=0077

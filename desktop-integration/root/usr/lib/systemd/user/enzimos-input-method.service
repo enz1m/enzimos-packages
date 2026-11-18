@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=enzimOS input method (Fcitx5)
+Documentation=https://fcitx-im.org/wiki/Using_Fcitx_5_on_Wayland/en
+PartOf=graphical-session.target
+After=graphical-session-pre.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=dbus
+BusName=org.fcitx.Fcitx5
+ExecStart=/usr/bin/fcitx5 --replace
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=10s

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Video capture diagnostic helper
+Exec=qvidcap
+NoDisplay=true
+Terminal=false

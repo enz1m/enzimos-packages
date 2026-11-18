@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+# Prefer compressed anonymous pages once zram is active; swap-in readahead only
+# helps seeking disks, zram reads each page at memory speed.
+ACTION=="change", KERNEL=="zram0", ATTR{initstate}=="1", SYSCTL{vm.swappiness}="150", SYSCTL{vm.page-cluster}="0"

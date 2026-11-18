@@ -1,0 +1,9 @@
+[terminal]
+vt = 4
+switch = true
+[general]
+source_profile = true
+runfile = "/run/enzimos-greetd-4/runfile"
+[default_session]
+command = "/usr/lib/enzui/enzui-greeter-session"
+user = "greeter"

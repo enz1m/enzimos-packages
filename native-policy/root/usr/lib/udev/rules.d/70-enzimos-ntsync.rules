@@ -1,0 +1,2 @@
+# SPDX-License-Identifier: MIT
+SUBSYSTEM=="misc", KERNEL=="ntsync", TAG+="uaccess"

@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>enzimOS</vendor>
+  <action id="org.enzimos.system.login-appearance">
+    <description>Publish your selected login appearance for the sign-in screen</description>
+    <description xml:lang="es">Publicar la apariencia elegida para la pantalla de inicio de sesión</description>
+    <message>Authenticate to publish or clear your public sign-in appearance and image.</message>
+    <message xml:lang="es">Autentícate para publicar o borrar tu apariencia e imagen públicas de inicio de sesión.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.home-history-create">
+    <description>Create a local home-history snapshot</description>
+    <description xml:lang="es">Crear una instantánea del historial de la carpeta personal</description>
+    <message>Administrator authentication is required to create a system-managed home-history snapshot.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para crear una instantánea del historial personal gestionada por el sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.backup-create">
+    <description>Create an encrypted backup at the configured destination</description>
+    <description xml:lang="es">Crear una copia cifrada en el destino configurado</description>
+    <message>Administrator authentication is required to manage this backup job.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para gestionar esta copia de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.recovery-prepare">
+    <description>Prepare a recovery plan from a recorded source</description>
+    <description xml:lang="es">Preparar un plan de recuperación desde un origen registrado</description>
+    <message>Administrator authentication is required to prepare this recovery plan.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para preparar este plan de recuperación.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.update-apply">
+    <description>Apply the admitted local system update</description>
+    <description xml:lang="es">Aplicar la actualización local del sistema autorizada</description>
+    <message>Administrator authentication is required to install this system update.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para instalar esta actualización del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.delivery-cancel">
+    <description>Cancel an unused administrator-approved file delivery grant</description>
+    <description xml:lang="es">Cancelar una autorización de entrega de archivos aprobada y sin usar</description>
+    <message>Administrator authentication is required to manage this lifecycle receipt.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para gestionar este registro de operación.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.credential-review">
+    <description>Review an interrupted recovery-password enrollment</description>
+    <description xml:lang="es">Revisar un registro interrumpido de contraseña de recuperación</description>
+    <message>Administrator authentication is required to manage this lifecycle receipt.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para gestionar este registro de operación.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.credential-complete">
+    <description>Complete a verified recovery-password enrollment receipt</description>
+    <description xml:lang="es">Completar el registro verificado de una contraseña de recuperación</description>
+    <message>Administrator authentication is required to manage this lifecycle receipt.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para gestionar este registro de operación.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.boot-retire">
+    <description>Retire an old reviewed boot generation (its root subvolume is kept)</description>
+    <description xml:lang="es">Retirar una generación de arranque revisada y antigua (se conserva su subvolumen raíz)</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.rotation-review">
+    <description>Review a backup repository compromise rotation</description>
+    <description xml:lang="es">Revisar la rotación de un repositorio de copias comprometido</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.rotation-advance">
+    <description>Advance a reviewed backup repository compromise rotation</description>
+    <description xml:lang="es">Continuar la rotación revisada de un repositorio de copias comprometido</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.root-retire-prepare">
+    <description>Prepare offline retirement of an unused fallback root</description>
+    <description xml:lang="es">Preparar la retirada sin conexión de un sistema raíz de reserva sin usar</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.root-retire-stage">
+    <description>Stage the offline root-retirement coordinator as the next boot</description>
+    <description xml:lang="es">Preparar el coordinador de retirada del sistema raíz para el próximo arranque</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.root-retire-finish">
+    <description>Finish an offline root retirement after the coordinator ran</description>
+    <description xml:lang="es">Finalizar la retirada del sistema raíz después de ejecutar el coordinador</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.remote-rotation-review">
+    <description>Review a remote backup replica compromise rotation</description>
+    <description xml:lang="es">Revisar la rotación de una réplica remota de copias comprometida</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.remote-rotation-advance">
+    <description>Advance a reviewed remote backup replica compromise rotation</description>
+    <description xml:lang="es">Continuar la rotación revisada de una réplica remota comprometida</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.recovery-run-stage">
+    <description>Stage a loader-started independent recovery run as the next boot</description>
+    <description xml:lang="es">Preparar una recuperación independiente iniciada por el cargador para el próximo arranque</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.recovery-run-finish">
+    <description>Finish an independent recovery run after the restored boot</description>
+    <description xml:lang="es">Finalizar la recuperación independiente tras arrancar el sistema restaurado</description>
+    <message>Administrator authentication is required to change system lifecycle state.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar el estado del ciclo de vida del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.file-restore-export">
+    <description>Export one backed-up home file to private administrator staging</description>
+    <description xml:lang="es">Exportar un archivo personal de una copia a un área privada de administrador</description>
+    <message>Administrator authentication is required to restore files from backups.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para restaurar archivos de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.file-restore-grant">
+    <description>Grant a privately exported backup file to a current local account</description>
+    <description xml:lang="es">Autorizar la entrega de un archivo exportado de una copia a una cuenta local actual</description>
+    <message>Administrator authentication is required to restore files from backups.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para restaurar archivos de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.file-restore-deliver">
+    <description>Deliver a granted backup file as a new private file in the recipient home</description>
+    <description xml:lang="es">Entregar el archivo autorizado como una copia privada nueva en la carpeta del destinatario</description>
+    <message>Administrator authentication is required to restore files from backups.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para restaurar archivos de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.remote-replicate">
+    <description>Copy a local recovery point to the pinned remote backup destination</description>
+    <description xml:lang="es">Copiar un punto de recuperación local al destino remoto de copias fijado</description>
+    <message>Administrator authentication is required to change backup destinations.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar los destinos de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.remote-retrieve">
+    <description>Retrieve a recovery point from the pinned remote backup destination</description>
+    <description xml:lang="es">Obtener un punto de recuperación del destino remoto de copias fijado</description>
+    <message>Administrator authentication is required to restore files from backups.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para restaurar archivos de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.tree-restore-export">
+    <description>Export one backed-up home directory tree as a private archive</description>
+    <description xml:lang="es">Exportar un árbol de carpetas personales de una copia como archivo privado</description>
+    <message>Administrator authentication is required to restore files from backups.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para restaurar archivos de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.query">
+    <description>Read enzimOS system status (versions, generations, history, backup and network trust state)</description>
+    <description xml:lang="es">Leer el estado de enzimOS (versiones, generaciones, historial, copias y confianza de red)</description>
+    <message>Reading system status is limited to the active local session.</message>
+    <message xml:lang="es">Solo la sesión local activa puede leer el estado del sistema.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.network-trust-set">
+    <description>Mark a network as trusted or untrusted (local discovery allowed only on trusted networks)</description>
+    <description xml:lang="es">Marcar una red como de confianza o no (solo se permite la detección local en redes de confianza)</description>
+    <message>Administrator authentication is required to change which networks are trusted.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar las redes de confianza.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.home-history-set">
+    <description>Pause or resume automatic home history</description>
+    <description xml:lang="es">Pausar o reanudar el historial personal automático</description>
+    <message>Administrator authentication is required to change system history and backup settings.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar los ajustes del historial y de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.backup-schedule-set">
+    <description>Turn the automatic backup schedule on or off</description>
+    <description xml:lang="es">Activar o desactivar las copias de seguridad programadas</description>
+    <message>Administrator authentication is required to change system history and backup settings.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar los ajustes del historial y de las copias de seguridad.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.battery-action-set">
+    <description>Change the critical battery action for the next boot</description>
+    <description xml:lang="es">Cambiar la acción de batería crítica para el próximo arranque</description>
+    <message>Administrator authentication is required to change critical battery protection.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar la protección de batería crítica.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.own-file-restore">
+    <description>Restore one backed-up file to your current home</description>
+    <description xml:lang="es">Restaurar un archivo de una copia en tu carpeta personal actual</description>
+    <message>Administrator authentication is required to restore this file as a new private copy.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para restaurar este archivo como una copia privada nueva.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.home-retention-set">
+    <description>Change home snapshot retention</description>
+    <description xml:lang="es">Cambiar la conservación de instantáneas personales</description>
+    <message>Administrator authentication is required to change future retention. Existing history will not be removed now.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar la conservación futura. No se eliminará el historial existente ahora.</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+  </action>
+  <action id="org.enzimos.system.backup-retention-set">
+    <description>Change encrypted backup retention</description>
+    <description xml:lang="es">Cambiar la conservación de copias cifradas</description>
+    <message>Administrator authentication is required to change future retention. Existing history will not be removed now.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar la conservación futura. No se eliminará el historial existente ahora.</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+  </action>
+  <action id="org.enzimos.system.backup-setup">
+    <description>Set up an encrypted backup repository on the reviewed drive</description>
+    <description xml:lang="es">Configurar un repositorio de copias cifradas en la unidad revisada</description>
+    <message>Administrator authentication is required to configure this backup destination.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para configurar este destino de copias de seguridad.</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+  </action>
+  <action id="org.enzimos.system.backup-export">
+    <description>Export the encrypted backup recovery password</description>
+    <description xml:lang="es">Exportar la contraseña de recuperación de las copias cifradas</description>
+    <message>Administrator authentication is required to export this backup recovery password.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para exportar esta contraseña de recuperación de copias.</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+  </action>
+  <action id="org.enzimos.system.backup-confirm-copy">
+    <description>Confirm an independent backup recovery copy</description>
+    <description xml:lang="es">Confirmar una copia independiente de la contraseña de recuperación</description>
+    <message>Administrator authentication is required to confirm that you saved this backup recovery password outside this computer.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para confirmar que guardaste esta contraseña de recuperación fuera de este equipo.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+  <action id="org.enzimos.system.memory-policy-set">
+    <description>Change memory exhaustion protection</description>
+    <description xml:lang="es">Cambiar la protección contra agotamiento de memoria</description>
+    <message>Administrator authentication is required to change memory protection</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para cambiar la protección de memoria</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+  </action>
+</policyconfig>

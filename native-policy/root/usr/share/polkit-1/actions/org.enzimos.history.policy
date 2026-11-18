@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>enzimOS</vendor>
+  <action id="org.enzimos.history.forget">
+    <description>Remove files from backups and home history</description>
+    <message>Authentication is required to remove files from your backups and earlier versions</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_self</allow_active></defaults>
+  </action>
+  <action id="org.enzimos.history.backup-now">
+    <description>Start a backup</description>
+    <message>Authentication is required to start a backup</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>yes</allow_active></defaults>
+  </action>
+  <action id="org.enzimos.history.settings">
+    <description>Change how much free space home history keeps</description>
+    <message>Authentication is required to change home history settings</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin_keep</allow_active></defaults>
+  </action>
+</policyconfig>

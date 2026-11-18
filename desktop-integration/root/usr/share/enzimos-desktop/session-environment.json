@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "environment": {
+    "XMODIFIERS": "@im=fcitx",
+    "QT_IM_MODULE": "fcitx",
+    "SDL_IM_MODULE": "fcitx"
+  },
+  "unset": ["GTK_IM_MODULE"],
+  "input_method_unit": "enzimos-input-method.service",
+  "start_after": "WAYLAND_DISPLAY imported to user manager",
+  "stop_with": "managed desktop session",
+  "preserve_pam_environment": ["GNOME_KEYRING_CONTROL"]
+}

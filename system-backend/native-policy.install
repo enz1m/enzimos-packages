@@ -1,0 +1,2 @@
+# SPDX-License-Identifier: MIT
+# The build harness uses this fixed filename; this package has no activation hook.

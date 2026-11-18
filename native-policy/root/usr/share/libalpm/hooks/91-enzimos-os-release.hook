@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+# The filesystem package owns /etc/os-release (a symlink to Arch's); keep enzimOS's identity.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = filesystem
+Target = enzimos-native-policy
+
+[Action]
+Description = Keeping the enzimOS system identity (os-release)...
+When = PostTransaction
+Exec = /usr/bin/sh -c 'rm -f /etc/os-release && install -m0644 /usr/share/enzimos/os-release /etc/os-release'

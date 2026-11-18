@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Start an owed backup when the backup drive is connected
+ConditionPathExists=/var/lib/enzimos-control/backup.enabled
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/enzimos-native/enzimos-history attached %i

@@ -1,0 +1,20 @@
+[Unit]
+Description=enzimOS additional greeter on reserved VT4
+After=systemd-user-sessions.service
+ConditionPathExists=!/run/enzimos-recovery-console
+Conflicts=getty@tty4.service
+[Service]
+ExecStart=/usr/bin/greetd --config /etc/greetd/enzimos-switch-4.toml
+RuntimeDirectory=enzimos-greetd-4
+RuntimeDirectoryMode=0700
+Type=simple
+Restart=no
+KillMode=mixed
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty4
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+LimitCORE=0

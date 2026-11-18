@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Measure the space backups and home history use
+ConditionPathIsDirectory=/home/.snapshots
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/enzimos-native/enzimos-history measure
+UMask=0077
+StateDirectory=enzimos-history
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateNetwork=yes
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+# Background only: lowest CPU and disk priority, bounded memory, a 30 minute
+# time box inside the program.
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=768M
+TimeoutStartSec=45min

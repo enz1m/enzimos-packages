@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Refresh the enzimOS package authority from the installed Arch keyring
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/enzimos-native/enzimos-policy authority refresh-auto

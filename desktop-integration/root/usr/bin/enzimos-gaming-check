@@ -1,0 +1,3 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+exec /usr/lib/enzimos-native/enzimos-policy desktop gaming-check

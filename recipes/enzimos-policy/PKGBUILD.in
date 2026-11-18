@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+# Data-only development scaffold; does not configure an installed system.
+pkgname=enzimos-policy
+pkgver=0.0.1
+pkgrel=1
+pkgdesc='enzimOS policy package metadata'
+arch=('any')
+license=('MIT')
+source=('product.json' 'LICENSE')
+sha256sums=('@POLICY_SHA256@' '@LICENSE_SHA256@')
+
+package() {
+  install -Dm644 "$srcdir/product.json" "$pkgdir/usr/share/enzimos/product.json"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

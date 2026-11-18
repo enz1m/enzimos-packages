@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Run a scheduled job unless GameMode holds the performance profile; then exit
+# 75, which the unit retries later (RestartForceExitStatus=75). Manual runs do
+# not go through this wrapper.
+for bus in "org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles" \
+           "net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles"; do
+    # shellcheck disable=SC2086
+    holds=$(busctl --system --timeout=3 get-property $bus ActiveProfileHolds 2>/dev/null) || continue
+    case "$holds" in
+    *'"Reason" s "GameMode"'*) echo "deferred while GameMode is active"; exit 75 ;;
+    esac
+    break
+done
+exec "$@"

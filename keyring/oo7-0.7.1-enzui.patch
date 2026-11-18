@@ -1,0 +1,252 @@
+diff --git a/pam/src/lib.rs b/pam/src/lib.rs
+index a3c713f..3225dce 100644
+--- a/pam/src/lib.rs
++++ b/pam/src/lib.rs
+@@ -76,12 +76,6 @@ unsafe fn get_auth_token_internal(
+     let password_cstr = unsafe { CStr::from_ptr(authtok_ptr as *const c_char) };
+     let password_bytes = password_cstr.to_bytes().to_vec();
+ 
+-    tracing::debug!(
+-        "Captured {} of length {} bytes",
+-        item_name,
+-        password_bytes.len()
+-    );
+-
+     Ok(Zeroizing::new(password_bytes))
+ }
+ 
+@@ -152,13 +146,7 @@ pub unsafe extern "C" fn pam_sm_authenticate(
+         return PAM_SUCCESS;
+     }
+ 
+-    tracing::info!(
+-        "Captured authentication token of length {} bytes, stashing for session",
+-        password.len()
+-    );
+-
+-    // Stash the password for later use in pam_sm_open_session
+-    let boxed_password = Box::new(password.clone());
++    let boxed_password = Box::new(password);
+     let password_ptr = Box::into_raw(boxed_password) as *mut std::os::raw::c_void;
+ 
+     let ret = unsafe {
+@@ -241,21 +229,13 @@ pub unsafe extern "C" fn pam_sm_open_session(
+     let ret = unsafe { ffi::pam_get_data(pamh, STASHED_PASSWORD_KEY.as_ptr(), &mut password_ptr) };
+ 
+     if ret != PAM_SUCCESS || password_ptr.is_null() {
+-        // Try to fall back to PAM_AUTHTOK, it may have been set by a previous
+-        // module.
+-        password_ptr = std::ptr::null();
+-        let ret = unsafe { ffi::pam_get_item(pamh, PAM_AUTHTOK, &mut password_ptr) };
+-        if ret != PAM_SUCCESS || password_ptr.is_null() {
+-            tracing::debug!("No stashed password found in session");
+-            return PAM_SUCCESS;
+-        }
++        tracing::debug!("No stashed password found in session");
++        return PAM_SUCCESS;
+     }
+ 
++    // PAM clears PAM_AUTHTOK after authentication. The value stored via
++    // pam_set_data is a Rust allocation and remains valid for this PAM handle.
+     let password = unsafe { &*(password_ptr as *const Zeroizing<Vec<u8>>) };
+-    tracing::debug!(
+-        "Retrieved stashed password of length {} bytes",
+-        password.len()
+-    );
+ 
+     // Get username and UID
+     let username = match unsafe { get_user(pamh) } {
+@@ -369,13 +349,6 @@ pub unsafe extern "C" fn pam_sm_chauthtok(
+             return PAM_SUCCESS;
+         }
+ 
+-        tracing::info!(
+-            "Password change for user {}: old={} bytes, new={} bytes",
+-            username,
+-            old_password.len(),
+-            new_password.len()
+-        );
+-
+         let message = PamMessage::change_password(
+             username.clone(),
+             old_password.to_vec(),
+diff --git a/pam/src/socket.rs b/pam/src/socket.rs
+index ba1e2be..d4cb735 100644
+--- a/pam/src/socket.rs
++++ b/pam/src/socket.rs
+@@ -200,7 +200,7 @@ pub fn send_secret_to_daemon(
+ ///
+ /// The helper holds the secret on a socket until oo7-daemon connects and
+ /// retrieves it via memfd.
+-fn start_login_helper(secret: &[u8]) -> Result<(), SocketError> {
++fn start_login_helper(secret: &[u8], uid: u32) -> Result<(), SocketError> {
+     tracing::info!("Starting oo7-daemon-login helper");
+ 
+     let (pipe_read, mut pipe_write) = io::pipe().map_err(SocketError::Connect)?;
+@@ -231,6 +231,22 @@ fn start_login_helper(secret: &[u8]) -> Result<(), SocketError> {
+     drop(pipe_write);
+     drop(saved_signals);
+     tracing::info!("Started oo7-daemon-login with PID {}", child.id());
++
++    // The keyring service is normally bus-activated. Start it at password login
++    // so the helper can hand off the secret before its socket expires.
++    match Command::new("/usr/bin/systemctl")
++        .args(["--user", "--no-block", "start", "oo7-daemon.service"])
++        .env_clear()
++        .env("XDG_RUNTIME_DIR", format!("/run/user/{uid}"))
++        .stdin(Stdio::null())
++        .stdout(Stdio::null())
++        .stderr(Stdio::null())
++        .status()
++    {
++        Ok(status) if status.success() => {}
++        Ok(status) => tracing::warn!("Could not queue oo7-daemon.service: {status}"),
++        Err(error) => tracing::warn!("Could not run systemctl: {error}"),
++    }
+     Ok(())
+ }
+ 
+@@ -270,7 +286,7 @@ async fn send_secret_to_daemon_async(
+         }
+         Err(e) if auto_start && e.kind() == io::ErrorKind::NotFound => {
+             tracing::info!("Socket not found, starting login helper");
+-            start_login_helper(&message.new_secret)?;
++            start_login_helper(&message.new_secret, uid)?;
+             return Ok(());
+         }
+         Err(e) => {
+@@ -287,7 +303,7 @@ async fn send_secret_to_daemon_async(
+         Ok(Ok(s)) => s,
+         Ok(Err(e)) if auto_start => {
+             tracing::info!("Daemon not running ({}), starting login helper", e.kind());
+-            start_login_helper(&message.new_secret)?;
++            start_login_helper(&message.new_secret, uid)?;
+             return Ok(());
+         }
+         Ok(Err(e)) => {
+diff --git a/server/src/plasma/prompter.rs b/server/src/plasma/prompter.rs
+index bf41987..318932b 100644
+--- a/server/src/plasma/prompter.rs
++++ b/server/src/plasma/prompter.rs
+@@ -31,6 +31,35 @@ pub enum CallbackAction {
+     Keep = 1,
+ }
+ 
++pub(crate) const ENZUI_PROMPTER: &str = "dev.enzui.SecretPrompter";
++
++pub(crate) async fn in_enzui_environment(connection: &zbus::Connection) -> bool {
++    let Ok(unit) = zbus::Proxy::new(
++        connection,
++        "org.freedesktop.systemd1",
++        "/org/freedesktop/systemd1/unit/enzui_2dsession_2etarget",
++        "org.freedesktop.systemd1.Unit",
++    )
++    .await
++    else {
++        return false;
++    };
++    // The user service may start during PAM, before the desktop exports its environment.
++    if !unit
++        .get_property::<String>("ActiveState")
++        .await
++        .is_ok_and(|state| matches!(state.as_str(), "active" | "activating"))
++    {
++        return false;
++    }
++    let Ok(bus) = zbus::fdo::DBusProxy::new(connection).await else {
++        return false;
++    };
++    bus.list_activatable_names()
++        .await
++        .is_ok_and(|names| names.iter().any(|name| name.as_str() == ENZUI_PROMPTER))
++}
++
+ #[must_use]
+ pub async fn in_plasma_environment(connection: &zbus::Connection) -> bool {
+     static IS_PLASMA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+@@ -179,9 +208,13 @@ impl PlasmaPrompterCallback {
+         role: &PromptRole,
+         window_id: Option<WindowIdentifierType>,
+         collection_name: &str,
++        destination: &'static str,
+     ) -> Result<(), ServiceError> {
+         let path = self.path.clone();
+-        let prompter = PlasmaPrompterProxy::new(&self.service.connection()).await?;
++        let prompter = PlasmaPrompterProxy::builder(&self.service.connection())
++            .destination(destination)
++            .build()
++            .await?;
+         let window_id = match window_id {
+             Some(id) => id.to_string(),
+             None => String::new(),
+diff --git a/server/src/prompt/mod.rs b/server/src/prompt/mod.rs
+index 8542f7d..9b70a10 100644
+--- a/server/src/prompt/mod.rs
++++ b/server/src/prompt/mod.rs
+@@ -117,7 +117,15 @@ impl Prompt {
+ 
+         match self.service.prompter_type(peer_info.as_ref()).await {
+             #[cfg(any(feature = "plasma_native_crypto", feature = "plasma_openssl_crypto"))]
+-            PrompterType::Plasma => self.prompt_plasma(window_id).await,
++            PrompterType::Plasma => {
++                self.prompt_plasma(window_id, "org.kde.secretprompter")
++                    .await
++            }
++            #[cfg(any(feature = "plasma_native_crypto", feature = "plasma_openssl_crypto"))]
++            PrompterType::Enzui => {
++                self.prompt_plasma(window_id, crate::plasma::prompter::ENZUI_PROMPTER)
++                    .await
++            }
+             #[cfg(any(feature = "gnome_native_crypto", feature = "gnome_openssl_crypto"))]
+             PrompterType::GNOME => self.prompt_gnome(window_id).await,
+             PrompterType::Cli => self.prompt_cli().await,
+@@ -357,6 +365,7 @@ impl Prompt {
+     async fn prompt_plasma(
+         &self,
+         window_id: Option<ashpd::WindowIdentifierType>,
++        destination: &'static str,
+     ) -> Result<(), ServiceError> {
+         if self.plasma_callback.get().is_some() {
+             return Ok(());
+@@ -372,7 +381,9 @@ impl Prompt {
+             .await?;
+         tracing::debug!("Prompt `{}` created.", self.path);
+ 
+-        callback.start(&self.role, window_id, &self.label).await
++        callback
++            .start(&self.role, window_id, &self.label, destination)
++            .await
+     }
+ 
+     #[cfg(any(feature = "gnome_native_crypto", feature = "gnome_openssl_crypto"))]
+diff --git a/server/src/service/mod.rs b/server/src/service/mod.rs
+index fe3ea29..d43c9d7 100644
+--- a/server/src/service/mod.rs
++++ b/server/src/service/mod.rs
+@@ -29,7 +29,7 @@ use zbus::{
+ #[cfg(any(feature = "gnome_native_crypto", feature = "gnome_openssl_crypto"))]
+ pub use crate::gnome::internal::InternalInterface;
+ #[cfg(any(feature = "plasma_native_crypto", feature = "plasma_openssl_crypto"))]
+-use crate::plasma::prompter::in_plasma_environment;
++use crate::plasma::prompter::{in_enzui_environment, in_plasma_environment};
+ use crate::{
+     collection::Collection,
+     error::{Error, custom_service_error},
+@@ -47,6 +47,7 @@ pub enum PrompterType {
+     #[allow(clippy::upper_case_acronyms)]
+     GNOME,
+     Plasma,
++    Enzui,
+     Cli,
+ }
+ 
+@@ -568,6 +569,9 @@ impl Service {
+ 
+             #[cfg(any(feature = "plasma_native_crypto", feature = "plasma_openssl_crypto"))]
+             {
++                if in_enzui_environment(&self.connection()).await {
++                    return PrompterType::Enzui;
++                }
+                 if in_plasma_environment(&self.connection()).await {
+                     return PrompterType::Plasma;
+                 }

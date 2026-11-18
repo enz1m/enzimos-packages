@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Input method configuration helper
+Exec=/usr/bin/fcitx5-configtool
+NoDisplay=true
+Terminal=false

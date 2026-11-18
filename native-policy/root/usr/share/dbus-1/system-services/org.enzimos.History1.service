@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.enzimos.History1
+Exec=/usr/bin/false
+User=root
+SystemdService=enzimos-history.service

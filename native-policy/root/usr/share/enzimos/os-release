@@ -1,0 +1,6 @@
+NAME="enzimOS"
+PRETTY_NAME="enzimOS (development)"
+ID=enzimos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;23;147;209"

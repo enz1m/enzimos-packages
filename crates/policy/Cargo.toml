@@ -1,0 +1,42 @@
+[package]
+name = "enzimos-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+enzimos-platform = { path = "../platform" }
+serde_json.workspace = true
+libc.workspace = true
+openssl = "=0.10.81"
+zeroize = "1"
+zstd = "=0.13.3"
+tar = "=0.4.46"
+flate2 = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+unicode-general-category = "=1.1.0"
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled", "backup", "hooks", "limits"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "enzimos-recovery-image-init"
+path = "src/image_init_main.rs"
+
+[[bin]]
+name = "enzimos-recovery-run-init"
+path = "src/run_init_main.rs"
+
+[[bin]]
+name = "enzimos-media-auth"
+path = "src/media_auth_main.rs"
+
+[[bin]]
+name = "enzimos-media-rescue-init"
+path = "src/media_rescue_init_main.rs"
+
+[lints]
+workspace = true

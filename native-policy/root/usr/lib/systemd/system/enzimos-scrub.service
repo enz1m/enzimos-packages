@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Scrub the owned enzimOS Btrfs filesystem
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/enzimos/defer-while-gaming /usr/lib/enzimos-native/enzimos-policy maintenance scrub
+Nice=10
+IOSchedulingClass=idle
+# Defer only contention before a maintenance command starts.
+Restart=no
+RestartForceExitStatus=75
+RestartMode=direct
+RestartSec=15min

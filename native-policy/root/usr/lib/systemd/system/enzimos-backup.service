@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Opt-in enzimOS encrypted backup
+ConditionPathExists=/var/lib/enzimos-control/backup.enabled
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/enzimos/defer-while-gaming /usr/lib/enzimos-backend/enzimos-system-backend --backup-automatic
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+# A first whole-system backup takes hours. Every step carries its own bound
+# (restic backup 12 h plus a 15 min no-output watchdog; retention 24 h), so
+# the oneshot start never times out on its own (stated, not the default).
+TimeoutStartSec=infinity
+# Retry only a typed operation-lock refusal before automatic backup entry.
+Restart=no
+RestartForceExitStatus=75
+RestartMode=direct
+RestartSec=15min

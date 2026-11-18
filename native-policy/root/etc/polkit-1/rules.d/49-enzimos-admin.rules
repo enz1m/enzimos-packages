@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: MIT
+polkit.addAdminRule(function(action, subject) {
+    return ["unix-group:wheel"];
+});

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<policy target="CONTINUE" priority="-500">
+  <short>Private discovery by default</short>
+  <description>Block outgoing multicast discovery on other network connections. The preceding trusted-network policy permits it after explicit trust. Other traffic continues normally.</description>
+  <ingress-zone name="HOST"/>
+  <egress-zone name="ANY"/>
+  <rule family="ipv4"><destination address="224.0.0.251"/><port port="5353" protocol="udp"/><drop/></rule>
+  <rule family="ipv6"><destination address="ff02::fb"/><port port="5353" protocol="udp"/><drop/></rule>
+</policy>

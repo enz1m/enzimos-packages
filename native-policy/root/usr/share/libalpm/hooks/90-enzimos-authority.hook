@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Recompute the enzimOS package authority whenever Arch's keyring data changes.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = archlinux-keyring
+
+[Action]
+Description = Refreshing the enzimOS package authority (three-master quorum)...
+When = PostTransaction
+Exec = /usr/lib/enzimos-native/enzimos-policy authority hook

@@ -1,0 +1,17 @@
+[Unit]
+Description=Stop VPN helpers NetworkManager leaves behind at shutdown
+# NetworkManager.service uses KillMode=process, so VPN plugin daemons outlive
+# it. strongSwan's charon-nm does not exit on SIGTERM while an IKE attempt is
+# pending (e.g. an unreachable server), which held shutdown for systemd's full
+# 90 s timeout. NetworkManager pulls this in (drop-in); being ordered after it,
+# this stops first at shutdown. Restarting NetworkManager leaves it alone, so
+# VPNs survive package upgrades as before.
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/true
+ExecStop=-/usr/bin/pkill -TERM -x charon-nm
+ExecStop=/usr/bin/sh -c 'for i in 1 2 3 4 5; do pgrep -x charon-nm >/dev/null || exit 0; sleep 1; done; pkill -KILL -x charon-nm; exit 0'
+TimeoutStopSec=15

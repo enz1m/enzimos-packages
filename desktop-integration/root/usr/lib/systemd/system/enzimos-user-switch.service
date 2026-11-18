@@ -1,0 +1,25 @@
+[Unit]
+Description=enzimOS bounded locked-session user switching
+After=dbus.service systemd-logind.service
+Requires=dbus.service systemd-logind.service
+[Service]
+Type=dbus
+BusName=org.enzimos.UserSwitch1
+ExecStart=/usr/lib/enzimos-native/enzimos-user-switch
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+LimitCORE=0
+MemoryMax=64M
+TasksMax=8
+TimeoutStartSec=10
+TimeoutStopSec=5
+Restart=no

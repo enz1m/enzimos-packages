@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=enzimOS background maintenance
+[Slice]
+CPUWeight=20
+IOWeight=10

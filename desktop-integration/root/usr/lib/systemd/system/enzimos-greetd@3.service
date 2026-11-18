@@ -1,0 +1,20 @@
+[Unit]
+Description=enzimOS additional greeter on reserved VT3
+After=systemd-user-sessions.service
+ConditionPathExists=!/run/enzimos-recovery-console
+Conflicts=getty@tty3.service
+[Service]
+ExecStart=/usr/bin/greetd --config /etc/greetd/enzimos-switch-3.toml
+RuntimeDirectory=enzimos-greetd-3
+RuntimeDirectoryMode=0700
+Type=simple
+Restart=no
+KillMode=mixed
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty3
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+LimitCORE=0

@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "component": "packages",
+  "package_name": "enzimos-rust-packages",
+  "version": "0.2.0",
+  "architecture": "x86_64",
+  "profile": "rust-candidate",
+  "automatic_activation": false,
+  "installed_qualification": false,
+  "binaries": {
+    "enzimos-policy": "usr/lib/enzimos-native/enzimos-policy",
+    "enzimos-media-auth": "usr/lib/enzimos-native/enzimos-media-auth",
+    "enzimos-recovery-image-init": "usr/lib/enzimos-native/enzimos-recovery-image-init",
+    "enzimos-recovery-run-init": "usr/lib/enzimos-native/enzimos-recovery-run-init",
+    "enzimos-system-backend": "usr/lib/enzimos-backend/enzimos-system-backend",
+    "enzimos-backup-worker": "usr/lib/enzimos-backend/enzimos-backup-worker",
+    "enzimos-secret-validator": "usr/lib/enzimos-backend/enzimos-secret-validator",
+    "enzimos-user-switch": "usr/lib/enzimos-native/enzimos-user-switch",
+    "enzimos-media-rescue-init": "usr/lib/enzimos-native/enzimos-media-rescue-init",
+    "enzimos-history": "usr/lib/enzimos-native/enzimos-history"
+  },
+  "dependencies": [
+    "glibc",
+    "gcc-libs",
+    "openssl",
+    "libarchive",
+    "util-linux",
+    "btrfs-progs",
+    "restic",
+    "pacman",
+    "gnupg",
+    "systemd",
+    "networkmanager",
+    "polkit",
+    "dbus-broker-units",
+    "snapper",
+    "openssh",
+    "kmod",
+    "cairo",
+    "pango",
+    "ttf-dejavu",
+    "earlyoom"
+  ],
+  "resources": {
+    "packaging/rust/root/usr/lib/enzimos-native/recovery-pacman.conf": {
+      "target": "usr/lib/enzimos-native/recovery-pacman.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/recovery-rust-mkinitcpio.conf": {
+      "target": "usr/lib/enzimos-native/recovery-rust-mkinitcpio.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/initcpio/install/enzimos-rust-recovery": {
+      "target": "usr/lib/initcpio/install/enzimos-rust-recovery",
+      "mode": 493
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-points.conf": {
+      "target": "usr/lib/enzimos-native/restic-points.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-backup.conf": {
+      "target": "usr/lib/enzimos-native/restic-backup.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-credential-review.conf": {
+      "target": "usr/lib/enzimos-native/restic-credential-review.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-selective.conf": {
+      "target": "usr/lib/enzimos-native/restic-selective.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-selective-plan.conf": {
+      "target": "usr/lib/enzimos-native/restic-selective-plan.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-rotation-read.conf": {
+      "target": "usr/lib/enzimos-native/restic-rotation-read.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-remote-replicate.conf": {
+      "target": "usr/lib/enzimos-native/restic-remote-replicate.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-remote-retrieve.conf": {
+      "target": "usr/lib/enzimos-native/restic-remote-retrieve.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-remote-rotation-read.conf": {
+      "target": "usr/lib/enzimos-native/restic-remote-rotation-read.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-remote-initialize.conf": {
+      "target": "usr/lib/enzimos-native/restic-remote-initialize.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-credential-enroll.conf": {
+      "target": "usr/lib/enzimos-native/restic-credential-enroll.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-remote-check.conf": {
+      "target": "usr/lib/enzimos-native/restic-remote-check.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-retain.conf": {
+      "target": "usr/lib/enzimos-native/restic-retain.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-restore-system.conf": {
+      "target": "usr/lib/enzimos-native/restic-restore-system.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-restore-complete.conf": {
+      "target": "usr/lib/enzimos-native/restic-restore-complete.conf",
+      "mode": 420
+    },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-rotation-prepare.conf": {
+      "target": "usr/lib/enzimos-native/restic-rotation-prepare.conf",
+      "mode": 420
+    }
+  }
+}

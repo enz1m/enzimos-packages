@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+pkgname=enzimos-system-backend
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='D-Bus activation and authorization policy for the enzimOS System1 backend'
+arch=('any')
+license=('MIT')
+# Retire the old activation package and satisfy dependencies during the upgrade.
+provides=("enzimos-backend-prototype=$pkgver-$pkgrel")
+conflicts=('enzimos-backend-prototype')
+replaces=('enzimos-backend-prototype')
+depends=('enzimos-native-policy=@NATIVE_POLICY_VERSION@' 'enzimos-rust-packages=@RUST_RUNTIME_VERSION@' 'polkit' 'dbus-broker-units')
+source=('policy.tar' 'LICENSE')
+sha256sums=('@POLICY_SHA256@' '@LICENSE_SHA256@')
+install=native-policy.install
+package() {
+  cp -r --preserve=mode,timestamps --no-preserve=ownership "$srcdir/policy/." "$pkgdir/"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: MIT
+//! Caller-side one-use control loop tied to the actual original reservation.
+use crate::{
+    backup_remote_report::{self, Incoming, Reported},
+    backup_remote_reservation::Reserved,
+};
+use enzimos_platform::{
+    Result,
+    fd_packet::{Message, Packet},
+    json, require,
+};
+use serde_json::{Value, json as value};
+use std::{collections::BTreeSet, time::Duration};
+pub struct State {
+    sequence: u64,
+    nonces: BTreeSet<String>,
+    failed: bool,
+    finished: bool,
+}
+pub enum Event<'g> {
+    Checkpoint,
+    Observed(Reported<'g>),
+}
+fn challenge(message: &Message, request: &Value, sequence: u64) -> Result<Value> {
+    backup_remote_report::sender(
+        message,
+        request["worker"]["worker"]["pid"].as_u64().unwrap() as u32,
+    )?;
+    let body = json::decode(&message.body, 4096)?;
+    json::fields(&body, "schema kind id request_sha256 sequence nonce")?;
+    require(
+        body["schema"] == 1
+            && body["kind"] == "remote-copy"
+            && body["id"] == request["id"]
+            && body["request_sha256"] == json::fingerprint(request)?
+            && body["sequence"].as_u64() == Some(sequence),
+        "remote copy challenge differs from original request/sequence",
+    )?;
+    crate::backup_worker_request::id(body["nonce"].as_str().unwrap_or(""))?;
+    Ok(body)
+}
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl State {
+    pub fn new() -> Self {
+        Self {
+            sequence: 0,
+            nonces: BTreeSet::new(),
+            failed: false,
+            finished: false,
+        }
+    }
+    pub fn receive<'g>(
+        &mut self,
+        reserved: &Reserved<'_, '_, 'g>,
+        channel: &Packet,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<Event<'g>> {
+        require(
+            !self.failed && !self.finished && self.sequence < 10000 && self.nonces.len() < 10001,
+            "original caller remote copy control retired or bounded out",
+        )?;
+        self.failed = true;
+        reserved.recheck(authorize)?;
+        let request = reserved.request(authorize)?.clone();
+        let incoming = backup_remote_report::receive(channel, reserved, self.sequence, authorize)?;
+        match incoming {
+            Incoming::Challenge(message) => {
+                let next = self.sequence + 1;
+                let challenge = challenge(&message, &request, next)?;
+                require(
+                    self.nonces
+                        .insert(challenge["nonce"].as_str().unwrap().to_owned()),
+                    "remote copy nonce reused",
+                )?;
+                // Fresh caller permission and all original actors precede every
+                // acknowledgement. Revocation retains intent and retires this loop.
+                reserved.recheck(authorize)?;
+                let mut reply = challenge;
+                reply["allowed"] = value!(true);
+                channel.send(&json::canonical(&reply)?, &[], Duration::from_secs(2))?;
+                reserved.recheck(authorize)?;
+                self.sequence = next;
+                self.failed = false;
+                Ok(Event::Checkpoint)
+            }
+            Incoming::Observed(observed) => {
+                let report = observed.report()?;
+                require(
+                    self.nonces
+                        .insert(report["nonce"].as_str().unwrap().to_owned()),
+                    "remote copy report nonce reused",
+                )?;
+                reserved.recheck(authorize)?;
+                let reply = value!({"schema":report["schema"],"kind":"remote-copy","id":report["id"],
+                    "request_sha256":report["request_sha256"],"sequence":report["sequence"],"nonce":report["nonce"],
+                    "report_sha256":json::fingerprint(report)?,"received":true});
+                channel.send(&json::canonical(&reply)?, &[], Duration::from_secs(2))?;
+                // The worker may naturally exit immediately after this receipt.
+                // Original context/intent and kernel scope remain retained; no
+                // complete-backup or source-cleanup authority is published here.
+                self.finished = true;
+                Ok(Event::Observed(observed))
+            }
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "upstream": "https://gitlab.freedesktop.org/pwithnall/malcontent",
+  "version": "0.14.0-4",
+  "archive_url": "https://archive.archlinux.org/packages/m/malcontent/malcontent-0.14.0-4-x86_64.pkg.tar.zst",
+  "archive_sha256": "97562adaba7efddc377617e3306ba2a82b7223aaf8cc39b94777e44dd5f0e384",
+  "license": "LGPL-2.1-or-later",
+  "archive_files": {
+    "usr/share/dbus-1/interfaces/com.endlessm.ParentalControls.AppFilter.xml": "c546839ecedde115639ac91c4bc4117d924f96e9ec5078ef5699edf91e1f66cb",
+    "usr/share/polkit-1/actions/com.endlessm.ParentalControls.policy": "141684999258cfd14e9b6f4fcc192f851f16542f10e7cfd2492125a0a82cdaa0"
+  },
+  "changes": [],
+  "qualification": "AccountsService AppFilter data only; no timer/web/PAM enforcement or GUI installed",
+  "symlinks": {
+    "usr/share/accountsservice/interfaces/com.endlessm.ParentalControls.AppFilter.xml": "../../dbus-1/interfaces/com.endlessm.ParentalControls.AppFilter.xml"
+  }
+}

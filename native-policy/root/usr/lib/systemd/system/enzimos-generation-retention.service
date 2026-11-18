@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Retire old enzimOS boot generations, fallback roots and finished update staging
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/enzimos-native/enzimos-policy boot-retire auto
+# Fallback roots that no remaining boot generation names, after the generations.
+ExecStart=/usr/lib/enzimos-native/enzimos-policy root-retire auto
+Nice=10
+IOSchedulingClass=idle
+# Retry only contention for the operation lock (exit 75, from either step).
+Restart=no
+RestartForceExitStatus=75
+RestartMode=direct
+RestartSec=15min

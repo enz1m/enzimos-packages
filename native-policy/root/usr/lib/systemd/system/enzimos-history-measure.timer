@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Measure backup and home history space daily
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=2h
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+pkgname=enzimos-native-policy
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='enzimOS system policy, update and backup integration'
+arch=('any')
+license=('MIT')
+depends=('enzimos-rust-packages=0.2.0-1' 'pacman' 'coreutils' 'util-linux' 'btrfs-progs' 'cryptsetup' 'gnupg' 'mkinitcpio' 'rsync' 'kernel-modules-hook' 'snapper' 'snap-pac' 'restic' 'networkmanager' 'wpa_supplicant' 'systemd' 'firewalld' 'nftables' 'chrony' 'sudo' 'polkit' 'apparmor' 'systemd-ukify' 'sbsigntools' 'efitools' 'earlyoom')
+source=('policy.tar' 'LICENSE')
+sha256sums=('@POLICY_SHA256@' '@LICENSE_SHA256@')
+install=native-policy.install
+backup=('etc/enzimos/memory-pressure.json' 'etc/enzimos/backup-retention.json' 'etc/enzimos/chrony.conf' 'etc/NetworkManager/conf.d/20-enzimos.conf' 'etc/systemd/resolved.conf.d/20-enzimos.conf' 'etc/firewalld/zones/public.xml' 'etc/geoclue/conf.d/90-enzimos.conf')
+package() {
+  cp -r --preserve=mode,timestamps --no-preserve=ownership "$srcdir/policy/." "$pkgdir/"
+  chmod 0440 "$pkgdir/etc/sudoers.d/20-enzimos-wheel"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT
+post_install() {
+  systemd-tmpfiles --create enzimos.conf
+  systemctl preset earlyoom.service NetworkManager.service systemd-resolved.service chronyd.service firewalld.service apparmor.service linux-modules-cleanup.service snapper-cleanup.timer enzimos-home-history.timer enzimos-history-measure.timer enzimos-scrub.timer enzimos-trim.timer enzimos-deferred.timer enzimos-generation-retention.timer systemd-networkd.service systemd-timesyncd.service dnsmasq.service snapper-timeline.timer fstrim.timer enzimos-backup.service enzimos-backup.timer
+}
+post_upgrade() {
+  systemd-tmpfiles --create enzimos.conf
+  # Default-enable the owed-work timer only when it is first introduced; later
+  # upgrades never re-enable a timer the administrator disabled.
+  if (( $(vercmp "$2" 0.1.0-61) < 0 )); then
+    systemctl preset enzimos-deferred.timer
+  fi
+  if (( $(vercmp "$2" 0.1.0-136) < 0 )); then
+    systemctl preset earlyoom.service
+  fi
+  # Automatic generation retention is a product default from 0.1.0-141.
+  if (( $(vercmp "$2" 0.1.0-141) < 0 )); then
+    systemctl preset enzimos-generation-retention.timer
+  fi
+  # History measurement is preset only on fresh installs.
+  if ! systemd-detect-virt --chroot --quiet; then
+    systemctl try-reload-or-restart apparmor.service
+  fi
+}

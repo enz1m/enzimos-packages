@@ -1,0 +1,495 @@
+# SPDX-License-Identifier: MIT
+abi <abi/4.0>,
+include <tunables/global>
+
+profile enzimos-restic-input-check flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  /run/enzimos/backup-auth-input-*/password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_read_search,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /etc/enzimos/backup*.password r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+# Named profiles, entered by the root-owned coordinator after source/destination checks.
+profile enzimos-restic-provision flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_read_search,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+# Closed native review commands only: key inventories and metadata check. No
+# source/restore trees or credential writes; repository lock files are required
+# by metadata check, while key inventory always uses --no-lock.
+profile enzimos-restic-credential-review flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/{backup.password,backup.next-password} r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+
+profile enzimos-restic-credential-enroll flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/{backup.password,backup.next-password} r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-backup flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-source/ r,
+  /backup-source/** r,
+  /etc/enzimos/backup.next-password r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_read_search,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /root/** rwklx,
+}
+
+# Compromise rotation copies between two fixed local repositories only: no source
+# datasets, restore target or network. It reads the current, candidate and retired
+# passwords by fixed name and cannot read other credentials.
+profile enzimos-restic-rotation flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/backup.password r,
+  /etc/enzimos/backup.rotation-password r,
+  /etc/enzimos/backup.retired-password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_read_search,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+# NAS (SMB share) copies use separate enzimos-restic-native-remote-* profiles:
+# the share is mounted by kernel CIFS in the Restic child's private namespace
+# at /backup-remote before the child loses its network namespace.
+profile enzimos-restic-restore flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /restore-target/ rw,
+  /restore-target/** rwkl,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability chown,
+  capability fowner,
+  capability fsetid,
+  capability setfcap,
+  capability dac_read_search,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow rw,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-selective flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-selective-plan flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  deny /backup-repository/** wklx,
+  /run/enzimos/ r,
+  deny /run/enzimos/** wklx,
+  deny /tmp/** wklx,
+  deny /var/tmp/** wklx,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-rotation-read flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  deny /backup-repository/** wklx,
+  /run/enzimos/ r,
+  deny /run/enzimos/** wklx,
+  deny /tmp/** wklx,
+  deny /var/tmp/** wklx,
+  /etc/enzimos/{backup.password,backup.rotation-password,backup.retired-password} r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-native-replicate flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/restic/** r,
+  /backup-repository/restic/locks/** rwk,
+  /backup-remote/ r,
+  /backup-remote/** rwk,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/{backup.password,backup-remote.password} r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  # The kernel SMB client reaches the NAS; Restic itself has no network.
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /etc/enzimos/backup-remote.share-password r,
+  deny /etc/enzimos/{backup-remote.identity,backup-remote.hosts} r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-native-retrieve flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/restic/** r,
+  /backup-repository/restic/{data,index,locks,snapshots}/** rwk,
+  /backup-remote/ r,
+  /backup-remote/** r,
+  /backup-remote/**/locks/{,**} rwk,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/{backup.password,backup-remote.password} r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  # The kernel SMB client reaches the NAS; Restic itself has no network.
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /etc/enzimos/backup-remote.share-password r,
+  deny /etc/enzimos/{backup-remote.identity,backup-remote.hosts} r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-native-remote-rotation-read flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  deny /backup-repository/** rwklx,
+  /backup-remote/ r,
+  /backup-remote/** r,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/backup-remote{,-rotation,-retired,-setup}.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  # The kernel SMB client reaches the NAS; Restic itself has no network.
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /etc/enzimos/backup-remote.share-password r,
+  deny /etc/enzimos/{backup-remote.identity,backup-remote.hosts} r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-native-remote-initialize flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  deny /backup-repository/** rwklx,
+  /backup-remote/ r,
+  /backup-remote/** rwk,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/backup-remote{,-rotation,-retired,-setup}.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  # The kernel SMB client reaches the NAS; Restic itself has no network.
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /etc/enzimos/backup-remote.share-password r,
+  deny /etc/enzimos/{backup-remote.identity,backup-remote.hosts} r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-native-remote-check flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  deny /backup-repository/** rwklx,
+  /backup-remote/ r,
+  /backup-remote/** rwk,
+  /run/enzimos/ rw,
+  /run/enzimos/** rwk,
+  /etc/enzimos/backup-remote{,-rotation,-retired,-setup}.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  # The kernel SMB client reaches the NAS; Restic itself has no network.
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /etc/enzimos/backup-remote.share-password r,
+  deny /etc/enzimos/{backup-remote.identity,backup-remote.hosts} r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-retain flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-restore-system flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  capability chown,
+  capability fowner,
+  capability fsetid,
+  capability setfcap,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  /restore-target/ rw,
+  /restore-target/** rwkl,
+  deny /home/** rwklx,
+  deny /var/lib/enzimos-control/** rwklx,
+  deny /etc/pacman.d/gnupg/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-restore-complete flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  capability chown,
+  capability fowner,
+  capability fsetid,
+  capability setfcap,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  /restore-target/ rw,
+  /restore-target/** rwkl,
+  deny /home/** rwklx,
+  deny /var/lib/enzimos-control/** rwklx,
+  deny /etc/pacman.d/gnupg/** rwklx,
+  deny /root/** rwklx,
+}
+
+profile enzimos-restic-native-rotation-prepare flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/restic/ r,
+  /backup-repository/restic/** r,
+  deny /backup-repository/restic/** wklx,
+  /backup-repository/restic-rotation/ rw,
+  /backup-repository/restic-rotation/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/{backup.password,backup.rotation-password} r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+}
+
+# Native backup uses the same fixed, read-only source and credential exclusions
+# as its retained-descriptor consumer profile. No fallback to a broader role.
+profile enzimos-restic-native-backup flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-source/ r,
+  /backup-source/** r,
+  /backup-repository/ r,
+  /backup-repository/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** wklx,
+  deny /backup-source/system/etc/enzimos/backup{.,.next-,.rotation-,.retired-}password r,
+  deny /backup-source/system/etc/enzimos/backup{-remote,-remote-rotation,-remote-retired}.{password,identity,hosts,json} r,
+  deny /backup-source/system/etc/enzimos/backup.json r,
+  deny /backup-source/system/etc/pacman.d/gnupg/** r,
+  deny /backup-source/system/var/lib/enzimos-control/** r,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+  deny /etc/enzimos/backup.next-password r,
+  deny /etc/enzimos/backup.{rotation-password,retired-password} r,
+  deny /etc/enzimos/backup{-remote,-remote-rotation,-remote-retired}.password r,
+}
+
+# Read-only native snapshot inventory; no repository writes or source access.
+profile enzimos-restic-points flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-repository/ r,
+  /backup-repository/** r,
+  /etc/enzimos/backup.password r,
+  /run/enzimos/ r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_read_search,
+  capability dac_override,
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-repository/** wklx,
+  deny /run/enzimos/** wklx,
+  deny /tmp/** wklx,
+  deny /var/tmp/** wklx,
+  deny /backup-source/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+  deny /etc/enzimos/backup.next-password r,
+  deny /etc/enzimos/backup.{rotation-password,retired-password} r,
+  deny /etc/enzimos/backup{-remote,-remote-rotation,-remote-retired}.password r,
+}
