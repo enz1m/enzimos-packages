@@ -1,0 +1,22 @@
+#!/usr/bin/sh
+# SPDX-License-Identifier: MIT
+set -eu
+
+mode=/etc/enzimos/tmp-storage.conf
+if [ -f /run/enzimos/tmp-storage-current ]; then
+    mode=/run/enzimos/tmp-storage-current
+fi
+[ "$(/usr/bin/cat "$mode" 2>/dev/null || :)" = disk ] || exit 0
+
+for path in /etc/systemd/system/tmp.mount /etc/systemd/system/tmp.mount.d \
+    /usr/local/lib/systemd/system/tmp.mount /usr/local/lib/systemd/system/tmp.mount.d; do
+    if [ -e "$path" ] || [ -L "$path" ]; then
+        exit 0
+    fi
+done
+
+if /usr/bin/findmnt --fstab --mountpoint /tmp --noheadings >/dev/null; then
+    exit 0
+fi
+
+/usr/bin/ln -s /dev/null "$1/tmp.mount"

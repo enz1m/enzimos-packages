@@ -252,6 +252,7 @@ mod storage_configuration;
 pub mod storage_runtime;
 pub mod subvolume;
 pub mod system_query;
+pub mod tmp_storage;
 pub mod topology;
 pub mod transition_idle;
 pub mod update_admission;

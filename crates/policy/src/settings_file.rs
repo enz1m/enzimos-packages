@@ -36,6 +36,7 @@ impl Config {
             matches!(
                 path,
                 "/etc/enzimos/memory-pressure.json"
+                    | "/etc/enzimos/tmp-storage.conf"
                     | "/etc/UPower/UPower.conf"
                     | "/etc/enzimos/backup.json"
                     | "/etc/enzimos/backup-retention.json"

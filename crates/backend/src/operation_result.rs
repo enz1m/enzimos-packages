@@ -172,6 +172,12 @@ pub(crate) fn validate(record: &Value) -> Result<()> {
                         == format!("enzimos-restored-{}.bin", s["id"].as_str().unwrap_or(""))
                 }
         }
+        Some("tmp-storage-set") => {
+            fields(r, "configured applied_live reboot_required")?;
+            r["configured"] == s["mode"]
+                && r["applied_live"] == false
+                && r["reboot_required"].is_boolean()
+        }
         Some("memory-policy-set") => {
             fields(r, "mode applied_live reboot_required")?;
             r["mode"] == s["mode"] && r["applied_live"] == true && r["reboot_required"] == false

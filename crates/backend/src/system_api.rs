@@ -152,7 +152,7 @@ impl<P: Provider> Api<P> {
             operations.push("home-history-create");
         }
         json!({"schema":1,"deployment":"dbus-activated",
-            "queries":["network-trust","memory-policy","power-policy","history","snapshots","backup-candidates","backups","backup-points"],"operations":operations,
+            "queries":["network-trust","memory-policy","tmp-storage","power-policy","history","snapshots","backup-candidates","backups","backup-points"],"operations":operations,
             "arbitrary_command_or_path":false,"long_jobs":"server-made reviewed plans; uncertain results never replay",
             "durable_jobs":"owner UID bound; completed deduplicated; uncertain never replayed",
             "cancellation":"no cancellation after backend entry; disconnect is not rollback",

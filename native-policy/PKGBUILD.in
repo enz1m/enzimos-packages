@@ -9,7 +9,7 @@ depends=('enzimos-rust-packages=0.2.0-1' 'pacman' 'coreutils' 'util-linux' 'btrf
 source=('policy.tar' 'LICENSE')
 sha256sums=('@POLICY_SHA256@' '@LICENSE_SHA256@')
 install=native-policy.install
-backup=('etc/enzimos/memory-pressure.json' 'etc/enzimos/backup-retention.json' 'etc/enzimos/chrony.conf' 'etc/NetworkManager/conf.d/20-enzimos.conf' 'etc/systemd/resolved.conf.d/20-enzimos.conf' 'etc/firewalld/zones/public.xml' 'etc/geoclue/conf.d/90-enzimos.conf')
+backup=('etc/enzimos/memory-pressure.json' 'etc/enzimos/tmp-storage.conf' 'etc/enzimos/backup-retention.json' 'etc/enzimos/chrony.conf' 'etc/NetworkManager/conf.d/20-enzimos.conf' 'etc/systemd/resolved.conf.d/20-enzimos.conf' 'etc/firewalld/zones/public.xml' 'etc/geoclue/conf.d/90-enzimos.conf')
 package() {
   cp -r --preserve=mode,timestamps --no-preserve=ownership "$srcdir/policy/." "$pkgdir/"
   chmod 0440 "$pkgdir/etc/sudoers.d/20-enzimos-wheel"

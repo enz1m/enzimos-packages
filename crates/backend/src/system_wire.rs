@@ -5,8 +5,8 @@ use serde_json::Value;
 pub const BUS: &str = "org.enzimos.System1";
 pub const PATH: &str = "/org/enzimos/System1";
 pub const MAX_REQUEST: usize = 4096;
-pub const OPERATIONS: [&str; 30] = enzimos_platform::system_contract::OPERATIONS;
-pub const QUERIES: [&str; 9] = [
+pub const OPERATIONS: [&str; 31] = enzimos_platform::system_contract::OPERATIONS;
+pub const QUERIES: [&str; 10] = [
     "system",
     "history",
     "backups",
@@ -16,6 +16,7 @@ pub const QUERIES: [&str; 9] = [
     "backup-points",
     "backup-candidates",
     "memory-policy",
+    "tmp-storage",
 ];
 fn error(code: &str) -> Error {
     Error(code.into())
@@ -242,7 +243,7 @@ impl Operation {
         let body = decode(bytes, MAX_REQUEST)?;
         let schema = body["schema"]
             .as_u64()
-            .filter(|n| (3..=32).contains(n))
+            .filter(|n| (3..3 + OPERATIONS.len() as u64).contains(n))
             .ok_or_else(|| error("request-version"))?;
         let selected = !matches!(schema, 3 | 5);
         fields(

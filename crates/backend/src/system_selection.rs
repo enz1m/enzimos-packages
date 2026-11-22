@@ -187,6 +187,10 @@ pub(crate) fn validate(schema: u64, v: &Value) -> Result<()> {
             matches!(mode, "balanced" | "responsive" | "off")
                 && v["risk_acknowledged"].as_bool() == Some(mode == "off")
         }
+        33 => {
+            fields(v, "mode")?;
+            matches!(v["mode"].as_str(), Some("ram" | "disk"))
+        }
         _ => false,
     };
     require(valid, "job-plan-invalid")

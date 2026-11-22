@@ -251,6 +251,7 @@ impl Native {
                     .ok_or_else(|| Error("job-plan-invalid".into()))?,
             )?,
             "home-history-set" => enzimos_policy::home_history_control::plan()?,
+            "tmp-storage-set" => enzimos_policy::tmp_storage::observation()?,
             "memory-policy-set" => enzimos_policy::memory::observation()?,
             "battery-action-set" => enzimos_policy::power::observation()?,
             "home-retention-set" => enzimos_policy::home_retention::observation()?,
@@ -372,6 +373,7 @@ impl Provider for Native {
             "network-trust-set",
             "home-history-set",
             "memory-policy-set",
+            "tmp-storage-set",
             "battery-action-set",
             "home-retention-set",
             "backup-retention-set",
@@ -842,6 +844,9 @@ impl Provider for Native {
                 expected,
                 &mut preflight,
             )?,
+            Some("tmp-storage-set") => {
+                enzimos_policy::tmp_storage::set(&selection["mode"], expected, &mut preflight)?
+            }
             Some("memory-policy-set") => {
                 enzimos_policy::memory::set_policy(selection, &mut preflight)?
             }
@@ -892,6 +897,7 @@ impl Provider for Native {
             "backups" => crate::backup_status_query::query(&self.guard)?,
             "backup-points" => self.backup_points()?,
             "network-trust" => enzimos_policy::network_trust::connections()?,
+            "tmp-storage" => enzimos_policy::tmp_storage::query()?,
             "memory-policy" => enzimos_policy::memory::policy()?,
             "power-policy" => enzimos_policy::power::policy()?,
             "history" => enzimos_policy::snapshot_queries::history()?,
