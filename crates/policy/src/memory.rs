@@ -22,6 +22,8 @@ pub const PROTECTED: &[&str] = &[
     "enzui-wallpaper",
     "enzimos-install",
     "enzimos-recover",
+    "enzimos-system-",
+    "enzimos-policy",
     "systemd",
     "systemd-journal",
     "systemd-logind",
@@ -51,7 +53,12 @@ pub fn validate_document(v: &Value) -> Result<()> {
 /// Keep absolute ceilings valid on machines smaller than a preset. earlyoom
 /// chooses the lower relative/absolute threshold; clamping a ceiling to total
 /// capacity therefore preserves the selected percentages on small machines.
-pub fn arguments_for_capacity(mode: &str, memory_kib: u64, swap_kib: u64) -> Result<Vec<String>> {
+fn arguments_for_capacity(
+    mode: &str,
+    memory_kib: u64,
+    swap_kib: u64,
+    disk_reserve_kib: u64,
+) -> Result<Vec<String>> {
     require(
         memory_kib > 0,
         "memory policy requires positive kernel capacity",
@@ -69,11 +76,24 @@ pub fn arguments_for_capacity(mode: &str, memory_kib: u64, swap_kib: u64) -> Res
         memory.into(),
         "-M".into(),
         cap(memory_cap, memory_kib),
-        "-s".into(),
-        swap.into(),
     ];
-    if swap_kib > 0 {
-        args.extend(["-S".into(), cap(swap_cap, swap_kib)]);
+    if disk_reserve_kib > 0 {
+        let zram = swap_kib.saturating_sub(disk_reserve_kib);
+        let (term_percent, kill_percent) = if mode == "balanced" {
+            (20, 10)
+        } else {
+            (40, 20)
+        };
+        let (term_cap, kill_cap) = swap_cap;
+        // earlyoom sees one pool; keep the lower-priority disk capacity in reserve.
+        let term = disk_reserve_kib + (zram * term_percent / 100).min(term_cap);
+        let kill = disk_reserve_kib + (zram * kill_percent / 100).min(kill_cap);
+        args.extend(["-S".into(), format!("{term},{kill}")]);
+    } else {
+        args.extend(["-s".into(), swap.into()]);
+        if swap_kib > 0 {
+            args.extend(["-S".into(), cap(swap_cap, swap_kib)]);
+        }
     }
     args.extend([
         "-r".into(),
@@ -84,7 +104,7 @@ pub fn arguments_for_capacity(mode: &str, memory_kib: u64, swap_kib: u64) -> Res
     Ok(args)
 }
 /// Kernel capacity (MemTotal, SwapTotal in KiB) that sizes the presets.
-fn capacity() -> Result<(u64, u64)> {
+fn capacity() -> Result<(u64, u64, u64)> {
     let bytes = files::read_kernel(Path::new("/proc/meminfo"), 65536)?;
     let text =
         std::str::from_utf8(&bytes).map_err(|_| Error("memory capacity kernel encoding".into()))?;
@@ -103,11 +123,42 @@ fn capacity() -> Result<(u64, u64)> {
             .parse()
             .map_err(|_| Error("memory capacity numeric type".into()))
     };
-    Ok((field("MemTotal:")?, field("SwapTotal:")?))
+    let swap = field("SwapTotal:")?;
+    let reserve = files::read_kernel(Path::new("/proc/swaps"), 65536)
+        .ok()
+        .and_then(|data| disk_reserve(std::str::from_utf8(&data).ok()?, swap))
+        .unwrap_or(0);
+    Ok((field("MemTotal:")?, swap, reserve))
 }
+
+fn disk_reserve(swaps: &str, swap_total: u64) -> Option<u64> {
+    let mut zram = 0_u64;
+    let mut zram_priority = i32::MAX;
+    let mut disk = 0_u64;
+    let mut disk_priority = i32::MIN;
+    for row in swaps.lines().skip(1) {
+        let mut fields = row.split_whitespace();
+        let device = fields.next()?;
+        let size = fields.nth(1)?.parse::<u64>().ok()?;
+        let priority = fields.nth(1)?.parse::<i32>().ok()?;
+        if device
+            .strip_prefix("/dev/zram")
+            .is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            zram = zram.checked_add(size)?;
+            zram_priority = zram_priority.min(priority);
+        } else {
+            disk = disk.checked_add(size)?;
+            disk_priority = disk_priority.max(priority);
+        }
+    }
+    (zram > 0 && zram.checked_add(disk)? == swap_total && zram_priority > disk_priority)
+        .then_some(disk)
+}
+
 pub fn arguments(mode: &str) -> Result<Vec<String>> {
-    let (memory, swap) = capacity()?;
-    arguments_for_capacity(mode, memory, swap)
+    let (memory, swap, reserve) = capacity()?;
+    arguments_for_capacity(mode, memory, swap, reserve)
 }
 
 /// systemd's fixed DynamicUser= allocation range (systemd.exec(5)). The vendor
@@ -150,9 +201,14 @@ pub fn unit_cgroup(body: &[u8]) -> bool {
 }
 /// Map an observed NUL-separated argv to the exact preset that produced it.
 /// Only a byte-identical command line built for this kernel's capacity counts.
-pub fn effective_mode(cmdline: &[u8], memory_kib: u64, swap_kib: u64) -> Option<&'static str> {
+fn effective_mode(
+    cmdline: &[u8],
+    memory_kib: u64,
+    swap_kib: u64,
+    reserve: u64,
+) -> Option<&'static str> {
     ["balanced", "responsive"].into_iter().find(|mode| {
-        arguments_for_capacity(mode, memory_kib, swap_kib).is_ok_and(|args| {
+        arguments_for_capacity(mode, memory_kib, swap_kib, reserve).is_ok_and(|args| {
             let mut expected = args.join("\0").into_bytes();
             expected.push(0);
             expected == cmdline
@@ -288,15 +344,15 @@ fn service_state_with(command: &Command) -> Result<Value> {
     if pid > 0
         && let Ok(body) = running_command_line(pid)
     {
-        let (memory, swap) = capacity()?;
-        v["EffectiveMode"] = value!(effective_mode(&body, memory, swap));
+        let (memory, swap, reserve) = capacity()?;
+        v["EffectiveMode"] = value!(effective_mode(&body, memory, swap, reserve));
     }
     Ok(v)
 }
 pub fn policy() -> Result<Value> {
     let (v, b) = read()?;
     Ok(
-        value!({"schema":1,"mode":v["mode"],"available_modes":["balanced","responsive","off"],"default_mode":"balanced","config_sha256":json::sha256(&b),"service":service_state()?,"protected_process_names":PROTECTED,"presets":{"balanced":["-m","10,5","-M","1048576,524288","-s","20,10","-S","1048576,524288"],"responsive":["-m","15,8","-M","1572864,786432","-s","40,20","-S","2097152,1048576"]},"effective_after":"immediate","off_requires_risk_acknowledgement":true,"owner":"earlyoom","zram_managed_separately":true}),
+        value!({"schema":1,"mode":v["mode"],"available_modes":["balanced","responsive","off"],"default_mode":"balanced","config_sha256":json::sha256(&b),"service":service_state()?,"protected_process_names":PROTECTED,"presets":{"balanced":arguments("balanced")?,"responsive":arguments("responsive")?},"effective_after":"immediate","off_requires_risk_acknowledgement":true,"owner":"earlyoom","zram_managed_separately":true}),
     )
 }
 /// Whether the observed service state proves `mode` is the running policy.
@@ -517,4 +573,38 @@ pub fn launch(action: &str) -> Result<Value> {
         );
     }
     Err(std::io::Error::last_os_error().into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn earlyoom_keeps_lower_priority_disk_swap_in_reserve() {
+        let swaps = "Filename Type Size Used Priority\n/dev/zram0 partition 8038400 0 100\n/swap/swapfile file 8038400 0 -2\n";
+        let ram = 8_038_400;
+        let swap = 2 * ram;
+        let reserve = disk_reserve(swaps, swap).expect("mixed swap");
+        assert_eq!(reserve, ram);
+        let args = arguments_for_capacity("balanced", ram, swap, reserve).expect("preset");
+        let limit = args
+            .windows(2)
+            .find(|pair| pair[0] == "-S")
+            .expect("swap limit");
+        assert_eq!(limit[1], "9086976,8562688");
+        assert!(!args.iter().any(|arg| arg == "-s"));
+        let argv = args.join("\0") + "\0";
+        assert_eq!(
+            effective_mode(argv.as_bytes(), ram, swap, reserve),
+            Some("balanced")
+        );
+        assert_eq!(disk_reserve(&swaps.replace("0 -2", "0 100"), swap), None);
+        assert_eq!(disk_reserve(swaps, ram), None);
+        let single_tier = arguments_for_capacity("balanced", ram, ram, 0).expect("preset");
+        assert!(
+            single_tier
+                .windows(2)
+                .any(|pair| pair == ["-S", "1048576,524288"])
+        );
+    }
 }
