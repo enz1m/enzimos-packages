@@ -8,12 +8,12 @@ pub const COLLECTION: &str = "org.flathub.Stable";
 pub const URL: &str = "https://dl.flathub.org/repo/";
 /// The enzimOS repository's OSTree collection.
 pub const ENZIMOS_COLLECTION: &str = "org.enzimos.Apps";
-/// Placeholder until the repository host exists; installs come from the medium.
-pub const ENZIMOS_URL: &str = "https://flatpak.enzimos.invalid/repo/";
+/// Public update URL for apps installed from the offline media.
+pub const ENZIMOS_URL: &str = "https://flatpak.enzim.dev/repo/";
 /// The enzimOS repository signing key (OpenPGP v4 fingerprint).
 pub const ENZIMOS_FINGERPRINT: &str = "02AF25420A1609EAC4CB4E5FA9E4B8C18CB3F476";
 /// The apps the enzimOS remote may install from the medium.
-pub const ENZIMOS_APPS: [&str; 7] = [
+pub const ENZIMOS_APPS: [&str; 9] = [
     "org.enzimos.Calculator",
     "io.enz.Messages",
     "io.github.enzui.Music",
@@ -21,6 +21,8 @@ pub const ENZIMOS_APPS: [&str; 7] = [
     "io.github.enzui.Remote",
     "io.github.enzui.Reader",
     "io.github.enzui.Calendar",
+    "org.enzim.Browser",
+    "io.github.enzui.TaskManager",
 ];
 /// A reviewed remote that offline media may install from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

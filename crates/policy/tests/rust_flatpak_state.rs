@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 use enzimos_policy::{flatpak_plan::Source, flatpak_state as state};
 const CONFIG: &str = "[core]\nrepo_version=1\nmode=bare-user-only\n[remote \"flathub\"]\nurl=https://dl.flathub.org/repo/\ncollection-id=org.flathub.Stable\ngpg-verify=true\ngpg-verify-summary=true\nurl-is-set=true\nxa.authenticator-install=false\n";
-const ENZIMOS: &str = "[remote \"enzimos\"]\nurl=https://flatpak.enzimos.invalid/repo/\nxa.title=enzimOS Apps\nxa.default-branch=stable\ngpg-verify=true\ncollection-id=org.enzimos.Apps\ngpg-verify-summary=true\nxa.authenticator-install=false\nxa.authenticator-install-is-set=true\n";
+const ENZIMOS: &str = "[remote \"enzimos\"]\nurl=https://flatpak.enzim.dev/repo/\nxa.title=enzimOS Apps\nxa.default-branch=stable\ngpg-verify=true\ncollection-id=org.enzimos.Apps\ngpg-verify-summary=true\nxa.authenticator-install=false\nxa.authenticator-install-is-set=true\n";
 const BOTH: [Source; 2] = [Source::Flathub, Source::Enzimos];
 #[test]
 fn effective_remote_preserves_signatures_and_refuses_routing_or_authentication_changes() {
@@ -13,7 +13,7 @@ fn effective_remote_preserves_signatures_and_refuses_routing_or_authentication_c
         (both.clone(), &[Source::Flathub][..]),
         (CONFIG.into(), &BOTH[..]),
         (
-            both.replace("enzimos.invalid", "foreign.invalid"),
+            both.replace("enzim.dev", "foreign.invalid"),
             &BOTH[..],
         ),
         (
