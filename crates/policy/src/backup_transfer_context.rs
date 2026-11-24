@@ -230,15 +230,19 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
             "backup_complete":false}))
     }
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
-        authorize()?;
-        require(
-            self.current()? == self.original,
-            "original transfer context changed; no replacement or replay",
-        )
+        enzimos_platform::recheck_scope::evaluation(|| {
+            authorize()?;
+            require(
+                self.current()? == self.original,
+                "original transfer context changed; no replacement or replay",
+            )
+        })
     }
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
-        self.recheck(authorize)?;
-        Ok(&self.original)
+        enzimos_platform::recheck_scope::evaluation(|| {
+            self.recheck(authorize)?;
+            Ok(&self.original)
+        })
     }
     /// Actual retained descriptions only. A worker still needs kernel-stamped
     /// admission, fresh authorization and its own original durable request.
@@ -246,45 +250,47 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<BTreeMap<&str, BorrowedFd<'_>>> {
-        self.recheck(authorize)?;
-        let common = [
-            ("caller-image", self.caller_actor().image()?.as_fd()),
-            ("caller-pidfd", self.caller_actor().pidfd()?),
-            ("operation-lock", self.lock.as_file().as_fd()),
-            ("restic", self.image_actor().descriptor()?.as_fd()),
-        ];
-        let mut map = BTreeMap::from(common);
-        match &self.target {
-            Target::Drive {
-                destination,
-                pin,
-                credential,
-                repository,
-                ..
-            } => map.extend([
-                ("repository", repository.as_fd()),
-                ("root", destination.root_descriptor()?.as_fd()),
-                (
-                    "configuration",
-                    destination.configuration()?.descriptor()?.as_fd(),
-                ),
-                ("pin", pin.descriptor()?.as_fd()),
-                ("credential", credential.descriptor()?),
-            ]),
-            Target::Share { remote } => {
-                let share = remote.descriptors(&mut || Ok(()))?;
-                for role in [
-                    "remote-configuration",
-                    "remote-password",
-                    "remote-share-password",
-                    "remote-pin",
-                    "root-control",
-                ] {
-                    map.insert(role, share[role]);
+        enzimos_platform::recheck_scope::evaluation(|| {
+            self.recheck(authorize)?;
+            let common = [
+                ("caller-image", self.caller_actor().image()?.as_fd()),
+                ("caller-pidfd", self.caller_actor().pidfd()?),
+                ("operation-lock", self.lock.as_file().as_fd()),
+                ("restic", self.image_actor().descriptor()?.as_fd()),
+            ];
+            let mut map = BTreeMap::from(common);
+            match &self.target {
+                Target::Drive {
+                    destination,
+                    pin,
+                    credential,
+                    repository,
+                    ..
+                } => map.extend([
+                    ("repository", repository.as_fd()),
+                    ("root", destination.root_descriptor()?.as_fd()),
+                    (
+                        "configuration",
+                        destination.configuration()?.descriptor()?.as_fd(),
+                    ),
+                    ("pin", pin.descriptor()?.as_fd()),
+                    ("credential", credential.descriptor()?),
+                ]),
+                Target::Share { remote } => {
+                    let share = remote.descriptors(&mut || Ok(()))?;
+                    for role in [
+                        "remote-configuration",
+                        "remote-password",
+                        "remote-share-password",
+                        "remote-pin",
+                        "root-control",
+                    ] {
+                        map.insert(role, share[role]);
+                    }
                 }
             }
-        }
-        Ok(map)
+            Ok(map)
+        })
     }
 }
 

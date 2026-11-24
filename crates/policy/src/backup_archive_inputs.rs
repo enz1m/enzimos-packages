@@ -103,82 +103,90 @@ impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
         self.capture.guard()
     }
     pub fn recheck(&self) -> Result<()> {
-        self.stage.require_original(self.capture)?;
-        require(
-            backup_capture_scope::review(self.capture)? == self.scope,
-            "original archive scope changed",
-        )?;
-        let sources = self.scope["sources"]
-            .as_array()
-            .ok_or_else(|| Error("original archive scope shape".into()))?;
-        require(
-            (4..=34).contains(&sources.len()) && sources.len() == self.directories.len(),
-            "complete original archive input set required",
-        )?;
-        for source in sources {
-            let target = source
-                .as_str()
-                .ok_or_else(|| Error("original archive path shape".into()))?;
-            self.directories
-                .get(target)
-                .ok_or_else(|| Error("original archive input missing".into()))?
-                .recheck()?;
-        }
-        Ok(())
+        enzimos_platform::recheck_scope::evaluation(|| {
+            self.stage.require_original(self.capture)?;
+            require(
+                backup_capture_scope::review(self.capture)? == self.scope,
+                "original archive scope changed",
+            )?;
+            let sources = self.scope["sources"]
+                .as_array()
+                .ok_or_else(|| Error("original archive scope shape".into()))?;
+            require(
+                (4..=34).contains(&sources.len()) && sources.len() == self.directories.len(),
+                "complete original archive input set required",
+            )?;
+            for source in sources {
+                let target = source
+                    .as_str()
+                    .ok_or_else(|| Error("original archive path shape".into()))?;
+                self.directories
+                    .get(target)
+                    .ok_or_else(|| Error("original archive input missing".into()))?
+                    .recheck()?;
+            }
+            Ok(())
+        })
     }
     /// Fixed archive targets and their actual original descriptors, never caller paths.
     pub fn directories(&self) -> Result<BTreeMap<&str, &File>> {
-        self.recheck()?;
-        Ok(self
-            .directories
-            .iter()
-            .map(|(target, original)| (target.as_str(), original.file))
-            .collect())
+        enzimos_platform::recheck_scope::evaluation(|| {
+            self.recheck()?;
+            Ok(self
+                .directories
+                .iter()
+                .map(|(target, original)| (target.as_str(), original.file))
+                .collect())
+        })
     }
     /// Fixed backup command tail from the actual captured scope. Repository,
     /// credential, scratch and readonly source bindings are separate consumer roles.
     pub fn arguments(&self) -> Result<Vec<String>> {
-        self.recheck()?;
-        let mut args = [
-            "backup",
-            "--json",
-            "--tag",
-            "enzimos-whole-linux",
-            "--host",
-            "enzimos",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-        let exclusions = self.scope["excludes"]
-            .as_array()
-            .ok_or_else(|| Error("original archive exclusions shape".into()))?;
-        require(exclusions.len() <= 128, "original archive exclusion count")?;
-        for pattern in exclusions {
-            args.push("--exclude".into());
-            args.push(
-                pattern
-                    .as_str()
-                    .ok_or_else(|| Error("original archive exclusion shape".into()))?
-                    .to_owned(),
-            );
-        }
-        args.extend(enzimos_platform::backup_command::skipped_arguments());
-        for source in self.scope["sources"].as_array().unwrap() {
-            args.push(source.as_str().unwrap().to_owned());
-        }
-        self.recheck()?;
-        Ok(args)
+        enzimos_platform::recheck_scope::evaluation(|| {
+            self.recheck()?;
+            let mut args = [
+                "backup",
+                "--json",
+                "--tag",
+                "enzimos-whole-linux",
+                "--host",
+                "enzimos",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+            let exclusions = self.scope["excludes"]
+                .as_array()
+                .ok_or_else(|| Error("original archive exclusions shape".into()))?;
+            require(exclusions.len() <= 128, "original archive exclusion count")?;
+            for pattern in exclusions {
+                args.push("--exclude".into());
+                args.push(
+                    pattern
+                        .as_str()
+                        .ok_or_else(|| Error("original archive exclusion shape".into()))?
+                        .to_owned(),
+                );
+            }
+            args.extend(enzimos_platform::backup_command::skipped_arguments());
+            for source in self.scope["sources"].as_array().unwrap() {
+                args.push(source.as_str().unwrap().to_owned());
+            }
+            self.recheck()?;
+            Ok(args)
+        })
     }
     /// Review data only; an isolated consumer must admit readonly bindings separately.
     pub fn evidence(&self) -> Result<Value> {
-        self.recheck()?;
-        Ok(
-            json!({"schema":1,"role":"backup-archive-inputs","scope":self.scope,
+        enzimos_platform::recheck_scope::evaluation(|| {
+            self.recheck()?;
+            Ok(
+                json!({"schema":1,"role":"backup-archive-inputs","scope":self.scope,
             "inventory":self.stage.evidence()?,"directories":self.directories.iter().map(|(target, d)|
                 (target, json!({"inode":d.epoch,"mount":d.mount}))).collect::<BTreeMap<_,_>>(),
             "boot_inventory_staged":true,"source_mounts_admitted":false,
             "transfer_entered":false,"backup_complete":false}),
-        )
+            )
+        })
     }
 }

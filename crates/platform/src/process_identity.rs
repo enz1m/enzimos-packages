@@ -148,12 +148,64 @@ fn pinned_bytes(file: &File, owner: u32) -> Result<Vec<u8>> {
     )?;
     Ok(bytes)
 }
+/// A pinned executable image and the digest of its bytes at pin time.
+struct Pinned {
+    file: File,
+    sha: String,
+    /// The inode identity at the last full readback that matched `sha`.
+    verified: std::sync::Mutex<Option<files::FileIdentity>>,
+}
+impl Pinned {
+    fn new(file: File, sha: String) -> Self {
+        Self {
+            file,
+            sha,
+            verified: std::sync::Mutex::new(None),
+        }
+    }
+    /// The image still holds the pinned bytes. Bytes are read back only when
+    /// the inode's identity differs from the last verified one: any change of
+    /// its data advances ctime, which userspace cannot set, so an identical
+    /// identity (including ctime and link count) proves the bytes unchanged.
+    fn verify(&self, owner: u32) -> Result<std::fs::Metadata> {
+        let metadata = self.file.metadata()?;
+        require(
+            metadata.uid() == owner
+                && metadata.mode() & 0o022 == 0
+                && metadata.mode() & 0o111 != 0
+                && metadata.nlink() <= 1,
+            "retained Root executable authority changed",
+        )?;
+        let mut verified = self
+            .verified
+            .lock()
+            .map_err(|_| Error("retained Root executable verification poisoned".into()))?;
+        if *verified != Some(files::identity(&metadata)) {
+            *verified = None;
+            let bytes = pinned_bytes(&self.file, owner)?;
+            require(
+                crate::json::sha256(&bytes) == self.sha,
+                "retained Root executable bytes changed",
+            )?;
+            let after = self.file.metadata()?;
+            require(
+                files::identity(&after) == files::identity(&metadata),
+                "retained Root executable changed during verification",
+            )?;
+            *verified = Some(files::identity(&after));
+        }
+        Ok(metadata)
+    }
+    fn duplicate(&self) -> Result<Self> {
+        Ok(Self::new(self.file.try_clone()?, self.sha.clone()))
+    }
+}
 pub struct Retained {
     pub stat: Stat,
     uid: u32,
     pidfd: File,
     fixed: Vec<PathBuf>,
-    pinned: Option<(File, String)>,
+    pinned: Option<Pinned>,
 }
 impl Retained {
     /// Root handoff must preserve the caller's actual open description, not just an inode.
@@ -217,11 +269,7 @@ impl Retained {
             uid: self.uid,
             pidfd: self.pidfd.try_clone()?,
             fixed: self.fixed.clone(),
-            pinned: self
-                .pinned
-                .as_ref()
-                .map(|(file, sha)| Ok::<_, Error>((file.try_clone()?, sha.clone())))
-                .transpose()?,
+            pinned: self.pinned.as_ref().map(Pinned::duplicate).transpose()?,
         })
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
@@ -231,11 +279,11 @@ impl Retained {
             "single original Root image required",
         )?;
         self.recheck()?;
-        let (_, sha) = self
+        let pinned = self
             .pinned
             .as_ref()
             .ok_or_else(|| Error("original pinned Root image required".into()))?;
-        Ok((self.fixed[0].clone(), sha.clone()))
+        Ok((self.fixed[0].clone(), pinned.sha.clone()))
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     pub fn open(pid: u32, start: u64, uid: u32, executables: &[PathBuf]) -> Result<Self> {
@@ -289,7 +337,7 @@ impl Retained {
             bytes.starts_with(b"\x7fELF"),
             "native Root executable pin required",
         )?;
-        self.pinned = Some((file.try_clone()?, crate::json::sha256(&bytes)));
+        self.pinned = Some(Pinned::new(file.try_clone()?, crate::json::sha256(&bytes)));
         self.recheck()?;
         Ok(self)
     }
@@ -298,7 +346,7 @@ impl Retained {
         pid: u32,
         uid: u32,
         fixed: &[PathBuf],
-        pinned: Option<&(File, String)>,
+        pinned: Option<&Pinned>,
     ) -> Result<Stat> {
         let root = PathBuf::from(format!("/proc/{pid}"));
         let read = |name: &str, bound| -> Result<String> {
@@ -327,20 +375,8 @@ impl Retained {
         let held = unsafe { File::from_raw_fd(fd) };
         let actual = held.metadata()?;
         let mut admitted = false;
-        if let Some((file, expected)) = pinned {
-            let metadata = file.metadata()?;
-            require(
-                metadata.uid() == 0
-                    && metadata.mode() & 0o022 == 0
-                    && metadata.mode() & 0o111 != 0
-                    && metadata.nlink() <= 1,
-                "retained Root executable authority changed",
-            )?;
-            let bytes = pinned_bytes(file, 0)?;
-            require(
-                crate::json::sha256(&bytes) == *expected,
-                "retained Root executable bytes changed",
-            )?;
+        if let Some(pinned) = pinned {
+            let metadata = pinned.verify(0)?;
             admitted = image(&actual) == image(&metadata);
         }
         for path in fixed.iter().filter(|_| pinned.is_none()) {
@@ -505,4 +541,45 @@ pub fn pidfd_mapping(fd: std::os::fd::BorrowedFd<'_>) -> Result<Option<u32>> {
 }
 pub fn pidfd_target(fd: std::os::fd::BorrowedFd<'_>) -> Result<u32> {
     pidfd_mapping(fd)?.ok_or_else(|| Error("pidfd target exited or invalid".into()))
+}
+
+#[cfg(test)]
+mod pinned_tests {
+    use super::*;
+    use std::os::unix::fs::{FileExt, PermissionsExt};
+
+    fn image(directory: &Path, bytes: &[u8]) -> (PathBuf, Pinned) {
+        let path = directory.join("image");
+        std::fs::write(&path, bytes).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let file = File::open(&path).unwrap();
+        (path, Pinned::new(file, crate::json::sha256(bytes)))
+    }
+    fn directory() -> tempfile::TempDir {
+        let base =
+            std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(std::env::temp_dir, PathBuf::from);
+        tempfile::tempdir_in(base).unwrap()
+    }
+    fn owner() -> u32 {
+        // SAFETY: geteuid has no preconditions.
+        #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
+        unsafe {
+            libc::geteuid()
+        }
+    }
+
+    #[test]
+    fn an_in_place_write_of_the_same_size_is_caught_after_a_verified_check() {
+        let directory = directory();
+        let (path, pinned) = image(directory.path(), b"\x7fELF original image");
+        pinned.verify(owner()).unwrap();
+        // ctime has at least the kernel's timestamp granularity; wait it out
+        // so the write below cannot land in the same tick as the first check.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let writer = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        writer.write_all_at(b"altered", 5).unwrap();
+        drop(writer);
+        assert!(pinned.verify(owner()).is_err());
+        assert!(pinned.verified.lock().unwrap().is_none());
+    }
 }

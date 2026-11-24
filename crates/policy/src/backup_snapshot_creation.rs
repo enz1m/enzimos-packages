@@ -228,6 +228,9 @@ pub struct Captured<'a, 'g> {
 }
 impl<'a, 'g> Captured<'a, 'g> {
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "captured-snapshot", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         self.lock.recheck()?;
         self.attempt.recheck()?;
         self.source.recheck()?;

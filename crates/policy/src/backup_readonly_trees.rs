@@ -204,42 +204,48 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
         Ok(this)
     }
     fn components(&self) -> Result<()> {
-        crate::namespaces::initial()?;
-        self.inputs.require_original_lock(self.lock)?;
-        let named =
-            files::directory_relative(self.inputs.guard().control(), Path::new(FOLDER), Some(0))?;
-        require(
-            shape(&self.registry)? == self.registry_shape && shape(&named)? == self.registry_shape,
-            "original readonly-tree registry changed or covered",
-        )?;
-        self.record.recheck()?;
-        let originals = self.inputs.directories()?;
-        require(
-            originals.len() == self.trees.len(),
-            "original detached source set incomplete",
-        )?;
-        for (target, tree) in &self.trees {
-            require(
-                originals
-                    .get(target.as_str())
-                    .is_some_and(|original| std::ptr::eq(*original, tree.source)),
-                "detached source no longer pairs with original descriptor",
+        enzimos_platform::recheck_scope::evaluation(|| {
+            crate::namespaces::initial()?;
+            self.inputs.require_original_lock(self.lock)?;
+            let named = files::directory_relative(
+                self.inputs.guard().control(),
+                Path::new(FOLDER),
+                Some(0),
             )?;
-            tree.recheck()?;
-        }
-        require(
-            self.record.value()? == &self.value
-                && self.value["input_sha256"]
-                    == json::sha256(&json::canonical(&self.inputs.evidence()?)?)
-                && self.value["trees"]
-                    == value!(
-                        self.trees
-                            .iter()
-                            .map(|(target, tree)| (target, tree.evidence()))
-                            .collect::<BTreeMap<_, _>>()
-                    ),
-            "original detached source receipt changed",
-        )
+            require(
+                shape(&self.registry)? == self.registry_shape
+                    && shape(&named)? == self.registry_shape,
+                "original readonly-tree registry changed or covered",
+            )?;
+            self.record.recheck()?;
+            let originals = self.inputs.directories()?;
+            require(
+                originals.len() == self.trees.len(),
+                "original detached source set incomplete",
+            )?;
+            for (target, tree) in &self.trees {
+                require(
+                    originals
+                        .get(target.as_str())
+                        .is_some_and(|original| std::ptr::eq(*original, tree.source)),
+                    "detached source no longer pairs with original descriptor",
+                )?;
+                tree.recheck()?;
+            }
+            require(
+                self.record.value()? == &self.value
+                    && self.value["input_sha256"]
+                        == json::sha256(&json::canonical(&self.inputs.evidence()?)?)
+                    && self.value["trees"]
+                        == value!(
+                            self.trees
+                                .iter()
+                                .map(|(target, tree)| (target, tree.evidence()))
+                                .collect::<BTreeMap<_, _>>()
+                        ),
+                "original detached source receipt changed",
+            )
+        })
     }
     pub fn recheck(&self) -> Result<()> {
         self.components()?;

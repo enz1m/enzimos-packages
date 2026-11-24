@@ -181,6 +181,9 @@ impl Guard {
         Ok(value)
     }
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "storage-guard", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         initial_namespace()?;
         self.original_configuration.recheck()?;
         require(

@@ -129,6 +129,9 @@ impl<'a> Source<'a> {
         Ok(this)
     }
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "backup-source", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         self.guard.recheck()?;
         let named = files::directory(Path::new(&self.dataset.path), Some(0))?;
         same(&self.file, &named, self.shape, self.mount)?;

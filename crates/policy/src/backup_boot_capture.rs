@@ -607,6 +607,9 @@ impl<'s, 'g> Captured<'s, 'g> {
         Ok(retired)
     }
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "boot-capture", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         self.snapshot.recheck()?;
         self.attempt
             .require_original(self.snapshot.guard(), self.lock)?;

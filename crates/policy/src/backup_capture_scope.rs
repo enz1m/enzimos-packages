@@ -56,19 +56,21 @@ pub(crate) fn validate_arguments_for_targets(
 /// source roots, options or alternate tag/host can enter the scope. Actual source
 /// mounts and boot/inventory stage actors are still required before execution.
 pub fn review(capture: &Released<'_, '_, '_>) -> Result<Value> {
-    capture.recheck()?;
-    let datasets = capture
-        .snapshots()?
-        .iter()
-        .map(|snapshot| Ok(snapshot.dataset()?.clone()))
-        .collect::<Result<Vec<_>>>()?;
-    let (sources, excludes) = scope(&datasets)?;
-    let evidence = capture.evidence()?;
-    capture.recheck()?;
-    Ok(
-        json!({"schema":1,"role":"backup-archive-scope-review","sources":sources,
+    enzimos_platform::recheck_scope::evaluation(|| {
+        capture.recheck()?;
+        let datasets = capture
+            .snapshots()?
+            .iter()
+            .map(|snapshot| Ok(snapshot.dataset()?.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        let (sources, excludes) = scope(&datasets)?;
+        let evidence = capture.evidence()?;
+        capture.recheck()?;
+        Ok(
+            json!({"schema":1,"role":"backup-archive-scope-review","sources":sources,
         "excludes":excludes,"tag":"enzimos-whole-linux","host":"enzimos",
         "capture":evidence,"global_atomicity":false,"source_mounts_admitted":false,
         "boot_inventory_staged":false,"transfer_entered":false,"backup_complete":false}),
-    )
+        )
+    })
 }

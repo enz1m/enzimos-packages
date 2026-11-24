@@ -133,6 +133,9 @@ impl<'s, 'cfg, 'g> Released<'s, 'cfg, 'g> {
         Ok(retired)
     }
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "source-capture", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         self.lock.recheck()?;
         self.attempt.recheck()?;
         self.inventory.recheck()?;

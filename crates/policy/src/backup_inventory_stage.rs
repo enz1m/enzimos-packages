@@ -226,6 +226,9 @@ impl<'c, 's, 'cfg, 'g> Staged<'c, 's, 'cfg, 'g> {
         Ok(retired)
     }
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "inventory-stage", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         self.capture.recheck()?;
         self.boot.require_original(self.capture)?;
         require(

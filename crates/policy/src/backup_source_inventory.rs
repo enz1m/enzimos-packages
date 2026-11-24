@@ -260,6 +260,9 @@ impl<'a, 'g> Inventory<'a, 'g> {
         Ok(result)
     }
     pub fn recheck(&self) -> Result<()> {
+        enzimos_platform::recheck_scope::once(self, "source-inventory", || self.recheck_fresh())
+    }
+    fn recheck_fresh(&self) -> Result<()> {
         self.configuration.recheck()?;
         self.guard.recheck()?;
         self.vendor.recheck()?;
