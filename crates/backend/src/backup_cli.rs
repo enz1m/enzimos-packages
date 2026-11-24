@@ -136,7 +136,8 @@ fn create_inner(automatic: bool, created: &mut bool) -> Result<Value> {
                 Ok(())
             },
         ),
-    )?;
+    )
+    .inspect_err(|_| crate::backup_create_coordinator::failed_cleanup(&guard, &lock))?;
     *created = true;
     enzimos_policy::backup_run_status::record_outcome(None);
     permission()?;
@@ -193,7 +194,8 @@ fn create_share(
                 Ok(())
             },
         ),
-    )?;
+    )
+    .inspect_err(|_| crate::backup_create_coordinator::failed_cleanup(guard, lock))?;
     *created = true;
     enzimos_policy::backup_run_status::record_outcome(None);
     permission()?;

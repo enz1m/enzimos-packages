@@ -399,7 +399,7 @@ impl<'g> Store<'g> {
         boot: &str,
         started: u64,
         abandon: &dyn Fn(&Value) -> bool,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         self.recheck()?;
         self.retire_completed(boot)?;
         let control = self.path.parent().map_or_else(
@@ -412,9 +412,11 @@ impl<'g> Store<'g> {
             .filter(|(_, r)| blocks_live(&r.value, boot, &control))
             .map(|(name, _)| name.clone())
             .collect::<Vec<_>>();
+        let mut abandoned = 0;
         for name in blocking {
             if abandon(&self.records[&name].value) {
                 self.abandon(&name)?;
+                abandoned += 1;
             }
         }
         require(
@@ -456,7 +458,8 @@ impl<'g> Store<'g> {
                 value: v,
             },
         );
-        self.recheck()
+        self.recheck()?;
+        Ok(abandoned)
     }
     /// Keep an interrupted attempt as `abandoned`, its audit record.
     fn abandon(&mut self, name: &str) -> Result<()> {
@@ -589,7 +592,7 @@ impl<'g> Attempt<'g> {
             .map_err(|_| enzimos_platform::Error("backup attempt clock unavailable".into()))?
             .as_secs();
         let control = Path::new(crate::operation::CONTROL);
-        store.start(&id, &crate::operation::boot_id()?, started, &|row| {
+        let abandoned = store.start(&id, &crate::operation::boot_id()?, started, &|row| {
             may_abandon(
                 holds_operation_lock(lock),
                 crate::backup_running::foreign(),
@@ -597,6 +600,10 @@ impl<'g> Attempt<'g> {
                 &worker_remains(control, row["id"].as_str().unwrap_or("")),
             )
         })?;
+        if abandoned > 0 {
+            // An abandoned attempt's snapshots and staging are no one's any more.
+            let _ = crate::backup_history::retire_failed_locked(guard, lock);
+        }
         Ok(Self {
             store: RefCell::new(store),
             id,

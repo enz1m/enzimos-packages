@@ -64,6 +64,9 @@ pub fn run(
         )
     };
     enzimos_policy::backup_run_status::record_outcome(created.as_ref().err().map(|e| e.0.as_str()));
+    if created.is_err() {
+        failed_cleanup(guard, &lock);
+    }
     let summary = created?;
     // The System1 result keeps its closed fields; the cleanup and copy
     // outcomes are published as backup status instead.
@@ -76,6 +79,18 @@ pub fn run(
         target,
     );
     Ok(value!({"snapshot_id":summary["snapshot_id"]}))
+}
+/// After a failed capture, under the still held lock: its snapshots and
+/// staging go now unless a transfer worker may still use them (the next
+/// backup then abandons the attempt and cleans up). Best effort.
+pub(crate) fn failed_cleanup(guard: &Guard, lock: &files::Lock) {
+    match enzimos_policy::backup_history::retire_failed_locked(guard, lock) {
+        Ok(outcome) => eprintln!("enzimos-backup: failed backup cleanup {outcome}"),
+        Err(error) => eprintln!(
+            "enzimos-backup: failed backup cleanup refused: {}",
+            enzimos_policy::diagnostic::bounded(&error.0)
+        ),
+    }
 }
 /// Report each capture phase as the running backup's phase too.
 pub(crate) fn tracked<'a>(

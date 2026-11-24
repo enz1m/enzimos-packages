@@ -190,8 +190,8 @@ pub fn retire_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     Ok(serde_json::json!({"retired":retired,"completions":completions}))
 }
 
-/// Newest failed backups whose leftovers (snapshots, staging, receipts) are
-/// kept for diagnostics.
+/// Newest failed backups whose receipts are kept for diagnostics; their
+/// snapshots and staging are removed as soon as no process can use them.
 pub const KEEP_FAILED: usize = 8;
 const WORKERS: &str = "backup-transfer-workers";
 const BOOTS: &str = "backup-boot-captures";
@@ -238,15 +238,18 @@ fn snapshot_leftover(receipt: &Value) -> Result<bool> {
 fn folder(control: &std::fs::File, mount: u64, owner: u32, name: &str) -> Result<Option<Folder>> {
     Folder::open(control, mount, owner, name, LIMIT, |_, _| Ok(()))
 }
-/// Retire failed backups beyond the newest [`KEEP_FAILED`]. A backup failed
-/// when its source capture never reached `retired` and its attempt never
-/// completed: nothing else will ever retire its snapshots, boot copy, staging
-/// or receipts, and each failure used to add one capture and one snapshot
-/// receipt per source until the bounded registries refused every backup.
-/// Data goes first (snapshots through `destroy`, the same exact-ID retirement
-/// a finished backup uses; boot copy and staging trees), then the receipts,
-/// the capture last, so an interrupted run is completed by the next one. A
-/// job that may still be live, or whose leftovers cannot be proven, stays.
+/// Clean up failed backups. A backup failed when its source capture never
+/// reached `retired` and its attempt never completed: nothing else will ever
+/// retire its snapshots, boot copy, staging or receipts.
+///
+/// The data of every failed backup that can no longer have a live process
+/// goes at once: its source snapshots through `destroy` (the same exact-ID
+/// retirement a finished backup uses) together with their receipts, so a
+/// reused Snapper number is never mistaken for them, and its boot copy and
+/// staging trees. Only the receipts of the newest [`KEEP_FAILED`] failures
+/// stay for diagnostics; older ones go, the capture last, so an interrupted
+/// run is completed by the next one. A job that may still be live, or whose
+/// leftovers cannot be proven, stays as it is.
 pub(crate) fn retire_failed_in(
     control: &std::fs::File,
     mount: u64,
@@ -256,7 +259,7 @@ pub(crate) fn retire_failed_in(
     check: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Value> {
     let Some(mut captures) = folder(control, mount, owner, CAPTURES)? else {
-        return Ok(serde_json::json!({"retired":[],"kept":[]}));
+        return Ok(serde_json::json!({"retired":[],"cleared":[],"kept":[]}));
     };
     let attempts = Folder::open(control, mount, owner, "backup-attempts", 8192, |v, id| {
         crate::backup_attempt::validate(v, id)
@@ -290,24 +293,40 @@ pub(crate) fn retire_failed_in(
             retirable: !live(value, attempt, worker, boot),
         });
     }
+    let expired = crate::control_registry::select(failed.clone(), KEEP_FAILED, 0);
     let mut retired = Vec::new();
+    let mut cleared = Vec::new();
     let mut kept = Vec::new();
-    for j in crate::control_registry::select(failed, KEEP_FAILED, 0) {
-        let outcome = (|| -> Result<()> {
+    for row in failed.into_iter().filter(|row| row.retirable) {
+        let j = row.id;
+        let whole = expired.contains(&j);
+        let outcome = (|| -> Result<bool> {
             check()?;
-            for (name, registry) in &members {
+            let mut removed = false;
+            for (name, registry) in &mut members {
                 let Some(registry) = registry else { continue };
-                for id in registry.members.keys().filter(|n| belongs(name, n, &j)) {
-                    if *name == SNAPSHOTS {
-                        let receipt = registry.value(id).ok_or_else(|| {
-                            enzimos_platform::Error("unreadable failed snapshot receipt".into())
-                        })?;
-                        if snapshot_leftover(receipt)? {
-                            check()?;
-                            destroy(receipt)?;
-                        }
-                    }
+                if *name != SNAPSHOTS {
+                    continue;
                 }
+                let ids = registry
+                    .members
+                    .keys()
+                    .filter(|n| belongs(name, n, &j))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for id in ids {
+                    let receipt = registry.value(&id).ok_or_else(|| {
+                        enzimos_platform::Error("unreadable failed snapshot receipt".into())
+                    })?;
+                    if snapshot_leftover(receipt)? {
+                        check()?;
+                        destroy(receipt)?;
+                    }
+                    check()?;
+                    registry.retire(&id)?;
+                    removed = true;
+                }
+                registry.sync()?;
             }
             // Boot copies and inventory staging are private trees named like
             // their receipt; the receipt is written before the tree exists.
@@ -334,8 +353,12 @@ pub(crate) fn retire_failed_in(
                             owner,
                             check,
                         )?;
+                        removed = true;
                     }
                 }
+            }
+            if !whole {
+                return Ok(removed);
             }
             for (name, registry) in &mut members {
                 let Some(registry) = registry else { continue };
@@ -353,16 +376,19 @@ pub(crate) fn retire_failed_in(
             }
             check()?;
             captures.retire(&j)?;
-            captures.sync()
+            captures.sync()?;
+            Ok(true)
         })();
         match outcome {
-            Ok(()) => retired.push(j),
+            Ok(_) if whole => retired.push(j),
+            Ok(true) => cleared.push(j),
+            Ok(false) => {}
             Err(error) => kept.push(
                 serde_json::json!({"id":j,"reason":error.0.chars().take(160).collect::<String>()}),
             ),
         }
     }
-    Ok(serde_json::json!({"retired":retired,"kept":kept}))
+    Ok(serde_json::json!({"retired":retired,"cleared":cleared,"kept":kept}))
 }
 /// Remove one failed backup's source snapshot through the same exact-ID
 /// subvolume and Snapper metadata retirement a finished backup uses. The
@@ -433,9 +459,10 @@ fn destroy_snapshot(
     snapshot.destroy_original()?.retire_metadata(authorize)?;
     Ok(())
 }
-/// Retire old failed backups (see [`retire_failed_in`]). The caller holds the
-/// backup operation lock: at attempt start, so a machine whose backups only
-/// ever fail still heals, and after a successful backup's own cleanup.
+/// Clean up failed backups (see [`retire_failed_in`]). The caller holds the
+/// backup operation lock: at attempt start (again after abandoning an
+/// interrupted attempt), after a backup failed in its own process, and after
+/// a successful backup's own cleanup.
 pub fn retire_failed_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     crate::operation::root_only()?;
     guard.recheck()?;
@@ -492,6 +519,135 @@ mod tests {
         ] {
             let receipt = serde_json::json!({"phase":phase});
             assert_eq!(snapshot_leftover(&receipt).ok(), owned, "{phase}");
+        }
+    }
+
+    struct Control {
+        _dir: tempfile::TempDir,
+        root: std::path::PathBuf,
+        file: std::fs::File,
+        mount: u64,
+        owner: u32,
+    }
+    const BOOT: &str = "11111111-2222-3333-4444-555555555555";
+    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
+    fn control() -> Control {
+        use std::os::unix::fs::PermissionsExt;
+        let base =
+            std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(std::env::temp_dir, Into::into);
+        let dir = tempfile::Builder::new()
+            .permissions(std::fs::Permissions::from_mode(0o700))
+            .tempdir_in(base)
+            .unwrap();
+        // SAFETY: getuid has no preconditions.
+        let owner = unsafe { libc::getuid() };
+        let file = files::directory(dir.path(), Some(owner)).unwrap();
+        let mount =
+            enzimos_platform::mount_identity::id(std::os::fd::AsFd::as_fd(&file), true).unwrap();
+        Control {
+            root: dir.path().to_owned(),
+            _dir: dir,
+            file,
+            mount,
+            owner,
+        }
+    }
+    impl Control {
+        fn write(&self, folder: &str, id: &str, value: &Value) {
+            use std::os::unix::fs::PermissionsExt;
+            let directory = self.root.join(folder);
+            if !directory.exists() {
+                std::fs::create_dir(&directory).unwrap();
+                std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))
+                    .unwrap();
+            }
+            let path = directory.join(format!("{id}.json"));
+            std::fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        fn has(&self, folder: &str, id: &str) -> bool {
+            self.root.join(folder).join(format!("{id}.json")).exists()
+        }
+        /// One failed job `j` with attempt `a` in `state` and one snapshot.
+        fn failed(&self, j: &str, a: &str, state: &str) {
+            self.write(
+                "backup-attempts",
+                a,
+                &serde_json::json!({"schema":1,"id":a,"boot_id":BOOT,
+                "started_unix":1,"state":state,"snapshot_id":null}),
+            );
+            self.write(
+                CAPTURES,
+                j,
+                &serde_json::json!({"id":j,"phase":"captured","boot_id":BOOT,
+                "attempt":{"id":a}}),
+            );
+            self.write(
+                SNAPSHOTS,
+                &format!("{j}-0"),
+                &serde_json::json!({"id":j,"phase":"created",
+                "snapshot":{"number":7}}),
+            );
+        }
+        fn retire(&self) -> (Value, Vec<Value>) {
+            let mut destroyed = Vec::new();
+            let outcome = retire_failed_in(
+                &self.file,
+                self.mount,
+                self.owner,
+                BOOT,
+                &mut |receipt| {
+                    destroyed.push(receipt.clone());
+                    Ok(())
+                },
+                &mut || Ok(()),
+            )
+            .unwrap();
+            (outcome, destroyed)
+        }
+    }
+    fn id(n: u32) -> String {
+        format!("{n:032x}")
+    }
+
+    #[test]
+    fn an_abandoned_backup_loses_its_snapshots_at_once_and_keeps_its_receipts() {
+        let control = control();
+        let (gone, live) = (id(1), id(2));
+        control.failed(&gone, &id(101), "abandoned");
+        control.failed(&live, &id(102), "uncertain");
+        control.write(
+            WORKERS,
+            &live,
+            &serde_json::json!({"id":live,"phase":"send-entered"}),
+        );
+        let (outcome, destroyed) = control.retire();
+        assert_eq!(destroyed.len(), 1);
+        assert_eq!(destroyed[0]["id"], gone.as_str());
+        assert_eq!(outcome["cleared"], serde_json::json!([gone]));
+        assert_eq!(outcome["retired"], serde_json::json!([]));
+        assert!(!control.has(SNAPSHOTS, &format!("{gone}-0")));
+        assert!(control.has(CAPTURES, &gone));
+        assert!(control.has(SNAPSHOTS, &format!("{live}-0")));
+        assert!(control.has(CAPTURES, &live));
+        let (again, destroyed) = control.retire();
+        assert!(destroyed.is_empty());
+        assert_eq!(again["cleared"], serde_json::json!([]));
+    }
+    #[test]
+    fn only_failures_beyond_the_diagnostics_window_lose_their_receipts() {
+        let control = control();
+        for n in 1..=(KEEP_FAILED as u32 + 1) {
+            control.failed(&id(n), &id(100 + n), "uncertain");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let (outcome, destroyed) = control.retire();
+        assert_eq!(destroyed.len(), KEEP_FAILED + 1);
+        assert_eq!(outcome["retired"], serde_json::json!([id(1)]));
+        assert!(!control.has(CAPTURES, &id(1)));
+        for n in 2..=(KEEP_FAILED as u32 + 1) {
+            assert!(control.has(CAPTURES, &id(n)));
+            assert!(!control.has(SNAPSHOTS, &format!("{}-0", id(n))));
         }
     }
 }

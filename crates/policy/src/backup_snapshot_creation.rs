@@ -68,6 +68,9 @@ fn registry_recheck(source: &Source<'_>, directory: &File, expected: Shape) -> R
         "original backup snapshot receipt directory replaced or covered",
     )
 }
+/// Snapper description of a backup's own source snapshot; display only, never
+/// proof of ownership (that is the snapshot receipt).
+pub(crate) const DESCRIPTION: &str = "enzimOS package-locked backup source";
 fn number(body: &[u8]) -> Result<u64> {
     require(
         !body.is_empty() && body.len() <= 32,
@@ -420,7 +423,7 @@ pub fn create<'a, 'c, 'g, F: FnMut() -> Result<()>>(
             "",
             "--print-number",
             "--description",
-            "enzimOS package-locked backup source",
+            DESCRIPTION,
         ],
         &[0],
         // number() still requires one short decimal line; a wider read bound

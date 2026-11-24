@@ -5,7 +5,7 @@
 //! `--system-backup-create` (test/maintenance) runs the native provider's own
 //! backup-create plan and job sequence; `--backup-candidates` prints the
 //! passive candidate inventory that setup selection tokens come from.
-//! `--system-query backups|backup-points` (test/maintenance) answers the
+//! `--system-query backups|backup-points|snapshots|history` (test/maintenance) answers the
 //! System1 query of that name through the native provider.
 use enzimos_platform::{Error, Result, files};
 use enzimos_policy::{identity, operation, storage_runtime::Guard};
@@ -150,6 +150,8 @@ pub fn parse(args: &[OsString]) -> Result<Option<Command>> {
         ["--backup-candidates"] => Command::Candidates,
         ["--system-query", "backups"] => Command::SystemQuery("backups"),
         ["--system-query", "backup-points"] => Command::SystemQuery("backup-points"),
+        ["--system-query", "snapshots"] => Command::SystemQuery("snapshots"),
+        ["--system-query", "history"] => Command::SystemQuery("history"),
         ["--remote-rotation-advance", digest, next] => {
             Command::RemoteRotationAdvance(sha(digest)?, action(next)?)
         }

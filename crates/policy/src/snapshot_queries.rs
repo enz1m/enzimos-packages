@@ -59,6 +59,14 @@ struct Row {
     number: u64,
     public: Value,
 }
+/// A backup's own source snapshot: it exists only while a backup captures or
+/// until a failed backup is cleaned up, and is no one's history or restore
+/// point, so the history queries leave it out.
+fn backup_source(kind: &str, cleanup: &str, description: &str) -> bool {
+    kind == "single"
+        && cleanup.is_empty()
+        && description == crate::backup_snapshot_creation::DESCRIPTION
+}
 fn parse(v: &Value) -> Result<Vec<Row>> {
     let rows = v
         .as_array()
@@ -90,6 +98,9 @@ fn parse(v: &Value) -> Result<Vec<Row>> {
                 && description.len() <= 4096,
             "snapshot kind/cleanup/description bound",
         )?;
+        if backup_source(kind, cleanup, description) {
+            continue;
+        }
         let (date, text) = utc(&row["date"])?;
         let pre = number(&row["pre-number"], true)?;
         result.push(Row { date,original_date:row["date"].as_str().unwrap().into(),number:n,public:value!({"number":n,"date":text,"kind":kind,"description":description,"cleanup":cleanup,"pre_number":pre}) });
@@ -183,4 +194,32 @@ pub fn history() -> Result<Value> {
     )?;
     timer.recheck()?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_backup_source_snapshot_is_no_ones_history() {
+        let row = |number: u64, cleanup: &str, description: &str| {
+            value!({"number":number,"type":"single","date":"2026-11-24 10:23:43","cleanup":cleanup,
+                "description":description})
+        };
+        let rows = value!([
+            row(66, "", crate::backup_snapshot_creation::DESCRIPTION),
+            row(67, "number", "enzimOS home history"),
+            row(68, "", "taken by hand"),
+            row(69, "number", crate::backup_snapshot_creation::DESCRIPTION),
+        ]);
+        let numbers = snapshot_rows(&rows)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["number"].as_u64().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(numbers, [69, 68, 67]);
+        assert_eq!(parse(&rows).unwrap().len(), 3);
+    }
 }
