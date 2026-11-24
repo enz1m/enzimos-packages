@@ -354,6 +354,13 @@
     <message xml:lang="es">Se requiere autenticación de administrador para configurar este destino de copias de seguridad.</message>
     <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
   </action>
+  <action id="org.enzimos.system.backup-remote-check">
+    <description>Check the network share for encrypted backups</description>
+    <description xml:lang="es">Comprobar el recurso de red de las copias cifradas</description>
+    <message>Administrator authentication is required to check the network share used for backups.</message>
+    <message xml:lang="es">Se requiere autenticación de administrador para comprobar el recurso de red de las copias de seguridad.</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+  </action>
   <action id="org.enzimos.system.backup-export">
     <description>Export the encrypted backup recovery password</description>
     <description xml:lang="es">Exportar la contraseña de recuperación de las copias cifradas</description>

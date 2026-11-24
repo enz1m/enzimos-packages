@@ -340,6 +340,41 @@ profile enzimos-restic-native-remote-check flags=(attach_disconnected) {
   deny /root/** rwklx,
 }
 
+# A whole-system backup straight into the NAS share, for setups without a
+# backup drive: the reviewed read-only sources and the share repository only.
+profile enzimos-restic-native-remote-backup flags=(attach_disconnected) {
+  include <abstractions/base>
+  /usr/bin/restic mrix,
+  /etc/{passwd,group,nsswitch.conf,machine-id} r,
+  owner @{PROC}/@{pid}/{cgroup,mountinfo} r,
+  /backup-source/ r,
+  /backup-source/** r,
+  /backup-remote/ r,
+  /backup-remote/** rwk,
+  /run/enzimos/backup-native/jobs/*/scratch/ rw,
+  /run/enzimos/backup-native/jobs/*/scratch/** rwk,
+  /etc/enzimos/backup-remote.password r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  capability dac_override,
+  # The kernel SMB client reaches the NAS; Restic itself has no network.
+  audit deny network,
+  audit deny /etc/shadow r,
+  deny /backup-source/** wklx,
+  deny /backup-source/system/etc/enzimos/backup{.,.next-,.rotation-,.retired-}password r,
+  deny /backup-source/system/etc/enzimos/backup{-remote,-remote-rotation,-remote-retired}.{password,identity,hosts,json} r,
+  deny /backup-source/system/etc/enzimos/backup-remote.share-password r,
+  deny /backup-source/system/etc/enzimos/backup.json r,
+  deny /backup-source/system/etc/pacman.d/gnupg/** r,
+  deny /backup-source/system/var/lib/enzimos-control/** r,
+  deny /backup-repository/** rwklx,
+  deny /restore-target/** rwklx,
+  deny /root/** rwklx,
+  deny /etc/enzimos/backup{.,.next-,.rotation-,.retired-}password r,
+  deny /etc/enzimos/backup{-remote-rotation,-remote-retired,-remote-setup}.password r,
+  deny /etc/enzimos/backup-remote.share-password r,
+  deny /etc/enzimos/{backup-remote.identity,backup-remote.hosts} r,
+}
+
 profile enzimos-restic-retain flags=(attach_disconnected) {
   include <abstractions/base>
   /usr/bin/restic mrix,

@@ -161,7 +161,7 @@ impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
         self.recheck(authorize)?;
         let map = self.context.descriptors(authorize)?;
         let mut files = vec![self.sealed.as_fd()];
-        for role in wire::ROLES {
+        for role in wire::roles(&self.request["context"]) {
             files.push(*map.get(role).ok_or_else(|| {
                 enzimos_platform::Error("original transfer descriptor role missing".into())
             })?);

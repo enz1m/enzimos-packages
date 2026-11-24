@@ -33,7 +33,12 @@ impl<P: Provider> Api<P> {
             .authority
             .authorize(
                 &call.sender,
-                "org.enzimos.system.backup-setup",
+                // A test only checks the share; its prompt says so.
+                if request["action"] == "test" {
+                    "org.enzimos.system.backup-remote-check"
+                } else {
+                    "org.enzimos.system.backup-setup"
+                },
                 request["allow_interaction"].as_bool().unwrap(),
                 call.arrived,
                 150000,

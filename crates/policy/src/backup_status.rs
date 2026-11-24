@@ -149,7 +149,7 @@ impl<'a> Status<'a> {
     pub fn schedule_enabled(&self) -> Result<bool> {
         self.recheck()?;
         let Some(configuration) = &self.configuration else {
-            return Ok(false);
+            return self.share_schedule_enabled();
         };
         let Some(opt) = OptIn::open()? else {
             return Ok(false);
@@ -158,6 +158,25 @@ impl<'a> Status<'a> {
         opt.verify_stored(configuration, &pin)?;
         self.recheck()?;
         Ok(true)
+    }
+    /// A setup without a backup drive: an opt-in bound to the current share
+    /// configuration and pin. One bound to anything else reads as disabled
+    /// (the scheduled run then refuses it), so a reconfigured share never
+    /// takes the status page down.
+    fn share_schedule_enabled(&self) -> Result<bool> {
+        use crate::backup_share_destination as share;
+        if share::primary() != Some(share::SHARE) {
+            return Ok(false);
+        }
+        let Some(opt) = OptIn::open()? else {
+            return Ok(false);
+        };
+        let verified = (|| {
+            let scope = share::ShareScope::open()?;
+            opt.verify_share(scope.public_bytes()?, &share::pin(self.guard)?)
+        })();
+        self.recheck()?;
+        Ok(opt.share()? && verified.is_ok())
     }
     /// Snapshot display is separate from provisioning, capture and restore authority.
     /// It never mounts a repository, creates runtime state, or reads credential bytes here.
@@ -242,6 +261,17 @@ impl<'a> Status<'a> {
             "schedule_enabled":enabled,"last_backup":last_backup,"next_run":next_run,
             "recovery_copy":{"state":"not-configured","user_attested_independent_copy":false,"physical_copy_verified":false},
             "destination_available":false,"destination_label":null,"destination_free_bytes":null,"repository_bytes":null});
+        // Where "Back up now" and the schedule write: `drive`, `share` (no
+        // drive; the NAS share holds the backups) or null (neither is ready).
+        result["primary"] = value!(crate::backup_share_destination::primary());
+        // The filesystem a recovery copy must not be saved on (`backup-recovery
+        // save --backup-filesystem-uuid`): the drive, or the system disk.
+        result["recovery_save_exclude_uuid"] = match &self.configuration {
+            Some(configuration) => configuration.value()["destination_uuid"].clone(),
+            None => self.guard.configuration["filesystem_uuid"].clone(),
+        };
+        result["running"] = crate::backup_running::read();
+        result["remote_copy"] = crate::backup_run_status::remote_copy();
         result["remote"] = remote_summary(self.remote.body.as_deref().map(Vec::as_slice));
         // What NAS share setup will use as the repository password: the local
         // backup's (one recovery key for both copies) or one to enter.
@@ -255,6 +285,14 @@ impl<'a> Status<'a> {
         // Only a share this OS can use counts as configured; an SFTP setup
         // from before SMB shows as `remote.state = reconfigure-as-smb`.
         result["remote_configured"] = value!(result["remote"]["state"] == "configured");
+        if result["primary"] == crate::backup_share_destination::SHARE {
+            result["recovery_copy"] =
+                crate::backup_recovery_confirmation::share_status(self.guard)?;
+            result["run"] = crate::backup_run_status::read();
+            let policy = crate::backup_retention::policy();
+            result["retention"] = value!({"policy":policy.as_ref().ok(),"policy_valid":policy.is_ok(),
+                "last_cleanup":crate::backup_retention::status().unwrap_or(Value::Null)});
+        }
         if let Some(configuration) = &self.configuration {
             result["destination_uuid"] = configuration.value()["destination_uuid"].clone();
             // An unreadable policy file must not take the whole status page down.

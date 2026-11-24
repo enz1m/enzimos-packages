@@ -322,7 +322,15 @@ fn validate_marker(bytes: &[u8]) -> Result<()> {
     let v = json::decode(bytes, crate::backup_configuration::LIMIT)?;
     json::fields(
         &v,
-        "schema configuration_sha256 destination_pin_sha256 schedule opt_in",
+        if v.get("destination").is_some() {
+            "schema destination configuration_sha256 destination_pin_sha256 schedule opt_in"
+        } else {
+            "schema configuration_sha256 destination_pin_sha256 schedule opt_in"
+        },
+    )?;
+    require(
+        v.get("destination").is_none_or(|d| d == "share"),
+        "closed backup schedule destination",
     )?;
     require(
         v["schema"].as_u64() == Some(1)
@@ -397,6 +405,29 @@ impl OptIn {
         self.recheck()?;
         pin.recheck()
     }
+    /// Whether this opt-in is bound to the NAS share (a setup without a
+    /// backup drive) rather than to a drive.
+    ///
+    /// # Errors
+    /// The opt-in document changed.
+    pub fn share(&self) -> Result<bool> {
+        self.recheck()?;
+        Ok(
+            json::decode(self.document.bytes()?, crate::backup_configuration::LIMIT)?
+                .get("destination")
+                .is_some(),
+        )
+    }
+    /// Verify the opt-in against the NAS share configuration bytes and the
+    /// share repository pin of a setup without a backup drive.
+    ///
+    /// # Errors
+    /// A drive opt-in, or a binding that no longer matches.
+    pub fn verify_share(&self, configuration: &[u8], pin: &Value) -> Result<()> {
+        self.recheck()?;
+        crate::backup_binding::verify_schedule_share(self.document.bytes()?, configuration, pin)?;
+        self.recheck()
+    }
     /// Caller must separately verify fresh recovery-copy confirmation before
     /// capture. A schedule document alone never grants recovery or source authority.
     pub fn admit<F: FnOnce(&Self) -> Result<Value>>(body: F) -> Result<Value> {
@@ -413,6 +444,38 @@ impl OptIn {
 mod tests {
     use super::*;
     use std::os::unix::fs::{PermissionsExt, symlink};
+    #[test]
+    fn a_share_opt_in_names_its_destination_and_nothing_else() {
+        let configuration = br#"{"folder":"enzimos/laptop","schema":2,"server":"192.0.2.4","share":"backups","user":"ann"}"#;
+        let pin = serde_json::json!({"schema":2,"repository_id":"c".repeat(64),
+            "configuration_sha256":json::sha256(configuration)});
+        let marker = crate::backup_binding::schedule_share(configuration, &pin).unwrap();
+        validate_marker(&json::canonical(&marker).unwrap()).unwrap();
+        crate::backup_binding::verify_schedule_share(
+            &json::canonical(&marker).unwrap(),
+            configuration,
+            &pin,
+        )
+        .unwrap();
+        let mut other = pin.clone();
+        other["repository_id"] = serde_json::json!("d".repeat(64));
+        assert!(
+            crate::backup_binding::verify_schedule_share(
+                &json::canonical(&marker).unwrap(),
+                configuration,
+                &other,
+            )
+            .is_err()
+        );
+        let mut stale = pin;
+        stale["configuration_sha256"] = serde_json::json!("e".repeat(64));
+        assert!(crate::backup_binding::schedule_share(configuration, &stale).is_err());
+        for destination in ["drive", "cloud"] {
+            let mut foreign = marker.clone();
+            foreign["destination"] = serde_json::json!(destination);
+            assert!(validate_marker(&json::canonical(&foreign).unwrap()).is_err());
+        }
+    }
     fn fixture() -> tempfile::TempDir {
         let work = Path::new(
             &std::env::var_os("ENZIMOS_TEST_TMPDIR")

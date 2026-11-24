@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 //! Complete, bounded nested-source inventory precedes snapshot capture admission.
 use crate::{
-    backup_configuration::Configuration,
+    backup_configuration::SourceScope,
     backup_source::Source,
-    backup_source_layout::{Dataset, layout},
+    backup_source_layout::Dataset,
     birth_runtime::parse_inventory,
     settings_command::Command,
     storage_runtime::{self, Guard},
@@ -134,7 +134,7 @@ fn creation_rows(
     Ok(expected)
 }
 pub struct Inventory<'a, 'g> {
-    configuration: &'a Configuration,
+    configuration: &'a dyn SourceScope,
     guard: &'g Guard,
     sources: Vec<Source<'g>>,
     vendor: Command,
@@ -142,10 +142,10 @@ pub struct Inventory<'a, 'g> {
     nested: Mutex<Vec<Value>>,
 }
 impl<'a, 'g> Inventory<'a, 'g> {
-    pub fn observe(configuration: &'a Configuration, guard: &'g Guard) -> Result<Self> {
+    pub fn observe(configuration: &'a dyn SourceScope, guard: &'g Guard) -> Result<Self> {
         configuration.recheck()?;
         guard.recheck()?;
-        let datasets = layout(configuration.value())?;
+        let datasets = configuration.datasets()?;
         let sources = datasets
             .iter()
             .cloned()
@@ -211,7 +211,7 @@ impl<'a, 'g> Inventory<'a, 'g> {
         self.configuration.recheck()?;
         self.guard.recheck()?;
         self.vendor.recheck()?;
-        let datasets = layout(self.configuration.value())?;
+        let datasets = self.configuration.datasets()?;
         require(
             persistent_mounts(storage_runtime::rows()?) == self.mounts
                 && Self::sample(&self.sources, &datasets, &self.vendor)? == self.nested_value()?,
@@ -250,7 +250,7 @@ impl<'a, 'g> Inventory<'a, 'g> {
             persistent_mounts(storage_runtime::rows()?) == self.mounts,
             "backup mounts changed during snapshot creation",
         )?;
-        let datasets = layout(self.configuration.value())?;
+        let datasets = self.configuration.datasets()?;
         let physical = self
             .sources
             .iter()
@@ -278,9 +278,13 @@ impl<'a, 'g> Inventory<'a, 'g> {
         drop(original);
         self.recheck()
     }
-    pub(crate) fn require_pair(&self, configuration: &Configuration, guard: &Guard) -> Result<()> {
+    pub(crate) fn require_pair(
+        &self,
+        configuration: &dyn SourceScope,
+        guard: &Guard,
+    ) -> Result<()> {
         require(
-            std::ptr::eq(self.configuration, configuration) && std::ptr::eq(self.guard, guard),
+            std::ptr::addr_eq(self.configuration, configuration) && std::ptr::eq(self.guard, guard),
             "review requires original source configuration and storage actors",
         )?;
         self.recheck()

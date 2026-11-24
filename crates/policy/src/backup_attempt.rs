@@ -316,18 +316,18 @@ impl<'g> Store<'g> {
         self.recheck()?;
         self.retire_completed(boot)?;
         require(
-            self.records.len() < CAPACITY
-                && !self.records.values().any(|r| {
-                    blocks_live(
-                        &r.value,
-                        boot,
-                        self.path
-                            .parent()
-                            .unwrap_or(Path::new(crate::operation::CONTROL)),
-                    )
-                }),
-            "running backup attempt or capacity requires review; no retry",
+            !self.records.values().any(|r| {
+                blocks_live(
+                    &r.value,
+                    boot,
+                    self.path
+                        .parent()
+                        .unwrap_or(Path::new(crate::operation::CONTROL)),
+                )
+            }),
+            "backup-attempt-needs-restart",
         )?;
+        require(self.records.len() < CAPACITY, "backup-attempt-capacity")?;
         let name = format!("{id}.json");
         require(
             !self.records.contains_key(&name),

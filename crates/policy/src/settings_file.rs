@@ -40,6 +40,7 @@ impl Config {
                     | "/etc/UPower/UPower.conf"
                     | "/etc/enzimos/backup.json"
                     | "/etc/enzimos/backup-retention.json"
+                    | "/etc/enzimos/backup-remote.json"
             ),
             "settings configuration outside registry",
         )?;

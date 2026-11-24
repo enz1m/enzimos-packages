@@ -40,9 +40,9 @@ pub(crate) fn additional(name: &str, path: &str) -> Result<()> {
         "unqualified additional source path",
     )
 }
-pub fn layout(config: &Value) -> Result<Vec<Dataset>> {
-    crate::backup_configuration::validate(config)?;
-    let mut sources = vec![
+/// The system and home datasets every backup captures.
+pub fn base() -> Vec<Dataset> {
+    vec![
         Dataset {
             name: "root".into(),
             path: "/".into(),
@@ -53,7 +53,11 @@ pub fn layout(config: &Value) -> Result<Vec<Dataset>> {
             path: "/home".into(),
             archive: "home".into(),
         },
-    ];
+    ]
+}
+pub fn layout(config: &Value) -> Result<Vec<Dataset>> {
+    crate::backup_configuration::validate(config)?;
+    let mut sources = base();
     if let Some(rows) = config.get("additional_sources") {
         for row in rows.as_array().unwrap() {
             let name = row["snapper_config"].as_str().unwrap();

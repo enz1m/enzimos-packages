@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
-//! Closed SMB-share Restic queries and one-snapshot copies, never initialization.
+//! Closed SMB-share Restic queries, one-snapshot copies and whole-system
+//! backups into the share; initialization has its own factory.
 //!
 //! The NAS repository is a folder on an SMB share. Each Restic child mounts the
 //! share with kernel CIFS in its own private mount namespace (see
 //! `remote_mount_child`) and uses Restic's local backend on the mounted folder;
-//! Restic itself runs without network access.
+//! Restic itself runs without network access. A backup child also attaches the
+//! reviewed read-only sources in that namespace (see `backup_mount_child`).
 use crate::{Error, Result, files, mount_identity, process, require};
 use std::{
     fs::File,
@@ -201,10 +203,14 @@ pub enum Task {
     LocalCheck,
     Replicate,
     Retrieve,
+    /// A whole-system backup into the share; only [`backup`] runs it.
+    Backup,
 }
 #[derive(Clone)]
 pub(crate) struct Invocation {
     pub(crate) attachment: Arc<crate::remote_mount_child::Prepared>,
+    /// The read-only sources of a share backup, attached after the share.
+    pub(crate) sources: Option<Arc<crate::backup_mount_child::Prepared>>,
     task: Task,
     read_only: bool,
     standalone_check: bool,
@@ -222,6 +228,7 @@ impl Invocation {
         let args = arguments(endpoint, task, snapshot)?;
         Ok(Self {
             attachment: Arc::clone(attachment),
+            sources: None,
             task,
             read_only: false,
             standalone_check: false,
@@ -245,12 +252,12 @@ impl Invocation {
         checks(self.task) && !self.long_running
     }
     pub(crate) fn prints_progress(&self) -> bool {
-        self.copies() || self.checks()
+        self.copies() || self.checks() || self.task == Task::Backup
     }
-    /// Copies: 15 min of silence. Checks: their old total bound, because
-    /// index loading and pack listing print nothing (see CHECK_STALL).
+    /// Copies and backups: 15 min of silence. Checks: their old total bound,
+    /// because index loading and pack listing print nothing (see CHECK_STALL).
     pub(crate) fn stall_limit(&self) -> Option<Duration> {
-        if self.copies() {
+        if self.copies() || self.task == Task::Backup {
             Some(crate::local_restic::BACKUP_STALL)
         } else if self.checks() {
             Some(if self.standalone_check {
@@ -263,7 +270,9 @@ impl Invocation {
         }
     }
     pub(crate) fn timeout(&self) -> Duration {
-        if self.copies() {
+        if self.task == Task::Backup {
+            crate::local_restic::BACKUP_TIMEOUT
+        } else if self.copies() {
             COPY_TIMEOUT
         } else if self.checks() {
             crate::local_restic::CHECK_TIMEOUT
@@ -276,7 +285,9 @@ impl Invocation {
         }
     }
     pub(crate) fn profile(&self) -> &'static str {
-        if self.standalone_check {
+        if self.task == Task::Backup {
+            "enzimos-restic-native-remote-backup"
+        } else if self.standalone_check {
             "enzimos-restic-native-remote-check"
         } else if self.task == Task::RemoteInitialize {
             "enzimos-restic-native-remote-initialize"
@@ -323,9 +334,9 @@ fn arguments(endpoint: &Endpoint, task: Task, snapshot: &str) -> Result<Vec<Stri
         args.push("--quiet".into());
     }
     match task {
-        Task::RemoteInitialize => {
+        Task::RemoteInitialize | Task::Backup => {
             return Err(crate::Error(
-                "exclusive remote initialization factory required".into(),
+                "exclusive remote initialization or backup factory required".into(),
             ));
         }
         Task::RemoteKeys => args.extend(["--no-lock", "key", "list", "--json"].map(String::from)),
@@ -427,6 +438,7 @@ pub fn initialize(
     let args = initialization_arguments(endpoint);
     let invocation = Invocation {
         attachment: Arc::clone(attachment),
+        sources: None,
         task: Task::RemoteInitialize,
         read_only: true,
         standalone_check: false,
@@ -461,6 +473,7 @@ pub fn check(
     let args = check_arguments(endpoint)?;
     let invocation = Invocation {
         attachment: Arc::clone(attachment),
+        sources: None,
         task: Task::RemoteCheck,
         read_only: true,
         standalone_check: true,
@@ -469,6 +482,56 @@ pub fn check(
     };
     execute_invocation(
         invocation, image, scratch, credential, credential, scratch, boundary,
+    )
+}
+/// `--repo` on the share folder, the remote password at descriptor 0, then the
+/// reviewed closed archive arguments of the prepared sources.
+fn backup_arguments(endpoint: &Endpoint, sources: &[String]) -> Result<Vec<String>> {
+    require(
+        sources.first().map(String::as_str) == Some("backup"),
+        "closed reviewed backup arguments required",
+    )?;
+    let mut args = initialization_arguments(endpoint);
+    require(
+        args.pop().as_deref() == Some("init") && args.pop().as_deref() == Some("--quiet"),
+        "closed remote-only argument prefix required",
+    )?;
+    args.extend(sources.iter().cloned());
+    Ok(args)
+}
+/// One whole-system backup into the share repository: the child mounts the
+/// share, attaches the prepared read-only sources beside it, leaves the
+/// network namespace and runs the reviewed `restic backup --json` under its
+/// own mandatory profile. Only the remote password and scratch are mapped.
+///
+/// # Errors
+/// A share that cannot be mounted (public `remote-share-*` codes), changed
+/// descriptors or attachments, the backup timeout or no-output watchdog.
+pub fn backup(
+    attachment: &Arc<crate::remote_mount_child::Prepared>,
+    endpoint: &Endpoint,
+    sources: &Arc<crate::backup_mount_child::Prepared>,
+    image: &File,
+    credential: &File,
+    scratch: &File,
+    boundary: &mut dyn FnMut() -> Result<()>,
+) -> Result<process::Output> {
+    let args = backup_arguments(endpoint, sources.arguments())?;
+    let invocation = Invocation {
+        attachment: Arc::clone(attachment),
+        sources: Some(Arc::clone(sources)),
+        task: Task::Backup,
+        read_only: true,
+        standalone_check: false,
+        long_running: false,
+        args,
+    };
+    let mut check = || {
+        boundary()?;
+        sources.recheck()
+    };
+    execute_invocation(
+        invocation, image, scratch, credential, credential, scratch, &mut check,
     )
 }
 fn prune_arguments(endpoint: &Endpoint, snapshots: &[String]) -> Result<Vec<String>> {
@@ -512,6 +575,7 @@ pub fn prune(
     let args = prune_arguments(endpoint, snapshots)?;
     let invocation = Invocation {
         attachment: Arc::clone(attachment),
+        sources: None,
         task: Task::RemoteCheck,
         read_only: true,
         standalone_check: true,
@@ -766,6 +830,37 @@ mod tests {
                     && !args.contains(&"forget".into())
             );
         }
+    }
+    #[test]
+    fn a_share_backup_writes_only_the_share_repository_with_the_reviewed_archive_arguments() {
+        let endpoint =
+            Endpoint::new("nas.local", "backups", "enzimos/laptop", "ann", None).unwrap();
+        let reviewed = crate::backup_command::arguments(
+            &["system", "home", "boot", "inventory"]
+                .map(|t| format!("/backup-source/{t}"))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+        let args = backup_arguments(&endpoint, &reviewed).unwrap();
+        assert_eq!(
+            args[..5],
+            [
+                "--repo",
+                "/backup-remote/enzimos/laptop",
+                "--password-file",
+                "@fd:0",
+                "--no-cache"
+            ]
+        );
+        assert_eq!(args[5..], reviewed[..]);
+        assert!(
+            !args
+                .iter()
+                .any(|a| a.starts_with("@fd-dir") || a == "--quiet")
+        );
+        assert!(backup_arguments(&endpoint, &["copy".into()]).is_err());
+        assert!(arguments(&endpoint, Task::Backup, &"a".repeat(64)).is_err());
     }
     #[test]
     fn share_endpoint_admits_plain_names_and_refuses_option_or_path_injection() {

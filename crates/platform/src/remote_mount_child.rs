@@ -94,6 +94,27 @@ fn address(endpoint: &Endpoint) -> Result<Ipv4Addr> {
     )?;
     Ok(found)
 }
+/// The server's address once it answers on the SMB port.
+fn answering(endpoint: &Endpoint) -> Result<Ipv4Addr> {
+    let ip = address(endpoint)?;
+    TcpStream::connect_timeout(&SocketAddr::new(IpAddr::V4(ip), 445), CONNECT_TIMEOUT).map_err(
+        |e| {
+            Error(format!(
+                "remote-share-unreachable: the NAS {} did not answer on the SMB port: {e}",
+                endpoint.server()
+            ))
+        },
+    )?;
+    Ok(ip)
+}
+/// Whether the NAS can be found and answers on the SMB port within the
+/// connect timeout. Nothing is mounted and no password is read.
+///
+/// # Errors
+/// `remote-share-unreachable` with the reason.
+pub fn reachable(endpoint: &Endpoint) -> Result<()> {
+    answering(endpoint).map(|_| ())
+}
 type Shape = (u64, u64, u32, u32, u32);
 fn shape(file: &File) -> Result<Shape> {
     let m = file.metadata()?;
@@ -171,14 +192,7 @@ impl Prepared {
         )?;
         let credential_parent = shape(&files::directory(Path::new("/etc/enzimos"), Some(0))?)?;
         let password = password(credential)?;
-        let ip = address(endpoint)?;
-        TcpStream::connect_timeout(&SocketAddr::new(IpAddr::V4(ip), 445), CONNECT_TIMEOUT)
-            .map_err(|e| {
-                Error(format!(
-                    "remote-share-unreachable: the NAS {} did not answer on the SMB port: {e}",
-                    endpoint.server()
-                ))
-            })?;
+        let ip = answering(endpoint)?;
         let text =
             |value: &str| CString::new(value).map_err(|_| Error("SMB option encoding".into()));
         let mut strings = vec![

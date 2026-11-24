@@ -15,6 +15,7 @@ use crate::{
     backup_configuration::Configuration,
     backup_credential::Credential,
     backup_destination::Destination,
+    backup_remote_context::Context as Remote,
     backup_repository_header::Header,
     operation,
     storage_runtime::Guard,
@@ -246,6 +247,9 @@ pub fn export_locked(
     owner(uid)?;
     authorize()?;
     lock.recheck()?;
+    if share_primary() {
+        return export_share_locked(guard, lock, uid, authorize);
+    }
     let configuration = Configuration::open()?;
     let pin = StoredPin::open(&configuration, guard)?;
     let credential = Credential::open()?;
@@ -292,6 +296,22 @@ pub fn confirm_locked(
     crate::namespaces::initial()?;
     authorize()?;
     lock.recheck()?;
+    if share_primary() {
+        let remote = Remote::observe(guard, lock, &mut || authorize())?;
+        let bound = share_binding(&remote)?;
+        let exported = read(EXPORT)?.ok_or_else(|| Error("recovery export missing".into()))?;
+        let record = confirmed(&exported, uid, ticket, assertion, &bound)?;
+        if read(CONFIRMATION)?.as_ref() != Some(&record) {
+            authorize()?;
+            lock.recheck()?;
+            write(CONFIRMATION, &record)?;
+        }
+        require(
+            share_binding(&remote)? == bound,
+            "recovery copy binding changed",
+        )?;
+        return Ok(attested(ticket));
+    }
     let configuration = Configuration::open()?;
     let pin = StoredPin::open(&configuration, guard)?;
     let credential = Credential::open()?;
@@ -309,9 +329,111 @@ pub fn confirm_locked(
         binding(&configuration, &pin, &credential, guard)? == bound,
         "recovery copy binding changed",
     )?;
-    Ok(
-        value!({"schema":1,"status":"backup-recovery-copy-attested","ticket":ticket,
+    Ok(attested(ticket))
+}
+fn attested(ticket: &str) -> Value {
+    value!({"schema":1,"status":"backup-recovery-copy-attested","ticket":ticket,
         "user_attested_independent_copy":true,"physical_copy_verified":false,
-        "automatic_backup_enabled":false}),
+        "automatic_backup_enabled":false})
+}
+fn share_primary() -> bool {
+    crate::backup_share_destination::primary() == Some(crate::backup_share_destination::SHARE)
+}
+/// The binding of a setup without a backup drive, whose recovery password is
+/// the NAS share repository password: the share configuration, the share pin
+/// and that password file's metadata (never its bytes).
+fn share_binding(remote: &Remote<'_>) -> Result<Value> {
+    let evidence = remote.evidence(&mut || Ok(()))?;
+    share_binding_of(&evidence["inputs"]["binding"], &evidence["pin"])
+}
+/// The same binding from the share inputs' public binding and the share pin.
+pub(crate) fn share_binding_of(binding: &Value, pin: &Value) -> Result<Value> {
+    let e = &binding["credentials"]["/etc/enzimos/backup-remote.password"];
+    Ok(
+        value!({"destination":"share","configuration_sha256":binding["configuration_sha256"],
+        "destination_pin_sha256":json::fingerprint(pin)?,
+        "credential_identity":{"dev":e[0],"ino":e[1],"size":e[2],"mtime_ns":e[3],"ctime_ns":e[4]}}),
     )
+}
+/// The current key of the pinned share repository that the share repository
+/// password opens, from an authenticated `key list` over the share.
+fn share_key(remote: &Remote<'_>, authorize: &mut dyn FnMut() -> Result<()>) -> Result<String> {
+    use enzimos_platform::remote_restic::{self, Task};
+    let descriptors = remote.descriptors(authorize)?;
+    let share_password = File::from(descriptors["remote-share-password"].try_clone_to_owned()?);
+    let credential = File::from(descriptors["remote-password"].try_clone_to_owned()?);
+    let image = File::from(descriptors["restic"].try_clone_to_owned()?);
+    let runtime = Runtime::create(&files::random_hex(16)?, &mut || remote.recheck(authorize))?;
+    require(
+        runtime.image_evidence()? == remote.evidence(authorize)?["restic"],
+        "recovery export vendor image changed",
+    )?;
+    let (attachment, endpoint) =
+        super::remote_share(remote.configuration(authorize)?, &share_password)?;
+    let read = |task: Task, authorize: &mut dyn FnMut() -> Result<()>| {
+        let output = remote_restic::rotation_read(
+            &attachment,
+            &endpoint,
+            task,
+            &"0".repeat(64),
+            &image,
+            &credential,
+            &runtime.scratch,
+            &mut || {
+                remote.recheck(authorize)?;
+                runtime.recheck()?;
+                attachment.recheck()
+            },
+        )?;
+        runtime.empty()?;
+        Ok::<_, Error>(output)
+    };
+    let identity = read(Task::RemoteIdentity, authorize)?;
+    remote.compare_identity_data(
+        &crate::backup_remote_observation::identity_data(
+            identity.status.code(),
+            &identity.stdout,
+            &remote.evidence(authorize)?["pin"],
+        )?,
+        authorize,
+    )?;
+    let output = read(Task::RemoteKeys, authorize)?;
+    let keys = crate::backup_restic_result::keys(output.status.code(), &output.stdout)?;
+    keys.into_iter()
+        .find(|(_, current)| *current)
+        .map(|(key, _)| key)
+        .ok_or_else(|| Error("current share repository key unavailable".into()))
+}
+/// Export the share repository password of a setup without a backup drive;
+/// the share must answer, since the password is checked against it.
+fn export_share_locked(
+    guard: &Guard,
+    lock: &files::Lock,
+    uid: u32,
+    authorize: &dyn Fn() -> Result<()>,
+) -> Result<(Value, File)> {
+    let remote = Remote::observe(guard, lock, &mut || authorize())?;
+    let bound = share_binding(&remote)?;
+    let record = prepared(uid, &files::random_hex(32)?, &bound)?;
+    authorize()?;
+    write(EXPORT, &record)?;
+    let key = share_key(&remote, &mut || authorize())?;
+    let copy = sealed_copy(
+        remote.descriptors(&mut || authorize())?["remote-password"],
+        uid,
+    )?;
+    require(
+        share_binding(&remote)? == bound && read(EXPORT)?.as_ref() == Some(&record),
+        "recovery export binding changed; no delivery",
+    )?;
+    let done = completed(&record, &key)?;
+    authorize()?;
+    lock.recheck()?;
+    write(EXPORT, &done)?;
+    Ok((
+        value!({"schema":1,"status":"backup-recovery-exported","ticket":done["ticket"],
+        "destination_uuid":null,"destination":"share","sealed_descriptor":true,
+        "automatic_backup_enabled":false,"physical_copy_verified":false}),
+        copy,
+    ))
 }

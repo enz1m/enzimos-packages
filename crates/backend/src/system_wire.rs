@@ -343,6 +343,7 @@ pub fn public_failure(e: &Error) -> &'static str {
         "backup-destination-absent",
         "backup-destination-not-mounted",
         "backup-destination-busy",
+        "backup-destination-not-configured",
     ];
     let codes = CODES.iter();
     #[cfg(feature = "update-worker")]

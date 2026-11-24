@@ -76,6 +76,26 @@ pub fn decode(bytes: &[u8]) -> Result<Value> {
     Ok(value)
 }
 
+/// The configuration that decides what a backup captures: the backup drive's
+/// `backup.json`, or the NAS share's configuration in setups without a drive
+/// (see `backup_share_scope`).
+pub trait SourceScope {
+    /// The original configuration file is still the one observed.
+    ///
+    /// # Errors
+    /// The file was changed, replaced or remounted.
+    fn recheck(&self) -> Result<()>;
+    /// The datasets to capture, in archive order.
+    ///
+    /// # Errors
+    /// An invalid source selection.
+    fn datasets(&self) -> Result<Vec<crate::backup_source_layout::Dataset>>;
+    /// Identity and content evidence of the original configuration file.
+    ///
+    /// # Errors
+    /// As for [`SourceScope::recheck`].
+    fn evidence(&self) -> Result<Value>;
+}
 pub struct Configuration {
     original: crate::settings_file::Config,
     value: Value,
@@ -110,5 +130,16 @@ impl Configuration {
         self.value["minimum_free_bytes"]
             .as_u64()
             .unwrap_or(64 * 1024 * 1024)
+    }
+}
+impl SourceScope for Configuration {
+    fn recheck(&self) -> Result<()> {
+        Configuration::recheck(self)
+    }
+    fn datasets(&self) -> Result<Vec<crate::backup_source_layout::Dataset>> {
+        crate::backup_source_layout::layout(&self.value)
+    }
+    fn evidence(&self) -> Result<Value> {
+        Configuration::evidence(self)
     }
 }

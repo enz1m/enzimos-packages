@@ -144,14 +144,25 @@ impl Runtime {
             prepared.recheck()?;
             boundary()
         };
-        let output = local_restic::backup(
-            prepared,
-            handoff.consumer_descriptor()?,
-            handoff.repository_descriptor()?,
-            handoff.credential_descriptor()?,
-            &self.scratch,
-            &mut ongoing,
-        )?;
+        let output = if let Some((configuration, share_password, credential)) = handoff.share()? {
+            self.backup_share(
+                prepared,
+                handoff,
+                configuration,
+                share_password,
+                credential,
+                &mut ongoing,
+            )?
+        } else {
+            local_restic::backup(
+                prepared,
+                handoff.consumer_descriptor()?,
+                handoff.repository_descriptor()?,
+                handoff.credential_descriptor()?,
+                &self.scratch,
+                &mut ongoing,
+            )?
+        };
         ongoing()?;
         self.empty()?;
         let snapshot = crate::backup_restic_result::backup(output.status.code(), &output.stdout)?;
@@ -164,6 +175,63 @@ impl Runtime {
             stdout,
             stdout_sha256,
         })
+    }
+    /// `restic backup` into the pinned share repository, between two
+    /// authenticated identity queries that must both match the share pin, so
+    /// a replaced or foreign repository in the share folder never receives
+    /// the backup or completes it.
+    fn backup_share(
+        &self,
+        prepared: &std::sync::Arc<enzimos_platform::backup_mount_child::Prepared>,
+        handoff: &crate::backup_transfer_handoff::Handoff,
+        configuration: &Value,
+        share_password: &File,
+        credential: &File,
+        ongoing: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<enzimos_platform::process::Output> {
+        use enzimos_platform::remote_restic::{self, Task};
+        let pin = handoff.request()?["context"]["share"]["pin"].clone();
+        let (attachment, endpoint) = remote_share(configuration, share_password)?;
+        let image = handoff.consumer_descriptor()?;
+        let identity = |ongoing: &mut dyn FnMut() -> Result<()>| -> Result<Value> {
+            ongoing()?;
+            let output = remote_restic::rotation_read(
+                &attachment,
+                &endpoint,
+                Task::RemoteIdentity,
+                &"0".repeat(64),
+                image,
+                credential,
+                &self.scratch,
+                ongoing,
+            )?;
+            ongoing()?;
+            self.empty()?;
+            crate::backup_remote_observation::identity_data(
+                output.status.code(),
+                &output.stdout,
+                &pin,
+            )
+        };
+        let first = identity(ongoing)?;
+        let mut check = || {
+            ongoing()?;
+            attachment.recheck()
+        };
+        let output = remote_restic::backup(
+            &attachment,
+            &endpoint,
+            prepared,
+            image,
+            credential,
+            &self.scratch,
+            &mut check,
+        )?;
+        require(
+            identity(ongoing)? == first,
+            "share repository identity changed during the backup",
+        )?;
+        Ok(output)
     }
     /// Selected repository output only; original whole-worker closure and private
     /// filesystem publication remain with the caller. No historical metadata is applied.

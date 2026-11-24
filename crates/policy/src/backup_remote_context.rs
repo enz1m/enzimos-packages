@@ -156,6 +156,12 @@ impl<'a> Context<'a> {
         self.recheck(authorize)?;
         Ok(descriptors)
     }
+    pub(crate) fn caller_actor(&self) -> &Caller {
+        &self.caller
+    }
+    pub(crate) fn image_actor(&self) -> &Image {
+        &self.restic
+    }
     pub(crate) fn require_description(
         &self,
         fd: std::os::fd::BorrowedFd<'_>,

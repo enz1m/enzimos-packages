@@ -99,6 +99,7 @@ impl Policy {
                 | "org.enzimos.system.home-history-set"
                 | "org.enzimos.system.home-history-create"
                 | "org.enzimos.system.backup-setup"
+                | "org.enzimos.system.backup-remote-check"
                 | "org.enzimos.system.backup-export"
                 | "org.enzimos.system.backup-confirm-copy"
         ));
@@ -785,6 +786,14 @@ async fn actual_sender_authority_revocation_and_provider_owner_changes_never_rep
     assert_eq!(
         serde_json::from_str::<Value>(&tested).unwrap()["reachable"],
         true
+    );
+    assert!(
+        state
+            .actions
+            .lock()
+            .unwrap()
+            .contains(&("org.enzimos.system.backup-remote-check".into(), 0)),
+        "a test asks to check the share, not to configure it"
     );
     assert_eq!(provider.shares.load(Ordering::SeqCst), 2);
     let id = "22222222222222222222222222222222";

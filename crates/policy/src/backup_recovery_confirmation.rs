@@ -32,15 +32,24 @@ fn validate_record(v: &Value, confirmation: bool) -> Result<()> {
             })?,
         )?;
     }
-    json::fields(
-        &v["binding"],
-        "destination_uuid configuration_sha256 destination_pin_sha256 credential_identity",
-    )?;
-    crate::identity::uuid(
-        v["binding"]["destination_uuid"]
-            .as_str()
-            .ok_or_else(|| enzimos_platform::Error("recovery-copy destination required".into()))?,
-    )?;
+    if v["binding"].get("destination").is_some() {
+        json::fields(
+            &v["binding"],
+            "destination configuration_sha256 destination_pin_sha256 credential_identity",
+        )?;
+        require(
+            v["binding"]["destination"] == "share",
+            "closed recovery-copy destination",
+        )?;
+    } else {
+        json::fields(
+            &v["binding"],
+            "destination_uuid configuration_sha256 destination_pin_sha256 credential_identity",
+        )?;
+        crate::identity::uuid(v["binding"]["destination_uuid"].as_str().ok_or_else(|| {
+            enzimos_platform::Error("recovery-copy destination required".into())
+        })?)?;
+    }
     for key in ["configuration_sha256", "destination_pin_sha256"] {
         crate::identity::sha(v["binding"][key].as_str().ok_or_else(|| {
             enzimos_platform::Error("recovery-copy public digest required".into())
@@ -132,6 +141,38 @@ pub fn status(
         enzimos_platform::files::identity(&storage.control().metadata()?) == before,
         "backup recovery status control inventory changed",
     )?;
+    Ok(status_value(observed.unwrap_or("needs-review")))
+}
+/// Attestation status of a setup without a backup drive, bound to the share
+/// configuration, pin and share repository password metadata. Read-only; a
+/// record pair that does not verify reads as `needs-review`.
+///
+/// # Errors
+/// None in practice; the result type matches the drive status.
+pub fn share_status(guard: &crate::storage_runtime::Guard) -> Result<Value> {
+    let observed = (|| -> Result<&'static str> {
+        let read =
+            |name: &str| Document::optional(&Path::new(crate::operation::CONTROL).join(name), 0);
+        let (exported, confirmed) = match (
+            read("backup-recovery-export.json")?,
+            read("backup-recovery-confirmation.json")?,
+        ) {
+            (None, None) => return Ok("missing"),
+            (Some(exported), Some(confirmed)) => (exported, confirmed),
+            _ => return Ok("needs-review"),
+        };
+        let inputs = crate::backup_remote_inputs::Inputs::observe(guard)?;
+        let expected = crate::backup_restic_runtime::recovery_export::share_binding_of(
+            inputs.binding(guard)?,
+            &crate::backup_share_destination::pin(guard)?,
+        )?;
+        verify_pair(
+            &json::decode(exported.bytes()?, crate::backup_configuration::LIMIT)?,
+            &json::decode(confirmed.bytes()?, crate::backup_configuration::LIMIT)?,
+            &expected,
+        )?;
+        Ok("user-attested")
+    })();
     Ok(status_value(observed.unwrap_or("needs-review")))
 }
 fn status_value(state: &str) -> Value {
@@ -277,5 +318,43 @@ impl<'a> Stored<'a> {
         )?;
         self.exported.recheck()?;
         self.confirmed.recheck()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pair(binding: &Value) -> (Value, Value) {
+        let common = value!({"schema":1,"phase":"complete","owner_uid":1000,"ticket":"a".repeat(64),
+            "binding":binding,"repository_key_id":"b".repeat(64)});
+        let mut exported = common.clone();
+        exported["descriptor_scope_closed"] = value!(true);
+        let mut confirmed = common;
+        confirmed["user_attested_independent_copy"] = value!(true);
+        confirmed["physical_copy_verified"] = value!(false);
+        (exported, confirmed)
+    }
+    #[test]
+    fn a_share_recovery_copy_binds_its_share_and_never_a_drive() {
+        let share = crate::backup_restic_runtime::recovery_export::share_binding_of(
+            &value!({"configuration_sha256":"c".repeat(64),"credentials":{
+                "/etc/enzimos/backup-remote.password":[2049, 21, 32, 1_000_000_000_i64, 1_000_000_000_i64]}}),
+            &value!({"schema":2,"repository_id":"d".repeat(64),"configuration_sha256":"c".repeat(64)}),
+        )
+        .unwrap();
+        let (exported, confirmed) = pair(&share);
+        verify_pair(&exported, &confirmed, &share).unwrap();
+        let mut other_pin = share.clone();
+        other_pin["destination_pin_sha256"] = value!("e".repeat(64));
+        assert!(verify_pair(&exported, &confirmed, &other_pin).is_err());
+        let mut foreign = share.clone();
+        foreign["destination"] = value!("cloud");
+        let (exported, confirmed) = pair(&foreign);
+        assert!(verify_pair(&exported, &confirmed, &foreign).is_err());
+        let mut both = share;
+        both["destination_uuid"] = value!("00000000-0000-4000-8000-000000000001");
+        let (exported, confirmed) = pair(&both);
+        assert!(verify_pair(&exported, &confirmed, &both).is_err());
     }
 }

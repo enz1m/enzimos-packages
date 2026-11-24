@@ -302,7 +302,10 @@ pub fn execute(command: Command) -> Result<Value> {
         Command::SystemQuery(name) => {
             use crate::system_provider::Provider;
             let native = crate::system_provider::Native::open()?;
-            let runtime = tokio::runtime::Builder::new_current_thread()
+            // A query blocks on D-Bus futures (the backup timer) from this
+            // thread; only a multi-thread runtime drives them meanwhile.
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
                 .enable_all()
                 .build()
                 .map_err(|_| Error("system query runtime unavailable".into()))?;

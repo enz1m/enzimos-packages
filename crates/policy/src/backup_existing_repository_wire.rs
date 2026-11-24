@@ -27,7 +27,8 @@ fn document(v: &Value, path: &str) -> Result<()> {
     )?;
     crate::identity::sha(text(v, "sha256")?).map(|_| ())
 }
-pub(crate) fn validate(v: &Value) -> Result<()> {
+/// The native backend caller of a transfer or copy context.
+pub(crate) fn caller(v: &Value) -> Result<()> {
     let caller = &v["caller"];
     json::fields(
         caller,
@@ -48,7 +49,33 @@ pub(crate) fn validate(v: &Value) -> Result<()> {
     require(
         image[7] == (libc::S_IFREG | 0o755) && image[8] == 0 && image[9] == 0 && image[10] == 1,
         "protected native transfer caller image",
-    )?;
+    )
+}
+/// The held operation lock of a transfer or copy context.
+pub(crate) fn operation_lock(v: &Value) -> Result<()> {
+    json::fields(v, "inode mount")?;
+    crate::backup_worker_request::file(&v["inode"])?;
+    let lock = &v["inode"];
+    require(
+        lock[2] == 0
+            && lock[7] == (libc::S_IFREG | 0o600)
+            && lock[8] == 0
+            && lock[9] == 0
+            && lock[10] == 1
+            && v["mount"].as_u64().is_some_and(|n| n > 0),
+        "original private operation lock",
+    )
+}
+/// The fixed Restic image of a transfer or copy context.
+pub(crate) fn restic(v: &Value) -> Result<()> {
+    crate::settings_command::validate(v)?;
+    require(
+        v["path"] == "/usr/bin/restic",
+        "fixed native transfer consumer",
+    )
+}
+pub(crate) fn validate(v: &Value) -> Result<()> {
+    caller(v)?;
     crate::backup_secret_persistence::root_binding(&v["source"])?;
     require(
         v["source"]["boot_id"] == v["boot_id"],
@@ -132,18 +159,7 @@ pub(crate) fn validate(v: &Value) -> Result<()> {
         destination["topology"].is_object(),
         "transfer topology object",
     )?;
-    json::fields(&v["operation_lock"], "inode mount")?;
-    crate::backup_worker_request::file(&v["operation_lock"]["inode"])?;
-    let lock = &v["operation_lock"]["inode"];
-    require(
-        lock[2] == 0
-            && lock[7] == (libc::S_IFREG | 0o600)
-            && lock[8] == 0
-            && lock[9] == 0
-            && lock[10] == 1
-            && v["operation_lock"]["mount"].as_u64().is_some_and(|n| n > 0),
-        "original private operation lock",
-    )?;
+    operation_lock(&v["operation_lock"])?;
     crate::backup_repository_header::validate(&v["header"])?;
     require(
         v["header"]["identity"] == destination["repository_configuration"]
@@ -151,12 +167,7 @@ pub(crate) fn validate(v: &Value) -> Result<()> {
             && v["header"]["sha256"] == pin["repository_sha256"],
         "original encrypted transfer header/pin",
     )?;
-    crate::settings_command::validate(&v["restic"])?;
-    require(
-        v["restic"]["path"] == "/usr/bin/restic",
-        "fixed native transfer consumer",
-    )?;
-    Ok(())
+    restic(&v["restic"])
 }
 
 pub(crate) fn intent(intent: &Value, limit: usize) -> Result<()> {

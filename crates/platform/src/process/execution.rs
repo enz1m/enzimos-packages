@@ -232,6 +232,9 @@ pub(super) fn run_observed_context(
             }
             if let Some(crate::local_restic::Consumer::Remote(invocation)) = local_restic.as_ref() {
                 invocation.attachment.enter_child()?;
+                if let Some(sources) = invocation.sources.as_ref() {
+                    sources.enter_private_child()?;
+                }
             }
             if let Some(context) = complete_boot.as_ref() {
                 context.enter_child()?;

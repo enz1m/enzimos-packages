@@ -200,6 +200,55 @@ impl Prepared {
         reason = "Linux syscall ABI (close, fstat, fstatfs, geteuid and others)."
     )]
     pub unsafe fn enter_child(&self) -> std::io::Result<()> {
+        // SAFETY: the caller's contract is this function's own.
+        unsafe { self.owned_child(true) }?;
+        if unsafe { libc::unshare(libc::CLONE_NEWNS) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        if unsafe {
+            libc::mount(
+                std::ptr::null(),
+                c"/".as_ptr(),
+                std::ptr::null(),
+                libc::MS_PRIVATE | libc::MS_REC,
+                std::ptr::null(),
+            )
+        } != 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: as above.
+        unsafe { self.populate() }
+    }
+    /// Attach sources in the private mount namespace that the NAS share
+    /// attachment of this same owned child has just entered.
+    ///
+    /// # Safety
+    /// As for [`Self::enter_child`], and only directly after
+    /// `remote_mount_child::Prepared::enter_child` succeeded in this child: the
+    /// current namespace must be the child's own private one.
+    ///
+    /// # Errors
+    /// The child is not the creator's direct owned child, is still in the
+    /// creator's namespace, or a source or the placeholder changed.
+    #[allow(
+        unsafe_code,
+        reason = "Linux syscall ABI (getpid, open, poll and others)."
+    )]
+    pub unsafe fn enter_private_child(&self) -> std::io::Result<()> {
+        // SAFETY: the caller's contract is this function's own.
+        unsafe { self.owned_child(false) }?;
+        // SAFETY: as above.
+        unsafe { self.populate() }
+    }
+    /// The direct owned child of the creator, still alive, in the creator's
+    /// namespace (`original`) or already in a different one, with unchanged
+    /// read-only sources.
+    #[allow(
+        unsafe_code,
+        reason = "Linux syscall ABI (close, getpid, open, poll, prctl and others)."
+    )]
+    unsafe fn owned_child(&self, original: bool) -> std::io::Result<()> {
         let denied = || std::io::Error::from_raw_os_error(libc::EPERM);
         if unsafe { libc::getpid() } == self.creator as i32
             || unsafe { libc::getppid() } != self.creator as i32
@@ -231,7 +280,7 @@ impl Prepared {
         }
         let same = unsafe { same_inode(old, self.namespace.as_raw_fd()) };
         unsafe { libc::close(old) };
-        if !same {
+        if same != original {
             return Err(denied());
         }
         for tree in &self.trees {
@@ -241,21 +290,16 @@ impl Prepared {
                 return Err(denied());
             }
         }
-        if unsafe { libc::unshare(libc::CLONE_NEWNS) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        if unsafe {
-            libc::mount(
-                std::ptr::null(),
-                c"/".as_ptr(),
-                std::ptr::null(),
-                libc::MS_PRIVATE | libc::MS_REC,
-                std::ptr::null(),
-            )
-        } != 0
-        {
-            return Err(std::io::Error::last_os_error());
-        }
+        Ok(())
+    }
+    /// A fresh private tmpfs over the reviewed placeholder with each source
+    /// attached below it.
+    #[allow(
+        unsafe_code,
+        reason = "Linux syscall ABI (close, fstat, fstatfs, mount, open)."
+    )]
+    unsafe fn populate(&self) -> std::io::Result<()> {
+        let denied = || std::io::Error::from_raw_os_error(libc::EPERM);
         let anchor = unsafe {
             libc::open(
                 c"/backup-source".as_ptr(),

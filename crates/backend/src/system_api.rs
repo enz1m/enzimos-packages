@@ -43,9 +43,10 @@ pub(crate) fn query_failure(query: &str, error: Error, worker_active: bool) -> E
 }
 /// Jobs that, once started, keep running without the approving session, like
 /// the scheduled backup: `backup-create` only reads sources and adds a
-/// snapshot, and its retention step removes snapshots only by the policy that
-/// was approved separately. Planning, approval and the start boundary still
-/// bind the live caller; every other job keeps the per-boundary session check.
+/// snapshot (and copies it to a configured NAS share), and its retention steps
+/// remove snapshots only by the policy that was approved separately. Planning,
+/// approval and the start boundary still bind the live caller; every other job
+/// keeps the per-boundary session check.
 pub(crate) fn continues_without_session(operation: &str) -> bool {
     operation == "backup-create"
 }
@@ -166,6 +167,9 @@ impl<P: Provider> Api<P> {
             "backup_remote_share":{"schema":1,"setup":"BackupRemoteShareSetup(sah)->s","control":"BackupRemoteShare(s)->s",
                 "actions":["test","remove"],"authorization":"org.enzimos.system.backup-setup","sealed_input_only":true,
                 "available":self.provider.backup_supported(),"runtime_qualified":false,"ui_qualified":false},
+            "backup_create":{"schema":1,"destinations":["drive","share"],"status_field":"primary",
+                "share_only":"without a backup drive, backup-create and the schedule write the full backup into the ready NAS share",
+                "share_recovery":"BackupRecoveryExport/Confirm export the NAS share repository password; the share schedule does not require a recovery confirmation"},
             "backup_scheduling":{"schema":27,"runtime_qualified":false,"ui_qualified":false,"enable_effect":"next-boot","requires_current_recovery_confirmation":true},
             "background_broker_witness":"InspectBackgroundBroker schema1; observation only, no activation or stop grant"})
     }

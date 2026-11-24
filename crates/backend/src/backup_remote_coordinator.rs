@@ -90,9 +90,66 @@ pub fn run(
 ) -> Result<Value> {
     enzimos_policy::operation::root_only()?;
     enzimos_policy::namespaces::initial()?;
-    let (direction, snapshot, receipt) = selection(role, selected)?;
+    selection(role, selected)?;
     authorize()?;
     let lock = enzimos_policy::operation::lock()?;
+    copy_locked(
+        guard,
+        &lock,
+        role,
+        selected,
+        Some(expected),
+        authorize,
+        progress,
+    )
+}
+/// Copy the snapshot a local backup just created to the NAS share, with the
+/// configured destination attached, and record the outcome as backup status.
+/// A failed copy is reported, never returned: the local backup stands.
+pub(crate) fn copy_after_backup(
+    guard: &Guard,
+    lock: &files::Lock,
+    snapshot: &str,
+    authorize: &dyn Fn() -> Result<()>,
+) -> Value {
+    let selected = value!({"snapshot":snapshot});
+    let outcome =
+        enzimos_policy::backup_destination_attach::with_destination(guard, lock, authorize, || {
+            copy_locked(
+                guard,
+                lock,
+                "remote-replicate",
+                &selected,
+                None,
+                authorize,
+                &mut |_| Ok(()),
+            )
+        });
+    let code = outcome.as_ref().err().map(|error| error.0.as_str());
+    let state = if code.is_none() { "ok" } else { "failed" };
+    let _ = enzimos_policy::backup_run_status::record_remote_copy(state, code);
+    eprintln!(
+        "enzimos-backup: copy to the NAS share {state} {}",
+        code.unwrap_or("")
+    );
+    enzimos_policy::backup_run_status::remote_copy()
+}
+/// One remote copy under the already held operation lock. `expected` is the
+/// reviewed plan of a System1 job; an automatic copy after a backup has none.
+fn copy_locked(
+    guard: &Guard,
+    lock: &files::Lock,
+    role: &str,
+    selected: &Value,
+    expected: Option<&Value>,
+    authorize: &dyn Fn() -> Result<()>,
+    progress: &mut dyn FnMut(&str) -> Result<()>,
+) -> Result<Value> {
+    enzimos_policy::operation::root_only()?;
+    enzimos_policy::namespaces::initial()?;
+    let (direction, snapshot, receipt) = selection(role, selected)?;
+    authorize()?;
+    lock.recheck()?;
     let configuration = Configuration::open()?;
     let destination = Destination::open(&configuration, guard)?;
     let mut permission = || {
@@ -104,7 +161,7 @@ pub fn run(
     progress("validating")?;
     let context = Context::observe(
         guard,
-        &lock,
+        lock,
         &destination,
         direction,
         snapshot,
@@ -112,10 +169,12 @@ pub fn run(
         receipt,
         &mut permission,
     )?;
-    require(
-        measure(&context, role, selected, &mut permission)? == *expected,
-        "job-plan-changed",
-    )?;
+    if let Some(expected) = expected {
+        require(
+            measure(&context, role, selected, &mut permission)? == *expected,
+            "job-plan-changed",
+        )?;
+    }
     let replication = if direction == Direction::Replicate {
         Some(Replication::prepare(&context, &mut permission)?)
     } else {
@@ -141,7 +200,7 @@ pub fn run(
         // fields stay as they are and the outcome is published as status.
         enzimos_policy::backup_restic_runtime::remote_retention::after_copy_locked(
             guard,
-            &lock,
+            lock,
             result["remote_snapshot"].as_str(),
             &mut permission,
         );

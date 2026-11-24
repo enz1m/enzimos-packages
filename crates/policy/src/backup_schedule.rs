@@ -141,6 +141,21 @@ fn review(
         "destination_pin":repository.evidence()?,"recovery":confirmation.review_evidence()?}),
     )
 }
+/// Review of a schedule for a setup without a backup drive: the share
+/// configuration and repository pin it binds. The share is not contacted.
+fn review_share(
+    storage: &Guard,
+    scope: &crate::backup_share_destination::ShareScope,
+) -> Result<Value> {
+    let binding = crate::backup_share_destination::schedule_binding(scope, storage)?;
+    Ok(
+        value!({"binding":binding,"share":crate::backup_configuration::SourceScope::evidence(scope)?,
+        "share_pin":crate::backup_share_destination::pin(storage)?}),
+    )
+}
+fn share_primary() -> bool {
+    crate::backup_share_destination::primary() == Some(crate::backup_share_destination::SHARE)
+}
 fn observed(marker: &Marker<'_>, command: &Command, approval: Option<Value>) -> Result<Value> {
     Ok(
         value!({"marker":marker.evidence()?,"timer":timer(command)?,"provider":command.evidence()?,"approval":approval}),
@@ -151,7 +166,14 @@ pub fn observation(enabled: bool) -> Result<Value> {
     let storage = Guard::observe()?;
     let marker = Marker::open(&storage)?;
     let command = Command::open("/usr/bin/systemctl")?;
-    let approval = if enabled {
+    let approval = if enabled && share_primary() {
+        let idle = Snapshot::online()?;
+        let scope = crate::backup_share_destination::ShareScope::open()?;
+        let approval = review_share(&storage, &scope)?;
+        marker.admit(&approval["binding"])?;
+        idle.recheck()?;
+        Some(approval)
+    } else if enabled {
         let measure = || -> Result<Value> {
             let idle = Snapshot::online()?;
             let configuration = Configuration::open()?;
@@ -201,7 +223,52 @@ pub fn set<F: FnMut() -> Result<()>>(
     )?;
     let command = Command::open("/usr/bin/systemctl")?;
     let mut marker = Marker::open(&storage)?;
-    if enabled {
+    if enabled && share_primary() {
+        let operation = operation::lock()?;
+        let idle = Snapshot::online()?;
+        let scope = crate::backup_share_destination::ShareScope::open()?;
+        let approval = review_share(&storage, &scope)?;
+        marker.admit(&approval["binding"])?;
+        require(
+            observed(&marker, &command, Some(approval.clone()))? == *expected,
+            "backup schedule plan changed",
+        )?;
+        let mut boundary = || -> Result<()> {
+            authorize()?;
+            operation.recheck()?;
+            schedule_lock.recheck()?;
+            idle.recheck()?;
+            require(
+                review_share(&storage, &scope)? == approval,
+                "backup schedule approval changed",
+            )?;
+            marker.recheck()?;
+            command.recheck()
+        };
+        boundary()?;
+        // As for a drive: stop first, enable without --now.
+        command.run(&["stop", TIMER], &[0], 65536)?;
+        boundary()?;
+        marker.publish(&approval["binding"])?;
+        authorize()?;
+        operation.recheck()?;
+        schedule_lock.recheck()?;
+        idle.recheck()?;
+        require(
+            review_share(&storage, &scope)? == approval,
+            "backup approval changed before timer enable",
+        )?;
+        marker.admit(&approval["binding"])?;
+        command.run(&["enable", TIMER], &[0], 65536)?;
+        let after = timer(&command)?;
+        require(
+            after["unit"]["state"] == "enabled" && after["activity"] == "inactive",
+            "backup schedule outcome differs; no automatic replay",
+        )?;
+        marker.admit(&approval["binding"])?;
+        operation.recheck()?;
+        idle.recheck()?;
+    } else if enabled {
         let operation = operation::lock()?;
         // The configured repository is checked in a borrowed mount or in one
         // reviewed temporary mount owned for this call and closed after it.

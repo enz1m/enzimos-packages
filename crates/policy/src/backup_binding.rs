@@ -48,6 +48,34 @@ pub fn schedule(configuration: &[u8], destination_pin: &[u8]) -> Result<Value> {
     )
 }
 
+/// The schedule opt-in of a setup without a backup drive: the exact share
+/// configuration bytes and the share repository pin, which must name them.
+///
+/// # Errors
+/// An invalid configuration or pin, or a pin of another configuration.
+pub fn schedule_share(configuration: &[u8], pin: &Value) -> Result<Value> {
+    crate::backup_remote_endpoint::validate(&json::decode(configuration, 32768)?)?;
+    crate::backup_remote_record::pin(pin)?;
+    require(
+        pin["configuration_sha256"] == json::sha256(configuration),
+        "backup schedule share pin binding mismatch",
+    )?;
+    Ok(
+        value!({"schema":1,"destination":"share","configuration_sha256":json::sha256(configuration),
+        "destination_pin_sha256":json::fingerprint(pin)?,"schedule":SCHEDULE,"opt_in":true}),
+    )
+}
+/// Whether `marker` is the opt-in of exactly this share and pin.
+///
+/// # Errors
+/// As for [`schedule_share`], or a marker bound to anything else.
+pub fn verify_schedule_share(marker: &[u8], configuration: &[u8], pin: &Value) -> Result<()> {
+    let actual = json::decode(marker, crate::backup_configuration::LIMIT)?;
+    require(
+        actual == schedule_share(configuration, pin)?,
+        "automatic backup opt-in binding changed; reapproval required",
+    )
+}
 pub fn verify_schedule(marker: &[u8], configuration: &[u8], destination_pin: &[u8]) -> Result<()> {
     let actual = json::decode(marker, crate::backup_configuration::LIMIT)?;
     require(

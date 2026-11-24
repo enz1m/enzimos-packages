@@ -312,6 +312,7 @@ pub(crate) unsafe fn confine_child(task: &Consumer) -> std::io::Result<()> {
             "enzimos-restic-native-remote-rotation-read" => {
                 b"exec enzimos-restic-native-remote-rotation-read"
             }
+            "enzimos-restic-native-remote-backup" => b"exec enzimos-restic-native-remote-backup",
             _ => b"exec enzimos-restic-native-replicate",
         },
         Consumer::Workflow(Task::AuthenticateInput) => b"exec enzimos-restic-input-check",

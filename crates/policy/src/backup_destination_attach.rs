@@ -21,6 +21,8 @@ use serde_json::Value;
 const TARGET: &str = "/backup-repository";
 /// Typed refusal: the configured backup drive is not attached.
 pub const ABSENT: &str = "backup-destination-absent";
+/// Typed refusal: neither a backup drive nor a ready NAS share is set up.
+pub const NOT_CONFIGURED: &str = "backup-destination-not-configured";
 /// Typed refusal: a read-only query found the configured repository unmounted.
 pub const NOT_MOUNTED: &str = "backup-destination-not-mounted";
 

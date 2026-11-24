@@ -273,6 +273,7 @@ pub mod update_worker_record;
 pub mod backup_points;
 pub mod backup_removals;
 pub mod backup_run_status;
+pub mod backup_running;
 pub mod backup_selective_checkpoint;
 pub mod backup_selective_context;
 pub mod backup_selective_control;
@@ -285,6 +286,7 @@ pub mod backup_selective_request;
 pub mod backup_selective_reservation;
 pub mod backup_selective_result;
 pub mod backup_selective_review;
+pub mod backup_share_destination;
 mod backup_tree_result;
 
 pub mod delivery_cancel;

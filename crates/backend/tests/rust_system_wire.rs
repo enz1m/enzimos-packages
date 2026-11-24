@@ -110,7 +110,11 @@ fn malformed_wire_and_restore_or_risk_boundary_inputs_never_become_operations() 
         wire::public_failure(&Error("secret=/private/password".into())),
         "internal-result-unknown-do-not-retry-automatically"
     );
-    for code in ["service-busy", "backup-destination-busy"] {
+    for code in [
+        "service-busy",
+        "backup-destination-busy",
+        "backup-destination-not-configured",
+    ] {
         assert_eq!(wire::public_failure(&Error(code.into())), code);
     }
     for path in [

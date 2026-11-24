@@ -102,6 +102,10 @@
       "target": "usr/lib/enzimos-native/restic-remote-check.conf",
       "mode": 420
     },
+    "packaging/rust/root/usr/lib/enzimos-native/restic-remote-backup.conf": {
+      "target": "usr/lib/enzimos-native/restic-remote-backup.conf",
+      "mode": 420
+    },
     "packaging/rust/root/usr/lib/enzimos-native/restic-retain.conf": {
       "target": "usr/lib/enzimos-native/restic-retain.conf",
       "mode": 420

@@ -85,6 +85,41 @@ pub fn context(v: &Value) -> Result<()> {
         )?;
     }
     let remote = &v["remote"];
+    let epochs = self::remote(remote, &v["source"])?;
+    let local = value!({"caller":remote["caller"],"source":v["source"],"boot_id":remote["boot_id"],"configuration":v["local_configuration"],"pin":v["local_pin"],"root_directory":v["local_root"],"repository_directory":v["local_repository"],"destination":v["destination"],"header":v["local_header"],"operation_lock":v["operation_lock"],"restic":remote["restic"]});
+    crate::backup_existing_repository_wire::validate(&local)?;
+    json::fields(&v["local_credential"], "inode mount")?;
+    inode(&v["local_credential"]["inode"], true, 4096)?;
+    require(
+        v["local_credential"]["mount"]
+            .as_u64()
+            .is_some_and(|n| n > 0),
+        "original local credential mount",
+    )?;
+    let mut objects = BTreeSet::new();
+    for e in epochs.iter().chain([
+        &remote["caller"]["image_epoch"],
+        &remote["restic"]["inode"],
+        &remote["pin_epoch"]["epoch"],
+        &v["local_credential"]["inode"],
+        &v["local_configuration"]["inode"],
+        &v["local_pin"]["inode"],
+        &v["operation_lock"]["inode"],
+        &v["local_header"]["identity"],
+    ]) {
+        require(
+            objects.insert((e[0].as_u64().unwrap(), e[1].as_u64().unwrap())),
+            "remote worker original file roles alias one inode",
+        )?;
+    }
+    require(
+        json::canonical(v)?.len() <= LIMIT,
+        "bounded original remote context",
+    )
+}
+/// The retained remote repository context (share inputs, pin and rotation
+/// epochs) for the live `source`; returns the three input epochs.
+pub(crate) fn remote<'v>(remote: &'v Value, source: &Value) -> Result<&'v Vec<Value>> {
     json::fields(
         remote,
         "schema role boot_id inputs caller restic pin pin_epoch rotation_epoch remote_identity_authenticated copy_complete worker_closed scheduler_enabled",
@@ -120,7 +155,7 @@ pub fn context(v: &Value) -> Result<()> {
     )?;
     require(
         inputs["credential_bytes_read"] == false
-            && inputs["source"] == v["source"]
+            && inputs["source"] == *source
             && inputs["mount"].as_u64().is_some_and(|n| n > 0),
         "original remote inputs cannot read credentials or substitute source",
     )?;
@@ -184,36 +219,7 @@ pub fn context(v: &Value) -> Result<()> {
             "remote credential metadata differs from original epoch",
         )?;
     }
-    let local = value!({"caller":remote["caller"],"source":v["source"],"boot_id":remote["boot_id"],"configuration":v["local_configuration"],"pin":v["local_pin"],"root_directory":v["local_root"],"repository_directory":v["local_repository"],"destination":v["destination"],"header":v["local_header"],"operation_lock":v["operation_lock"],"restic":remote["restic"]});
-    crate::backup_existing_repository_wire::validate(&local)?;
-    json::fields(&v["local_credential"], "inode mount")?;
-    inode(&v["local_credential"]["inode"], true, 4096)?;
-    require(
-        v["local_credential"]["mount"]
-            .as_u64()
-            .is_some_and(|n| n > 0),
-        "original local credential mount",
-    )?;
-    let mut objects = BTreeSet::new();
-    for e in epochs.iter().chain([
-        &remote["caller"]["image_epoch"],
-        &remote["restic"]["inode"],
-        &remote["pin_epoch"]["epoch"],
-        &v["local_credential"]["inode"],
-        &v["local_configuration"]["inode"],
-        &v["local_pin"]["inode"],
-        &v["operation_lock"]["inode"],
-        &v["local_header"]["identity"],
-    ]) {
-        require(
-            objects.insert((e[0].as_u64().unwrap(), e[1].as_u64().unwrap())),
-            "remote worker original file roles alias one inode",
-        )?;
-    }
-    require(
-        json::canonical(v)?.len() <= LIMIT,
-        "bounded original remote context",
-    )
+    Ok(epochs)
 }
 pub fn request(v: &Value) -> Result<()> {
     json::fields(v, "schema kind id boot_id worker context")?;

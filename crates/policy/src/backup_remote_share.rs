@@ -40,11 +40,13 @@ const INPUTS: [&str; 9] = [
     "backup-remote-retired.json",
     "backup-remote-retired.password",
 ];
-/// Pin, initialization receipt and rotation record in the control directory.
-const RECORDS: [&str; 3] = [
+/// Pin, initialization receipt, rotation record and automatic copy outcome in
+/// the control directory.
+const RECORDS: [&str; 4] = [
     "backup-remote-pin.json",
     "backup-remote-init.json",
     "backup-remote-rotation.json",
+    crate::backup_run_status::REMOTE_COPY,
 ];
 const ATTEMPTS: &str = "backup-remote-initialization";
 const STAGED: [&str; 3] = [
@@ -583,6 +585,28 @@ pub fn remove_locked(
     Ok(
         value!({"schema":1,"status":"remote-share-removed","retired":removed,"nas_data_deleted":false}),
     )
+}
+/// Whether a configured SMB share with its passwords and pinned repository is
+/// in place, so a new local backup is copied to it. Metadata only.
+pub fn copy_ready() -> bool {
+    let Ok(Some(bytes)) = enzimos_platform::files::read_optional(
+        &Path::new(ETC).join("backup-remote.json"),
+        32768,
+        Some(0),
+        true,
+    ) else {
+        return false;
+    };
+    let configured = json::decode(&bytes, 32768).is_ok_and(|v| endpoint::validate(&v).is_ok());
+    let ready = readiness(&bytes);
+    configured
+        && [
+            "share_password_ready",
+            "repository_password_ready",
+            "repository_ready",
+        ]
+        .iter()
+        .all(|key| ready[*key] == true)
 }
 /// Readiness for status: metadata only, no secret bytes are read.
 pub fn readiness(configuration_bytes: &[u8]) -> Value {
