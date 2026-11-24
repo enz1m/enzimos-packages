@@ -762,6 +762,22 @@ fn run(args: &[String]) -> Result<Value> {
         _ => unreachable!(),
     }
 }
+/// Exit status of one command: 75 is work deferred by a busy operation lock
+/// (units with `RestartForceExitStatus=75` retry it), 2 a failure.
+fn exit_code(result: &Result<Value>, recovery: bool) -> i32 {
+    match result {
+        Ok(value)
+            if (value["status"] == "deferred" && value["owed_after_reboot"] == true)
+                || value["status"] == "operation-lock-busy" =>
+        {
+            75
+        }
+        Ok(value) if value["status"] == "memory-policy-disabled" => 1,
+        Ok(_) => 0,
+        Err(_) if recovery => 1,
+        Err(_) => 2,
+    }
+}
 #[allow(
     unsafe_code,
     reason = "Linux syscall ABI (getrlimit, prctl, setrlimit)."
@@ -803,23 +819,7 @@ fn main() {
         )?;
         run(&args)
     })();
-    let code = if result.as_ref().is_ok_and(|value| {
-        (value["status"] == "deferred" && value["owed_after_reboot"] == true)
-            || value["status"] == "operation-lock-busy"
-    }) {
-        75
-    } else if result
-        .as_ref()
-        .is_ok_and(|value| value["status"] == "memory-policy-disabled")
-    {
-        1
-    } else if result.is_ok() {
-        0
-    } else if recovery_action.is_some() {
-        1
-    } else {
-        2
-    };
+    let code = exit_code(&result, recovery_action.is_some());
     let output = match result {
         Ok(value) => value,
         Err(error) => match recovery_action {
@@ -869,5 +869,23 @@ fn secure_options(action: &str, options: &BTreeMap<String, String>) -> Result<()
                 && options["options"].bytes().all(|b| (32..127).contains(&b)),
             "initial UKI paths, pairing or options refused",
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_busy_operation_lock_defers_and_real_failures_still_fail() {
+        let busy = Ok(value!({"status":"operation-lock-busy","retry":true}));
+        assert_eq!(exit_code(&busy, false), 75);
+        let owed = Ok(value!({"status":"deferred","owed_after_reboot":true}));
+        assert_eq!(exit_code(&owed, false), 75);
+        assert_eq!(exit_code(&Ok(value!({"snapshot":66})), false), 0);
+        let busy_error = Err(Error(enzimos_policy::operation::BUSY.into()));
+        assert_eq!(exit_code(&busy_error, false), 2);
+        assert_eq!(exit_code(&Err(Error("snapper failed".into())), false), 2);
+        assert_eq!(exit_code(&Err(Error("x".into())), true), 1);
     }
 }

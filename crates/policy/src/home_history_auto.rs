@@ -76,7 +76,12 @@ impl Gate {
 pub fn create() -> Result<Value> {
     let gate = Gate::open()?;
     gate.admit(|| {
-        let lock = operation::lock()?;
+        // A backup or another operation can hold the lock for hours; this run
+        // is skipped (exit 75) and the unit retries it, see `busy`.
+        let Some(lock) = operation::try_lock()? else {
+            eprintln!("enzimos-policy: home history skipped: a backup or another system operation is running");
+            return Ok(busy());
+        };
         if gate.disabled()? {
             return Ok(json!({"status":"disabled-no-source-scan"}));
         }
@@ -88,4 +93,10 @@ pub fn create() -> Result<Value> {
             lock.recheck()
         })
     })
+}
+/// The skipped-run result: the policy binary exits 75 for it and the unit's
+/// `RestartForceExitStatus=75` runs home history again shortly, without the
+/// unit ever failing.
+fn busy() -> Value {
+    json!({"status":"operation-lock-busy","retry":true})
 }
