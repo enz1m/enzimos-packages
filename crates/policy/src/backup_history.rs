@@ -199,13 +199,18 @@ const STAGES: &str = "backup-inventory-stages";
 /// Whether failed job `capture` may still have a process: its attempt still
 /// runs in this boot, or (as [`crate::backup_attempt::blocks_live`]) the job
 /// is from this boot and its transfer worker was never proven closed
-/// (`worker`: None no record, Some(None) an unreadable one).
+/// (`worker`: None no record, Some(None) an unreadable one), unless the
+/// attempt was abandoned.
 fn live(
     capture: &Value,
     attempt: Option<&Value>,
     worker: Option<Option<&Value>>,
     boot: &str,
 ) -> bool {
+    // An abandoned attempt was proven to have no owner, worker or Restic left.
+    if attempt.is_some_and(|row| row["state"] == "abandoned") {
+        return false;
+    }
     if attempt.is_some_and(|row| crate::backup_attempt::blocks(row, boot)) {
         return true;
     }
@@ -462,6 +467,17 @@ pub fn retire_failed_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn an_abandoned_attempt_frees_its_failed_capture_for_retirement() {
+        let boot = "11111111-2222-3333-4444-555555555555";
+        let capture = serde_json::json!({"boot_id":boot});
+        let worker = serde_json::json!({"phase":"send-entered"});
+        let mut attempt = serde_json::json!({"boot_id":boot,"state":"uncertain"});
+        assert!(live(&capture, Some(&attempt), Some(Some(&worker)), boot));
+        attempt["state"] = serde_json::json!("abandoned");
+        assert!(!live(&capture, Some(&attempt), Some(Some(&worker)), boot));
+        assert!(!live(&capture, Some(&attempt), Some(None), boot));
+    }
 
     #[test]
     fn only_recorded_snapshots_are_destroyed_and_interrupted_retirement_stops() {

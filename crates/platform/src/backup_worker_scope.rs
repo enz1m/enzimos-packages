@@ -109,6 +109,82 @@ fn populated(body: &str) -> Result<bool> {
         _ => Err(Error("original cgroup population unavailable".into())),
     }
 }
+/// What remains of a recorded worker scope after its owning backend died.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Remains {
+    /// No process of the scope can exist: its cgroup is gone, or it is the
+    /// recorded cgroup and reports no population.
+    Gone,
+    /// The worker or another member of its cgroup is still alive.
+    Live,
+    /// Neither could be proven.
+    Unproven,
+}
+/// Decide from a fresh observation: `alive` is the recorded worker (PID and
+/// start time), `cgroup` the named unit cgroup's shape and population.
+fn judge(alive: bool, cgroup: Option<(Value, bool)>, recorded: &Value) -> Remains {
+    match (alive, cgroup) {
+        (true, _) => Remains::Live,
+        // cgroup v2 refuses to remove a populated cgroup.
+        (false, None) => Remains::Gone,
+        (false, Some((shape, populated))) if shape == *recorded => {
+            if populated {
+                Remains::Live
+            } else {
+                Remains::Gone
+            }
+        }
+        (false, Some(_)) => Remains::Unproven,
+    }
+}
+/// What remains of the worker scope `binding` (as recorded by `Scope`) when
+/// no retained descriptor of it survives. Any observation failure is
+/// [`Remains::Unproven`].
+#[must_use]
+pub fn remains(binding: &Value) -> Remains {
+    observe_remains(binding).unwrap_or(Remains::Unproven)
+}
+fn observe_remains(binding: &Value) -> Result<Remains> {
+    initial()?;
+    let id = binding["id"]
+        .as_str()
+        .ok_or_else(|| Error("recorded worker scope ID required".into()))?;
+    let unit = unit(id)?;
+    let worker = &binding["worker"];
+    let (Some(pid), Some(start)) = (worker["pid"].as_u64(), worker["start_ticks"].as_u64()) else {
+        return Err(Error("recorded worker identity required".into()));
+    };
+    require(
+        binding["unit"] == unit.as_str() && (1..i32::MAX as u64).contains(&pid) && start > 0,
+        "recorded worker scope shape",
+    )?;
+    let alive = match files::read_kernel(&PathBuf::from(format!("/proc/{pid}/stat")), 8192) {
+        Ok(body) => process_identity::parse_stat(
+            std::str::from_utf8(&body).map_err(|_| Error("worker stat encoding".into()))?,
+            pid as u32,
+        )
+        .is_ok_and(|stat| stat.start_ticks == start),
+        Err(_) if std::fs::symlink_metadata(format!("/proc/{pid}")).is_err() => false,
+        Err(error) => return Err(error),
+    };
+    let path = Path::new("/sys/fs/cgroup/system.slice").join(&unit);
+    let cgroup = match std::fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+        Ok(_) => {
+            let directory = files::directory(&path, Some(0))?;
+            let mut bytes = Vec::new();
+            (&files::open_relative(&directory, Path::new("cgroup.events"))?)
+                .take(4097)
+                .read_to_end(&mut bytes)?;
+            let populated = populated(
+                std::str::from_utf8(&bytes).map_err(|_| Error("cgroup event encoding".into()))?,
+            )?;
+            Some((shape(&directory)?, populated))
+        }
+    };
+    Ok(judge(alive, cgroup, &binding["cgroup"]))
+}
 pub struct Scope {
     process: Retained,
     directory: File,
@@ -294,6 +370,27 @@ impl Closed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_dead_worker_scope_is_gone_only_with_its_cgroup_removed_or_empty() {
+        let recorded = json!({"device":30,"inode":4,"mode":16877,"uid":0,"gid":0,"mount":9});
+        assert_eq!(judge(false, None, &recorded), Remains::Gone);
+        assert_eq!(
+            judge(false, Some((recorded.clone(), false)), &recorded),
+            Remains::Gone
+        );
+        assert_eq!(
+            judge(false, Some((recorded.clone(), true)), &recorded),
+            Remains::Live
+        );
+        assert_eq!(judge(true, None, &recorded), Remains::Live);
+        let mut other = recorded.clone();
+        other["inode"] = json!(5);
+        assert_eq!(
+            judge(false, Some((other, false)), &recorded),
+            Remains::Unproven
+        );
+        assert_eq!(remains(&json!({"id":"not-an-id"})), Remains::Unproven);
+    }
     #[test]
     fn complete_subtree_population_is_mandatory_and_ambiguous_events_refused() {
         assert!(!populated("populated 0\nfrozen 0\n").unwrap());

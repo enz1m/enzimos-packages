@@ -83,6 +83,20 @@ impl Store {
     }
 }
 
+impl Store {
+    fn foreign(&self, own: u32) -> bool {
+        let Some(record) = self.load() else {
+            return false;
+        };
+        let Ok(boot) = operation::boot_id() else {
+            return true;
+        };
+        !project(&record, &boot, &|pid, start| {
+            pid != own && owner_identity(pid, self.owner) == Some(start)
+        })
+        .is_null()
+    }
+}
 /// Validate a stored record and reduce it to the public `running` field.
 fn project(record: &Value, boot: &str, alive: &dyn Fn(u32, u64) -> bool) -> Value {
     let valid = (|| -> Result<(u32, u64)> {
@@ -112,6 +126,12 @@ fn project(record: &Value, boot: &str, alive: &dyn Fn(u32, u64) -> bool) -> Valu
     }
 }
 
+/// Whether a live process other than this one records a backup run in this
+/// boot. An unreadable boot identity counts as a foreign run.
+#[must_use]
+pub fn foreign() -> bool {
+    Store::system().foreign(std::process::id())
+}
 /// The current backup run, or `null` when idle (see the module documentation).
 #[must_use]
 pub fn read() -> Value {
@@ -251,6 +271,16 @@ mod tests {
         drop(run);
         assert_eq!(store.read(), Value::Null);
         assert!(!store.path().exists());
+    }
+    #[test]
+    fn only_a_live_run_of_another_process_is_foreign() {
+        let (_temp, store) = store();
+        assert!(!store.foreign(std::process::id()));
+        let run = Run::begin_in(store.clone(), "share");
+        assert!(!store.foreign(std::process::id()));
+        assert!(store.foreign(1));
+        drop(run);
+        assert!(!store.foreign(1));
     }
     #[test]
     fn ending_a_run_keeps_a_record_owned_by_another_process() {

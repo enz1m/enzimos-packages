@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 //! Durable backup attempts complete only after the caller's actual cleanup succeeds.
-use enzimos_platform::{Result, files, json, mount_identity, require};
+use enzimos_platform::{
+    Result, backup_worker_scope::Remains, files, json, mount_identity, require,
+};
 use serde_json::{Value, json as value};
 use std::{
     cell::{Cell, RefCell},
@@ -61,6 +63,85 @@ pub fn blocks_live(row: &Value, boot: &str, control: &Path) -> bool {
         }
     })
 }
+/// Whether a blocking attempt row may be abandoned so a new backup can start
+/// in the same boot. Every backend and transfer worker of an attempt holds
+/// the operation lock's open description, so `lock_held` (this backup holds
+/// it exclusively) means none of them is alive; additionally no other process
+/// may record a running backup, no Restic process may exist, and every
+/// transfer worker scope of the attempt must be proven gone.
+pub(crate) fn may_abandon(
+    lock_held: bool,
+    foreign_run: bool,
+    restic: bool,
+    workers: &[Remains],
+) -> bool {
+    lock_held && !foreign_run && !restic && workers.iter().all(|w| *w == Remains::Gone)
+}
+/// What remains of each transfer worker recorded for attempt `id`. A record
+/// that cannot be read or matched is [`Remains::Unproven`].
+fn worker_remains(control: &Path, id: &str) -> Vec<Remains> {
+    let workers = control.join("backup-transfer-workers");
+    if std::fs::symlink_metadata(&workers).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+    {
+        return Vec::new();
+    }
+    let Ok(jobs) = jobs_of(control, id) else {
+        return vec![Remains::Unproven];
+    };
+    jobs.iter()
+        .filter_map(|job| {
+            match files::read_optional(
+                &workers.join(format!("{job}.json")),
+                LIMIT * 8,
+                Some(0),
+                true,
+            ) {
+                Ok(None) => None,
+                Ok(Some(body)) => Some(json::decode(&body, LIMIT * 8).map_or(
+                    Remains::Unproven,
+                    |record| {
+                        if record["phase"] == "worker-kernel-closed" {
+                            Remains::Gone
+                        } else {
+                            enzimos_platform::backup_worker_scope::remains(&record["worker"])
+                        }
+                    },
+                )),
+                Err(_) => Some(Remains::Unproven),
+            }
+        })
+        .collect()
+}
+/// Whether any Restic process exists; an unreadable process list counts.
+/// Restic is executed through its pinned descriptor, so its `comm` is a
+/// descriptor number: the executable link names it.
+fn restic_running() -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return true;
+    };
+    entries.flatten().any(|entry| {
+        entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.bytes().all(|b| b.is_ascii_digit()))
+            && std::fs::read_link(entry.path().join("exe"))
+                .is_ok_and(|exe| restic_image(exe.as_os_str().as_encoded_bytes()))
+    })
+}
+/// The executable link of a Restic process, also after its file was replaced.
+fn restic_image(link: &[u8]) -> bool {
+    link == b"/usr/bin/restic" || link == b"/usr/bin/restic (deleted)"
+}
+/// Whether `lock` is the operation lock and this process holds it exclusively.
+fn holds_operation_lock(lock: &files::Lock) -> bool {
+    lock.recheck().is_ok()
+        && std::fs::metadata(Path::new("/run/enzimos/operation.lock")).is_ok_and(|named| {
+            lock.as_file()
+                .metadata()
+                .is_ok_and(|held| (held.dev(), held.ino()) == (named.dev(), named.ino()))
+        })
+        && enzimos_platform::flock_identity::exclusive(lock.as_file()).is_ok()
+}
 /// Job IDs whose source capture records attempt `id` (and `id` itself).
 fn jobs_of(control: &Path, id: &str) -> Result<Vec<String>> {
     let mut jobs = vec![id.to_owned()];
@@ -117,7 +198,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
     )?;
     require(
         match v["state"].as_str() {
-            Some("running" | "uncertain") => v["snapshot_id"].is_null(),
+            Some("running" | "uncertain" | "abandoned") => v["snapshot_id"].is_null(),
             Some("completed") => v["snapshot_id"].as_str().is_some_and(snapshot),
             _ => false,
         },
@@ -312,9 +393,30 @@ impl<'g> Store<'g> {
         self.directory.sync_all()?;
         self.recheck()
     }
-    fn start(&mut self, id: &str, boot: &str, started: u64) -> Result<()> {
+    fn start(
+        &mut self,
+        id: &str,
+        boot: &str,
+        started: u64,
+        abandon: &dyn Fn(&Value) -> bool,
+    ) -> Result<()> {
         self.recheck()?;
         self.retire_completed(boot)?;
+        let control = self.path.parent().map_or_else(
+            || PathBuf::from(crate::operation::CONTROL),
+            Path::to_path_buf,
+        );
+        let blocking = self
+            .records
+            .iter()
+            .filter(|(_, r)| blocks_live(&r.value, boot, &control))
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        for name in blocking {
+            if abandon(&self.records[&name].value) {
+                self.abandon(&name)?;
+            }
+        }
         require(
             !self.records.values().any(|r| {
                 blocks_live(
@@ -347,6 +449,46 @@ impl<'g> Store<'g> {
         )?;
         self.records.insert(
             name,
+            Record {
+                identity: files::identity(&file.metadata()?),
+                file,
+                bytes,
+                value: v,
+            },
+        );
+        self.recheck()
+    }
+    /// Keep an interrupted attempt as `abandoned`, its audit record.
+    fn abandon(&mut self, name: &str) -> Result<()> {
+        self.recheck()?;
+        let row = self
+            .records
+            .get(name)
+            .ok_or_else(|| enzimos_platform::Error("abandoned backup attempt missing".into()))?;
+        require(
+            matches!(row.value["state"].as_str(), Some("running" | "uncertain")),
+            "only an interrupted backup attempt can be abandoned",
+        )?;
+        let mut v = row.value.clone();
+        v["state"] = value!("abandoned");
+        validate(&v, name.strip_suffix(".json").unwrap_or(""))?;
+        let bytes = json::canonical(&v)?;
+        let file = files::atomic_replace_original(
+            &self.directory,
+            Path::new(name),
+            &bytes,
+            0o600,
+            Some(self.owner),
+            LIMIT,
+            &row.file,
+        )?;
+        eprintln!(
+            "enzimos-backup: abandoned interrupted attempt {} (was {}); its owner, workers and Restic are gone",
+            v["id"].as_str().unwrap_or(""),
+            row.value["state"].as_str().unwrap_or("")
+        );
+        self.records.insert(
+            name.to_owned(),
             Record {
                 identity: files::identity(&file.metadata()?),
                 file,
@@ -446,7 +588,15 @@ impl<'g> Attempt<'g> {
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|_| enzimos_platform::Error("backup attempt clock unavailable".into()))?
             .as_secs();
-        store.start(&id, &crate::operation::boot_id()?, started)?;
+        let control = Path::new(crate::operation::CONTROL);
+        store.start(&id, &crate::operation::boot_id()?, started, &|row| {
+            may_abandon(
+                holds_operation_lock(lock),
+                crate::backup_running::foreign(),
+                restic_running(),
+                &worker_remains(control, row["id"].as_str().unwrap_or("")),
+            )
+        })?;
         Ok(Self {
             store: RefCell::new(store),
             id,
@@ -585,15 +735,15 @@ mod tests {
     fn actual_durable_attempt_never_replays_running_uncertain_or_completed_ids() {
         let dir = fixture();
         let mut s = store(&dir);
-        s.start(ID, BOOT, 1).unwrap();
-        assert!(s.start(NEXT, BOOT, 2).is_err());
+        s.start(ID, BOOT, 1, &|_| false).unwrap();
+        assert!(s.start(NEXT, BOOT, 2, &|_| false).is_err());
         drop(s);
         let mut s = store(&dir);
-        assert!(s.start(NEXT, BOOT, 2).is_err());
+        assert!(s.start(NEXT, BOOT, 2, &|_| false).is_err());
         s.finish(ID, Some("aabbccdd")).unwrap();
         assert!(s.finish(ID, Some("aabbccdd")).is_err());
-        assert!(s.start(ID, BOOT, 2).is_err());
-        s.start(NEXT, BOOT, 2).unwrap();
+        assert!(s.start(ID, BOOT, 2, &|_| false).is_err());
+        s.start(NEXT, BOOT, 2, &|_| false).unwrap();
         let a = Attempt {
             store: RefCell::new(s),
             id: NEXT.into(),
@@ -618,8 +768,95 @@ mod tests {
             s.records[&format!("{NEXT}.json")].value["state"],
             "uncertain"
         );
-        assert!(s.start(NEXT, BOOT, 3).is_err());
-        s.start("33333333333333333333333333333333", BOOT, 3)
+        assert!(s.start(NEXT, BOOT, 3, &|_| false).is_err());
+        s.start("33333333333333333333333333333333", BOOT, 3, &|_| false)
             .unwrap();
+    }
+
+    #[test]
+    fn only_a_dead_owner_with_every_worker_gone_may_be_abandoned() {
+        assert!(may_abandon(true, false, false, &[]));
+        assert!(may_abandon(
+            true,
+            false,
+            false,
+            &[Remains::Gone, Remains::Gone]
+        ));
+        // A live owner: the lock is held elsewhere, or another process records a run.
+        assert!(!may_abandon(false, false, false, &[]));
+        assert!(!may_abandon(true, true, false, &[]));
+        assert!(!may_abandon(true, false, true, &[]));
+        assert!(!may_abandon(
+            true,
+            false,
+            false,
+            &[Remains::Gone, Remains::Live]
+        ));
+        assert!(!may_abandon(true, false, false, &[Remains::Unproven]));
+    }
+    #[test]
+    fn a_dead_owner_unblocks_with_an_audit_record_and_a_live_one_still_blocks() {
+        let dir = fixture();
+        let mut s = store(&dir);
+        s.start(ID, BOOT, 1, &|_| false).unwrap();
+        let refused = s.start(NEXT, BOOT, 2, &|_| false).unwrap_err();
+        assert_eq!(refused.0, "backup-attempt-needs-restart");
+        assert_eq!(s.records[&format!("{ID}.json")].value["state"], "running");
+        let asked = std::cell::RefCell::new(Vec::new());
+        s.start(NEXT, BOOT, 2, &|row| {
+            asked.borrow_mut().push(row["id"].clone());
+            true
+        })
+        .unwrap();
+        assert_eq!(*asked.borrow(), [value!(ID)]);
+        drop(s);
+        let s = store(&dir);
+        let audit = &s.records[&format!("{ID}.json")].value;
+        assert_eq!(audit["state"], "abandoned");
+        assert_eq!(audit["boot_id"], BOOT);
+        assert_eq!(audit["started_unix"], 1);
+        assert!(!blocks_live(audit, BOOT, dir.path()));
+        assert_eq!(s.records[&format!("{NEXT}.json")].value["state"], "running");
+    }
+    #[test]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
+    fn an_unproven_scope_keeps_an_uncertain_attempt_blocking() {
+        let dir = fixture();
+        let attempts = dir.path().join("backup-attempts");
+        std::fs::create_dir(&attempts).unwrap();
+        std::fs::set_permissions(&attempts, std::fs::Permissions::from_mode(0o700)).unwrap();
+        // SAFETY: getuid has no preconditions.
+        let uid = unsafe { libc::getuid() };
+        let held = files::directory(&attempts, Some(uid)).unwrap();
+        let mut s = Store::retained(
+            &attempts,
+            uid,
+            mount_identity::id(held.as_fd(), true).unwrap(),
+            Box::new(|| Ok(())),
+        )
+        .unwrap();
+        s.start(ID, BOOT, 1, &|_| false).unwrap();
+        s.finish(ID, None).unwrap();
+        std::fs::create_dir(dir.path().join("backup-transfer-workers")).unwrap();
+        std::fs::write(
+            dir.path()
+                .join(format!("backup-transfer-workers/{ID}.json")),
+            br#"{"phase":"send-entered","worker":{"id":"not-a-scope"}}"#,
+        )
+        .unwrap();
+        assert!(blocks_live(
+            &s.records[&format!("{ID}.json")].value,
+            BOOT,
+            dir.path()
+        ));
+        let workers = worker_remains(dir.path(), ID);
+        assert_eq!(workers, [Remains::Unproven]);
+        let refused = s
+            .start(NEXT, BOOT, 2, &|_| {
+                may_abandon(true, false, false, &workers)
+            })
+            .unwrap_err();
+        assert_eq!(refused.0, "backup-attempt-needs-restart");
+        assert_eq!(s.records[&format!("{ID}.json")].value["state"], "uncertain");
     }
 }

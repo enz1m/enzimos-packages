@@ -199,7 +199,7 @@ fn project(snapshot: &Snapshot<'_>) -> Result<Option<Receipt>> {
                 enzimos_policy::backup_attempt::validate(value, id)?;
                 match value["state"].as_str().unwrap() {
                     "running" if value["boot_id"] == boot => None,
-                    "running" | "uncertain" => Some(("uncertain", None)),
+                    "running" | "uncertain" | "abandoned" => Some(("uncertain", None)),
                     "completed" => Some((
                         "completed",
                         value["snapshot_id"]
