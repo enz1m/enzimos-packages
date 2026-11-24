@@ -138,21 +138,18 @@ fn stable(rows: &[Value], physical: &[String]) -> Result<Vec<Value>> {
         })
         .collect()
 }
-/// The Snapper snapshots present in a full nested inventory.
-fn snapper_paths(rows: &[Value], physical: &[String]) -> BTreeSet<String> {
+/// The subvolume UUIDs of a full nested inventory.
+fn subvolume_uuids(rows: &[Value]) -> BTreeSet<String> {
     rows.iter()
-        .zip(physical)
-        .filter_map(|(rows, parent)| Some((rows.as_object()?, parent)))
-        .flat_map(|(rows, parent)| {
-            rows.keys()
-                .filter(|path| snapper_snapshot(path, parent))
-                .cloned()
-                .collect::<Vec<_>>()
-        })
+        .filter_map(Value::as_object)
+        .flat_map(|rows| rows.values())
+        .filter_map(|row| row["uuid"].as_str().map(str::to_owned))
         .collect()
 }
 /// The backup's own new snapshot: a Snapper snapshot of exactly one source,
-/// listed with exactly its row now, and absent when the sources were reviewed.
+/// listed with exactly its row now, and a subvolume absent when the sources
+/// were reviewed. Snapper reuses the number of a removed newest snapshot, so
+/// the path alone does not tell a new snapshot from a reviewed one.
 fn created_row(
     current: &[Value],
     physical: &[String],
@@ -166,7 +163,9 @@ fn created_row(
         "created inventory row shape differs",
     )?;
     require(
-        !reviewed.contains(path),
+        row["uuid"]
+            .as_str()
+            .is_some_and(|uuid| !reviewed.contains(uuid)),
         "created snapshot already recorded; no replay",
     )?;
     let owners = current
@@ -225,7 +224,7 @@ impl<'a, 'g> Inventory<'a, 'g> {
             vendor,
             mounts: persistent_mounts(mounts),
             nested: Mutex::new(stable(&full, &physical)?),
-            reviewed: snapper_paths(&full, &physical),
+            reviewed: subvolume_uuids(&full),
         };
         this.recheck()?;
         Ok(this)
@@ -437,16 +436,20 @@ mod tests {
         );
     }
     #[test]
-    fn the_backup_snapshot_must_be_new_listed_and_exactly_its_row() {
+    fn the_backup_snapshot_must_be_a_new_subvolume_listed_with_exactly_its_row() {
         let path = "enzimos-home/.snapshots/13/snapshot";
         let created = row(path, 402);
         let current = vec![
             rows(&[("enzimos-root/.snapshots", 300)]),
             rows(&[("enzimos-home/.snapshots", 400), (path, 402)]),
         ];
-        let reviewed = BTreeSet::from(["enzimos-home/.snapshots/12/snapshot".to_owned()]);
+        let reused_number = vec![
+            rows(&[("enzimos-root/.snapshots", 300)]),
+            rows(&[("enzimos-home/.snapshots", 400), (path, 401)]),
+        ];
+        let reviewed = subvolume_uuids(&reused_number);
         created_row(&current, &physical(), &reviewed, path, &created).unwrap();
-        let replay = BTreeSet::from([path.to_owned()]);
+        let replay = subvolume_uuids(&current);
         assert!(created_row(&current, &physical(), &replay, path, &created).is_err());
         let mut other = created.clone();
         other["id"] = json!(403);
