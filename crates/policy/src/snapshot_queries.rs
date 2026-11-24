@@ -7,7 +7,10 @@ use crate::{
 use chrono::{DateTime, Datelike, NaiveDateTime, SecondsFormat, Timelike, Utc};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
-use std::time::{Duration, Instant};
+use std::{
+    collections::BTreeSet,
+    time::{Duration, Instant},
+};
 const MAX_BYTES: usize = 512 * 1024;
 fn number(v: &Value, empty: bool) -> Result<Option<u64>> {
     if empty && (v.is_null() || v == "") {
@@ -59,20 +62,21 @@ struct Row {
     number: u64,
     public: Value,
 }
-/// A backup's own source snapshot: it exists only while a backup captures or
-/// until a failed backup is cleaned up, and is no one's history or restore
-/// point, so the history queries leave it out.
-fn backup_source(kind: &str, cleanup: &str, description: &str) -> bool {
-    kind == "single"
+/// A backup's own source snapshot, still owned by its receipt: the backup
+/// retires it, and it is no one's history or restore point. A snapshot whose
+/// receipt is gone stays listed so it can be removed.
+fn backup_source(kind: &str, cleanup: &str, description: &str, owned: bool) -> bool {
+    owned
+        && kind == "single"
         && cleanup.is_empty()
         && description == crate::backup_snapshot_creation::DESCRIPTION
 }
-fn parse(v: &Value) -> Result<Vec<Row>> {
+fn parse(v: &Value, owned: &BTreeSet<u64>) -> Result<Vec<Row>> {
     let rows = v
         .as_array()
         .ok_or_else(|| Error("snapshot inventory list required".into()))?;
     require(rows.len() <= 10000, "snapshot inventory count bound")?;
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = BTreeSet::new();
     let mut result = Vec::new();
     for row in rows {
         require(row.is_object(), "snapshot record object required")?;
@@ -98,7 +102,7 @@ fn parse(v: &Value) -> Result<Vec<Row>> {
                 && description.len() <= 4096,
             "snapshot kind/cleanup/description bound",
         )?;
-        if backup_source(kind, cleanup, description) {
+        if backup_source(kind, cleanup, description, owned.contains(&n)) {
             continue;
         }
         let (date, text) = utc(&row["date"])?;
@@ -107,8 +111,8 @@ fn parse(v: &Value) -> Result<Vec<Row>> {
     }
     Ok(result)
 }
-pub fn snapshot_rows(v: &Value) -> Result<Value> {
-    let mut rows = parse(v)?;
+fn snapshot_rows(v: &Value, owned: &BTreeSet<u64>) -> Result<Value> {
+    let mut rows = parse(v, owned)?;
     rows.sort_by(|a, b| b.date.cmp(&a.date).then(b.number.cmp(&a.number)));
     Ok(Value::Array(
         rows.into_iter().take(100).map(|r| r.public).collect(),
@@ -128,6 +132,8 @@ fn sample() -> Result<(Value, Value)> {
             &guard,
         )?);
     }
+    // Display only: an unreadable receipt registry lists every snapshot.
+    let receipts = crate::backup_history::receipt_snapshots(&guard).unwrap_or_default();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut snapshots = serde_json::Map::new();
     let mut history = serde_json::Map::new();
@@ -148,13 +154,18 @@ fn sample() -> Result<(Value, Value)> {
             v.is_object() && v.get(name).is_some(),
             "missing snapshot configuration inventory",
         )?;
-        let rows = parse(&v[name])?;
+        let owned = receipts
+            .iter()
+            .filter(|(source, _)| source == name)
+            .map(|(_, number)| *number)
+            .collect();
+        let rows = parse(&v[name], &owned)?;
         let latest = rows.iter().map(|r| r.original_date.as_str()).max();
         history.insert(
             name.clone(),
             value!({"snapshots":rows.len(),"latest":latest}),
         );
-        snapshots.insert(name.clone(), snapshot_rows(&v[name])?);
+        snapshots.insert(name.clone(), snapshot_rows(&v[name], &owned)?);
     }
     for source in &sources {
         source.recheck()?;
@@ -201,25 +212,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_backup_source_snapshot_is_no_ones_history() {
+    fn only_a_receipt_owned_backup_snapshot_leaves_history() {
         let row = |number: u64, cleanup: &str, description: &str| {
             value!({"number":number,"type":"single","date":"2026-11-24 10:23:43","cleanup":cleanup,
                 "description":description})
         };
         let rows = value!([
+            row(65, "", crate::backup_snapshot_creation::DESCRIPTION),
             row(66, "", crate::backup_snapshot_creation::DESCRIPTION),
             row(67, "number", "enzimOS home history"),
             row(68, "", "taken by hand"),
             row(69, "number", crate::backup_snapshot_creation::DESCRIPTION),
         ]);
-        let numbers = snapshot_rows(&rows)
+        let owned = BTreeSet::from([66, 68]);
+        let numbers = snapshot_rows(&rows, &owned)
             .unwrap()
             .as_array()
             .unwrap()
             .iter()
             .map(|row| row["number"].as_u64().unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(numbers, [69, 68, 67]);
-        assert_eq!(parse(&rows).unwrap().len(), 3);
+        assert_eq!(numbers, [69, 68, 67, 65]);
+        assert_eq!(parse(&rows, &owned).unwrap().len(), 4);
     }
 }

@@ -235,6 +235,32 @@ fn snapshot_leftover(receipt: &Value) -> Result<bool> {
         )),
     }
 }
+/// The `(source, Snapper number)` pairs that backup snapshot receipts still
+/// own: recorded at creation and not yet retired by their backup.
+pub(crate) fn receipt_snapshots(
+    guard: &Guard,
+) -> Result<std::collections::BTreeSet<(String, u64)>> {
+    let Some(registry) = open(guard, SNAPSHOTS)? else {
+        return Ok(Default::default());
+    };
+    Ok(registry
+        .members
+        .values()
+        .filter_map(|member| member.value.as_ref())
+        .filter(|receipt| {
+            !matches!(
+                receipt["phase"].as_str(),
+                Some("entered" | "snapshot-retired")
+            )
+        })
+        .filter_map(|receipt| {
+            Some((
+                receipt["source"]["name"].as_str()?.to_owned(),
+                receipt["snapshot"]["number"].as_u64()?,
+            ))
+        })
+        .collect())
+}
 fn folder(control: &std::fs::File, mount: u64, owner: u32, name: &str) -> Result<Option<Folder>> {
     Folder::open(control, mount, owner, name, LIMIT, |_, _| Ok(()))
 }
@@ -246,9 +272,10 @@ fn folder(control: &std::fs::File, mount: u64, owner: u32, name: &str) -> Result
 /// goes at once: its source snapshots through `destroy` (the same exact-ID
 /// retirement a finished backup uses) together with their receipts, so a
 /// reused Snapper number is never mistaken for them, and its boot copy and
-/// staging trees. Only the receipts of the newest [`KEEP_FAILED`] failures
-/// stay for diagnostics; older ones go, the capture last, so an interrupted
-/// run is completed by the next one. A job that may still be live, or whose
+/// staging trees. A receipt still `entered` names no snapshot and stays with
+/// the others. Only the receipts of the newest [`KEEP_FAILED`] failures stay
+/// for diagnostics; older ones go, the capture last, so an interrupted run is
+/// completed by the next one. A job that may still be live, or whose
 /// leftovers cannot be proven, stays as it is.
 pub(crate) fn retire_failed_in(
     control: &std::fs::File,
@@ -318,6 +345,11 @@ pub(crate) fn retire_failed_in(
                     let receipt = registry.value(&id).ok_or_else(|| {
                         enzimos_platform::Error("unreadable failed snapshot receipt".into())
                     })?;
+                    // Snapper may have made a snapshot that `entered` cannot
+                    // name; this receipt is its only record until expiry.
+                    if receipt["phase"] == "entered" {
+                        continue;
+                    }
                     if snapshot_leftover(receipt)? {
                         check()?;
                         destroy(receipt)?;
@@ -611,11 +643,17 @@ mod tests {
     }
 
     #[test]
-    fn an_abandoned_backup_loses_its_snapshots_at_once_and_keeps_its_receipts() {
+    fn an_abandoned_backup_loses_its_snapshots_at_once_but_keeps_unnamed_ones_and_its_capture() {
         let control = control();
         let (gone, live) = (id(1), id(2));
         control.failed(&gone, &id(101), "abandoned");
         control.failed(&live, &id(102), "uncertain");
+        let unnamed = format!("{gone}-1");
+        control.write(
+            SNAPSHOTS,
+            &unnamed,
+            &serde_json::json!({"id":gone,"phase":"entered"}),
+        );
         control.write(
             WORKERS,
             &live,
@@ -627,6 +665,7 @@ mod tests {
         assert_eq!(outcome["cleared"], serde_json::json!([gone]));
         assert_eq!(outcome["retired"], serde_json::json!([]));
         assert!(!control.has(SNAPSHOTS, &format!("{gone}-0")));
+        assert!(control.has(SNAPSHOTS, &unnamed));
         assert!(control.has(CAPTURES, &gone));
         assert!(control.has(SNAPSHOTS, &format!("{live}-0")));
         assert!(control.has(CAPTURES, &live));
