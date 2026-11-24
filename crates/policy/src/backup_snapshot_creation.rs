@@ -89,16 +89,17 @@ fn number(body: &[u8]) -> Result<u64> {
     )?;
     Ok(number)
 }
+/// Snapper's own timeline, cleanup and home history may add or remove other
+/// numbers meanwhile; only this one must be new and present.
 fn added(before: &BTreeSet<String>, after: &BTreeSet<String>, number: u64) -> Result<()> {
     let name = number.to_string();
-    let mut expected = before.clone();
     require(
-        expected.insert(name),
+        !before.contains(&name),
         "backup snapshot number already existed; no adoption",
     )?;
     require(
-        *after == expected,
-        "backup snapshot directory has unknown changes",
+        after.contains(&name),
+        "backup snapshot directory lacks the created snapshot",
     )
 }
 pub struct Created<'a, 'c, 'g> {
@@ -570,5 +571,21 @@ impl MetadataRetired<'_, '_> {
             value!({"receipt":self.value,"snapshot":self.snapshot.evidence()?,
             "source_cleanup_complete":false,"backup_complete":false}),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|n| (*n).to_owned()).collect()
+    }
+    #[test]
+    fn concurrent_snapper_numbers_are_tolerated_but_not_a_reused_number() {
+        added(&set(&["7"]), &set(&["7", "8"]), 8).unwrap();
+        added(&set(&["7", "9"]), &set(&["8", "10"]), 8).unwrap();
+        assert!(added(&set(&["7", "8"]), &set(&["7", "8"]), 8).is_err());
+        assert!(added(&set(&["7"]), &set(&["7", "9"]), 8).is_err());
     }
 }

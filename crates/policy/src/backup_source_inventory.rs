@@ -11,6 +11,7 @@ use crate::{
 use enzimos_platform::{Result, mountinfo, require};
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeSet,
     sync::Mutex,
     time::{Duration, Instant},
 };
@@ -102,36 +103,81 @@ fn qualify_mounts(rows: &[mountinfo::Row], datasets: &[Dataset], filesystem: &st
     }
     Ok(())
 }
-fn creation_rows(
-    before: &[Value],
-    physical: &[String],
-    path: &str,
-    row: &Value,
-) -> Result<Vec<Value>> {
+/// Whether `path` is a Snapper snapshot of the source at `parent`
+/// (`<parent>/.snapshots/<number>/snapshot`). Snapper timeline and cleanup and
+/// home history add and remove these at any time; `.snapshots` is never
+/// archived, so they are qualified but not part of the stable inventory.
+fn snapper_snapshot(path: &str, parent: &str) -> bool {
+    path.strip_prefix(&format!("{parent}/"))
+        .and_then(|relative| relative.strip_prefix(".snapshots/"))
+        .and_then(|relative| relative.strip_suffix("/snapshot"))
+        .is_some_and(|number| {
+            !number.is_empty()
+                && number.bytes().all(|b| b.is_ascii_digit())
+                && !number.starts_with('0')
+        })
+}
+/// The nested inventory without Snapper snapshot rows.
+fn stable(rows: &[Value], physical: &[String]) -> Result<Vec<Value>> {
     require(
-        before.len() == physical.len() && row["path"] == path,
-        "created inventory row shape differs",
+        rows.len() == physical.len(),
+        "nested inventory source count differs",
     )?;
-    enzimos_platform::json::fields(row, "path id uuid parent_uuid")?;
-    let mut expected = before.to_vec();
-    let mut affected = false;
-    for (rows, parent) in expected.iter_mut().zip(physical) {
-        if path.starts_with(&format!("{parent}/")) {
-            let rows = rows.as_object_mut().ok_or_else(|| {
+    rows.iter()
+        .zip(physical)
+        .map(|(rows, parent)| {
+            let rows = rows.as_object().ok_or_else(|| {
                 enzimos_platform::Error("original nested inventory object required".into())
             })?;
-            require(
-                rows.insert(path.into(), row.clone()).is_none(),
-                "created snapshot already recorded; no replay",
-            )?;
-            affected = true;
-        }
-    }
+            Ok(Value::Object(
+                rows.iter()
+                    .filter(|(path, _)| !snapper_snapshot(path, parent))
+                    .map(|(path, row)| (path.clone(), row.clone()))
+                    .collect(),
+            ))
+        })
+        .collect()
+}
+/// The Snapper snapshots present in a full nested inventory.
+fn snapper_paths(rows: &[Value], physical: &[String]) -> BTreeSet<String> {
+    rows.iter()
+        .zip(physical)
+        .filter_map(|(rows, parent)| Some((rows.as_object()?, parent)))
+        .flat_map(|(rows, parent)| {
+            rows.keys()
+                .filter(|path| snapper_snapshot(path, parent))
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+/// The backup's own new snapshot: a Snapper snapshot of exactly one source,
+/// listed with exactly its row now, and absent when the sources were reviewed.
+fn created_row(
+    current: &[Value],
+    physical: &[String],
+    reviewed: &BTreeSet<String>,
+    path: &str,
+    row: &Value,
+) -> Result<()> {
+    enzimos_platform::json::fields(row, "path id uuid parent_uuid")?;
     require(
-        affected,
-        "created snapshot escaped original source inventory",
+        current.len() == physical.len() && row["path"] == path,
+        "created inventory row shape differs",
     )?;
-    Ok(expected)
+    require(
+        !reviewed.contains(path),
+        "created snapshot already recorded; no replay",
+    )?;
+    let owners = current
+        .iter()
+        .zip(physical)
+        .filter(|(_, parent)| snapper_snapshot(path, parent))
+        .collect::<Vec<_>>();
+    require(
+        owners.len() == 1 && owners[0].0[path] == *row,
+        "created snapshot escaped original source inventory",
+    )
 }
 pub struct Inventory<'a, 'g> {
     configuration: &'a dyn SourceScope,
@@ -140,6 +186,7 @@ pub struct Inventory<'a, 'g> {
     vendor: Command,
     mounts: Vec<mountinfo::Row>,
     nested: Mutex<Vec<Value>>,
+    reviewed: BTreeSet<String>,
 }
 impl<'a, 'g> Inventory<'a, 'g> {
     pub fn observe(configuration: &'a dyn SourceScope, guard: &'g Guard) -> Result<Self> {
@@ -166,14 +213,19 @@ impl<'a, 'g> Inventory<'a, 'g> {
             guard.configuration["filesystem_uuid"].as_str().unwrap(),
         )?;
         let vendor = Command::open("/usr/bin/btrfs")?;
-        let nested = Self::sample(&sources, &datasets, &vendor)?;
+        let full = Self::sample(&sources, &datasets, &vendor)?;
+        let physical = sources
+            .iter()
+            .map(Source::filesystem_path)
+            .collect::<Vec<_>>();
         let this = Self {
             configuration,
             guard,
             sources,
             vendor,
             mounts: persistent_mounts(mounts),
-            nested: Mutex::new(nested),
+            nested: Mutex::new(stable(&full, &physical)?),
+            reviewed: snapper_paths(&full, &physical),
         };
         this.recheck()?;
         Ok(this)
@@ -214,7 +266,10 @@ impl<'a, 'g> Inventory<'a, 'g> {
         let datasets = self.configuration.datasets()?;
         require(
             persistent_mounts(storage_runtime::rows()?) == self.mounts
-                && Self::sample(&self.sources, &datasets, &self.vendor)? == self.nested_value()?,
+                && stable(
+                    &Self::sample(&self.sources, &datasets, &self.vendor)?,
+                    &self.physical(),
+                )? == self.nested_value()?,
             "original backup source inventory changed; new review required",
         )?;
         self.configuration.recheck()?;
@@ -224,13 +279,16 @@ impl<'a, 'g> Inventory<'a, 'g> {
             "backup mounts changed during source inventory",
         )
     }
+    fn physical(&self) -> Vec<String> {
+        self.sources.iter().map(Source::filesystem_path).collect()
+    }
     fn nested_value(&self) -> Result<Vec<Value>> {
         self.nested
             .lock()
             .map(|value| value.clone())
             .map_err(|_| enzimos_platform::Error("backup source inventory lock poisoned".into()))
     }
-    /// Advance only the known creation proven by an original retained actor.
+    /// Admit only the known creation proven by an original retained actor.
     /// A decoded row or an independently opened old snapshot cannot invoke this.
     pub fn advance_created(
         &self,
@@ -251,19 +309,15 @@ impl<'a, 'g> Inventory<'a, 'g> {
             "backup mounts changed during snapshot creation",
         )?;
         let datasets = self.configuration.datasets()?;
-        let physical = self
-            .sources
-            .iter()
-            .map(Source::filesystem_path)
-            .collect::<Vec<_>>();
-        let mut original = self
+        let physical = self.physical();
+        let original = self
             .nested
             .lock()
             .map_err(|_| enzimos_platform::Error("backup source inventory lock poisoned".into()))?;
-        let expected = creation_rows(&original, &physical, &path, &row)?;
         let current = Self::sample(&self.sources, &datasets, &self.vendor)?;
+        created_row(&current, &physical, &self.reviewed, &path, &row)?;
         require(
-            current == expected,
+            stable(&current, &physical)? == *original,
             "backup source inventory has unowned changes; no adoption",
         )?;
         created.recheck()?;
@@ -274,7 +328,6 @@ impl<'a, 'g> Inventory<'a, 'g> {
             persistent_mounts(storage_runtime::rows()?) == self.mounts,
             "backup mount closure changed",
         )?;
-        *original = expected;
         drop(original);
         self.recheck()
     }
@@ -300,5 +353,107 @@ impl<'a, 'g> Inventory<'a, 'g> {
         Ok(
             json!({"configuration":self.configuration.evidence()?,"sources":self.sources.iter().map(Source::evidence).collect::<Result<Vec<_>>>()?,"nested":self.nested_value()?,"provider":self.vendor.evidence()?}),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(path: &str, id: u64) -> Value {
+        json!({"path":path,"id":id,"uuid":format!("00000000-0000-4000-8000-{id:012}"),"parent_uuid":null})
+    }
+    fn rows(paths: &[(&str, u64)]) -> Value {
+        Value::Object(
+            paths
+                .iter()
+                .map(|(path, id)| ((*path).to_owned(), row(path, *id)))
+                .collect(),
+        )
+    }
+    fn physical() -> Vec<String> {
+        vec!["enzimos-root".into(), "enzimos-home".into()]
+    }
+
+    #[test]
+    fn only_exact_snapper_snapshots_leave_the_stable_inventory() {
+        for path in [
+            "enzimos-root/.snapshots/1/snapshot",
+            "enzimos-root/.snapshots/4711/snapshot",
+        ] {
+            assert!(snapper_snapshot(path, "enzimos-root"), "{path}");
+        }
+        for path in [
+            "enzimos-root/.snapshots",
+            "enzimos-root/.snapshots/01/snapshot",
+            "enzimos-root/.snapshots/x/snapshot",
+            "enzimos-root/.snapshots/1/snapshot/nested",
+            "enzimos-root/.snapshots/1/other",
+            "enzimos-root/var/lib/machines",
+            "enzimos-home/.snapshots/1/snapshot",
+            "enzimos-rooted/.snapshots/1/snapshot",
+        ] {
+            assert!(!snapper_snapshot(path, "enzimos-root"), "{path}");
+        }
+    }
+    #[test]
+    fn snapper_churn_keeps_the_inventory_but_a_new_data_subvolume_does_not() {
+        let before = vec![
+            rows(&[
+                ("enzimos-root/.snapshots", 300),
+                ("enzimos-root/.snapshots/7/snapshot", 301),
+            ]),
+            rows(&[("enzimos-home/.snapshots", 400)]),
+        ];
+        let churned = vec![
+            rows(&[
+                ("enzimos-root/.snapshots", 300),
+                ("enzimos-root/.snapshots/8/snapshot", 302),
+            ]),
+            rows(&[
+                ("enzimos-home/.snapshots", 400),
+                ("enzimos-home/.snapshots/12/snapshot", 401),
+            ]),
+        ];
+        assert_eq!(
+            stable(&before, &physical()).unwrap(),
+            stable(&churned, &physical()).unwrap()
+        );
+        let mut data = churned.clone();
+        data[0]["enzimos-root/var/lib/machines"] = row("enzimos-root/var/lib/machines", 500);
+        assert_ne!(
+            stable(&before, &physical()).unwrap(),
+            stable(&data, &physical()).unwrap()
+        );
+        let mut nested = churned;
+        nested[0]["enzimos-root/.snapshots/8/snapshot/inner"] =
+            row("enzimos-root/.snapshots/8/snapshot/inner", 501);
+        assert_ne!(
+            stable(&before, &physical()).unwrap(),
+            stable(&nested, &physical()).unwrap()
+        );
+    }
+    #[test]
+    fn the_backup_snapshot_must_be_new_listed_and_exactly_its_row() {
+        let path = "enzimos-home/.snapshots/13/snapshot";
+        let created = row(path, 402);
+        let current = vec![
+            rows(&[("enzimos-root/.snapshots", 300)]),
+            rows(&[("enzimos-home/.snapshots", 400), (path, 402)]),
+        ];
+        let reviewed = BTreeSet::from(["enzimos-home/.snapshots/12/snapshot".to_owned()]);
+        created_row(&current, &physical(), &reviewed, path, &created).unwrap();
+        let replay = BTreeSet::from([path.to_owned()]);
+        assert!(created_row(&current, &physical(), &replay, path, &created).is_err());
+        let mut other = created.clone();
+        other["id"] = json!(403);
+        assert!(created_row(&current, &physical(), &reviewed, path, &other).is_err());
+        let missing = vec![
+            current[0].clone(),
+            rows(&[("enzimos-home/.snapshots", 400)]),
+        ];
+        assert!(created_row(&missing, &physical(), &reviewed, path, &created).is_err());
+        let data = "enzimos-home/var/data";
+        assert!(created_row(&current, &physical(), &reviewed, data, &row(data, 402)).is_err());
     }
 }
