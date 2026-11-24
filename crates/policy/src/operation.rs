@@ -36,6 +36,14 @@ pub fn try_lock() -> Result<Option<files::Lock>> {
     }
     Ok(lock)
 }
+/// Whether another process holds the operation lock; a probe that never
+/// keeps it and skips the pending-entry checks of [`try_lock`].
+pub fn busy() -> Result<bool> {
+    root_only()?;
+    let directory = Path::new("/run/enzimos");
+    files::ensure_directory(directory, 0o700, 0)?;
+    Ok(files::Lock::try_acquire(&directory.join("operation.lock"), 0)?.is_none())
+}
 /// The operation lock for `secure-boot abandon` only: it skips the refusal of
 /// an unfinished owner boot enablement (which it exists to end) and the update
 /// apply review, so neither pending state can lock the other out.
