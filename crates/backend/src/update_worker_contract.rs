@@ -95,10 +95,7 @@ pub fn properties_for(definition: &Definition) -> Result<Vec<(&'static str, Valu
         false,
     )];
     let mut properties = vec![
-        (
-            "Description",
-            Value::from("enzimOS native package transaction"),
-        ),
+        ("Description", Value::from(description(definition))),
         ("Type", Value::from("exec")),
         ("ExitType", Value::from("main")),
         ("User", Value::from("0")),
@@ -141,9 +138,19 @@ pub fn properties_for(definition: &Definition) -> Result<Vec<(&'static str, Valu
         properties.extend([
             ("MemoryMax", Value::from(1024 * 1024 * 1024u64)),
             ("TasksMax", Value::from(64u64)),
+            // The backend records every outcome itself; a finished or failed
+            // worker unit is not kept for `systemctl --failed`.
+            ("CollectMode", Value::from("inactive-or-failed")),
         ]);
     }
     Ok(properties)
+}
+fn description(definition: &Definition) -> &'static str {
+    if definition.executable == BACKUP_EXECUTABLE {
+        "enzimOS backup worker"
+    } else {
+        "enzimOS native package transaction"
+    }
 }
 fn field<T: TryFrom<OwnedValue>>(properties: &Properties, key: &str) -> Result<T> {
     T::try_from(

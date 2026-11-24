@@ -277,9 +277,14 @@ pub async fn stop_for(
         "worker ownership belongs to a different native role or attempt",
     )?;
     let owner = &retained.state;
-    let state = snapshot_for(manager, definition)
-        .await?
-        .ok_or_else(|| Error("worker stop outcome unavailable".into()))?;
+    // PID1 unloads only an inactive or failed unit; with the worker's own
+    // process and cgroup proven gone, an unloaded unit is terminal too.
+    let collected =
+        || -> Result<bool> { Ok(retained.process.exited()? && retained.group.empty()?) };
+    let Some(state) = snapshot_for(manager, definition).await? else {
+        require(collected()?, "worker stop outcome unavailable")?;
+        return Ok(());
+    };
     require(
         contract::retained_or_terminal(&state, owner),
         "worker owner changed before stop",
@@ -307,9 +312,13 @@ pub async fn stop_for(
     let deadline =
         tokio::time::Instant::now() + std::time::Duration::from_secs(definition.stop_seconds + 10);
     loop {
-        let state = snapshot_for(manager, definition)
-            .await?
-            .ok_or_else(|| Error("worker stop receipt unavailable; inspect owned unit".into()))?;
+        let Some(state) = snapshot_for(manager, definition).await? else {
+            require(
+                collected()?,
+                "worker stop receipt unavailable; inspect owned unit",
+            )?;
+            return Ok(());
+        };
         require(
             contract::retained_or_terminal(&state, owner),
             "worker owner changed during stop",
