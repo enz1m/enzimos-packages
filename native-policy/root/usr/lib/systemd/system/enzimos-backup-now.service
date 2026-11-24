@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
 [Unit]
 Description=enzimOS backup started by hand
-ConditionPathExists=/etc/enzimos/backup.json
+ConditionPathExists=|/etc/enzimos/backup.json
+ConditionPathExists=|/etc/enzimos/backup-remote.json
 [Service]
 Type=oneshot
 ExecStart=/usr/lib/enzimos-backend/enzimos-system-backend --backup-create

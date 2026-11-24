@@ -10,6 +10,7 @@ use super::{
 };
 use crate::authority::Authority;
 use enzimos_platform::{Error, Result, fsview};
+use enzimos_policy::backup_share_destination as destination;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -21,7 +22,6 @@ const PATH: &str = "/org/enzimos/History1";
 const IDLE: Duration = Duration::from_secs(60);
 const MEASURE_UNIT: &str = "enzimos-history-measure.service";
 const BACKUP_UNIT: &str = "enzimos-backup-now.service";
-const BACKUP_CONFIG: &str = "/etc/enzimos/backup.json";
 
 fn failed(e: Error) -> fdo::Error {
     fdo::Error::Failed(e.0)
@@ -271,7 +271,8 @@ impl History {
                 let refs: Vec<&Path> = rels.iter().map(PathBuf::as_path).collect();
                 outcome = prune::forget(&owner, &dir, &list, &refs)?;
             }
-            let queued = Path::new(BACKUP_CONFIG).exists();
+            // Removals rewrite the drive repository; a share keeps what it holds.
+            let queued = destination::primary() == Some(destination::DRIVE);
             if queued {
                 let mut removals = store.removals();
                 for rel in &rels {
@@ -336,11 +337,11 @@ impl History {
         start_unit(MEASURE_UNIT).await
     }
 
-    /// Start a backup to the configured backup drive now.
+    /// Start a backup now: to the backup drive, or to the NAS share without one.
     async fn back_up_now(&self, #[zbus(header)] header: Header<'_>) -> fdo::Result<()> {
         self.approved(&header, "org.enzimos.history.backup-now")
             .await?;
-        if !Path::new(BACKUP_CONFIG).exists() {
+        if destination::primary().is_none() {
             return Err(fdo::Error::Failed("no-backup-drive".into()));
         }
         start_unit(BACKUP_UNIT).await
