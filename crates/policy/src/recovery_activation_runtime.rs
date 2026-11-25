@@ -13,7 +13,7 @@ use crate::{
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::{Value, json as value};
 use std::path::Path;
-pub const EFI: &str = "/sys/firmware/efi/efivars";
+pub(crate) const EFI: &str = "/sys/firmware/efi/efivars";
 pub(crate) const GUID: &str = "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f";
 pub fn efi_guard() -> Result<bool> {
     match std::fs::symlink_metadata(EFI) {

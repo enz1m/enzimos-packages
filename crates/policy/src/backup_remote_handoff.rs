@@ -155,7 +155,7 @@ impl<'s> Handoff<'s> {
         Ok(this)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (flock).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         self.caller.recheck()?;
@@ -430,7 +430,7 @@ impl<'s> Handoff<'s> {
     }
     /// Only independently admitted original descriptions, still requiring this
     /// live Root worker and original sender at every consumer checkpoint.
-    pub fn descriptors(&self) -> Result<std::collections::BTreeMap<&'static str, &File>> {
+    pub(crate) fn descriptors(&self) -> Result<std::collections::BTreeMap<&'static str, &File>> {
         self.recheck()?;
         Ok(wire::ROLES
             .iter()

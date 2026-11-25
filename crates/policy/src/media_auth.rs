@@ -11,13 +11,13 @@ use std::{
     time::Duration,
 };
 use zeroize::Zeroizing;
-pub const CONSUMER: &str = "/usr/lib/enzimos-native/enzimos-media-auth";
-pub const MAX_DATA: usize = 256 * 1024;
+pub(crate) const CONSUMER: &str = "/usr/lib/enzimos-native/enzimos-media-auth";
+pub(crate) const MAX_DATA: usize = 256 * 1024;
 pub struct Account {
     pub name: String,
     pub uid: u32,
     pub gid: u32,
-    pub hash: Zeroizing<Vec<u8>>,
+    pub(crate) hash: Zeroizing<Vec<u8>>,
 }
 fn name(s: &str) -> bool {
     !s.is_empty()
@@ -35,7 +35,12 @@ fn rows(bytes: &[u8]) -> Result<impl Iterator<Item = &str>> {
         .map_err(|_| Error("offline account file encoding".into()))?
         .lines())
 }
-pub fn documents(passwd: &[u8], group: &[u8], shadow: &[u8], username: &str) -> Result<Account> {
+pub(crate) fn documents(
+    passwd: &[u8],
+    group: &[u8],
+    shadow: &[u8],
+    username: &str,
+) -> Result<Account> {
     require(
         name(username) && username != "root",
         "ordinary administrator account required",
@@ -92,7 +97,7 @@ pub fn documents(passwd: &[u8], group: &[u8], shadow: &[u8], username: &str) -> 
         hash: Zeroizing::new(fields[1].as_bytes().to_vec()),
     })
 }
-pub fn hash_setting(hash: &[u8]) -> Result<()> {
+pub(crate) fn hash_setting(hash: &[u8]) -> Result<()> {
     require(
         hash.len() < 384
             && hash.len() >= 20
@@ -129,16 +134,16 @@ fn private_bytes(file: &File) -> Result<Zeroizing<Vec<u8>>> {
     )?;
     Ok(bytes)
 }
-pub struct Observation {
+pub(crate) struct Observation {
     root: File,
     path: PathBuf,
     identity: files::FileIdentity,
     mount: u64,
     data: Vec<Data>,
-    pub account: Account,
+    pub(crate) account: Account,
 }
 impl Observation {
-    pub fn observe(root: &Path, username: &str) -> Result<Self> {
+    pub(crate) fn observe(root: &Path, username: &str) -> Result<Self> {
         crate::media_origin::current()?;
         require(
             root.starts_with(crate::storage_runtime::IndependentGuard::TOP)
@@ -185,7 +190,7 @@ impl Observation {
         observation.recheck()?;
         Ok(observation)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::media_origin::current()?;
         let named = files::directory(&self.path, Some(0))?;
         require(
@@ -210,7 +215,7 @@ impl Observation {
         }
         Ok(())
     }
-    pub fn authenticate(&self, password: &[u8]) -> Result<()> {
+    pub(crate) fn authenticate(&self, password: &[u8]) -> Result<()> {
         require(
             !password.is_empty() && password.len() < 512 && !password.contains(&0),
             "administrator password size bound",

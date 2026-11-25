@@ -53,7 +53,10 @@ impl Repository {
         context.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self, scope: &crate::backup_setup_mount::Scope<'_, '_, '_>) -> Result<()> {
+    pub(crate) fn recheck(
+        &self,
+        scope: &crate::backup_setup_mount::Scope<'_, '_, '_>,
+    ) -> Result<()> {
         scope.recheck()?;
         let root = File::from(scope.descriptor()?.try_clone_to_owned()?);
         let named = files::directory_relative(&root, Path::new("restic"), Some(0))?;

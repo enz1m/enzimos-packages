@@ -22,7 +22,7 @@ const RETAINED: usize = 32;
 /// `running` row from an earlier boot was interrupted by that boot ending, so
 /// no process of it survives. Both stay visible (status reports them as
 /// uncertain) and keep their objects for review, but never block forever.
-pub fn blocks(row: &Value, boot: &str) -> bool {
+pub(crate) fn blocks(row: &Value, boot: &str) -> bool {
     row["state"] == "running" && row["boot_id"] == boot
 }
 /// Like [`blocks`], and an `uncertain` attempt of this boot also blocks while
@@ -629,7 +629,7 @@ impl<'g> Attempt<'g> {
         self.active.set(false);
         Ok(record)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.store.borrow().recheck()
     }
     pub(crate) fn require_lock(&self, lock: &files::Lock) -> Result<()> {
@@ -655,7 +655,7 @@ impl<'g> Attempt<'g> {
         guard.recheck()
     }
     /// Review data only. The original running attempt and its lock remain borrowed actors.
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let store = self.store.borrow();
         let original = store

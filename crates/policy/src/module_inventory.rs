@@ -196,7 +196,7 @@ impl Scan {
         )
     }
 }
-pub fn observe(directory: &File, owner: u32) -> Result<Value> {
+pub(crate) fn observe(directory: &File, owner: u32) -> Result<Value> {
     let mut scan = Scan {
         owner,
         mount: mount_identity::id(directory.as_fd(), true)?,
@@ -209,7 +209,7 @@ pub fn observe(directory: &File, owner: u32) -> Result<Value> {
         value!({"schema":1,"root":{"mode":root.mode()&0o7777,"uid":root.uid(),"gid":root.gid()},"bytes":scan.bytes,"members":scan.rows}),
     )
 }
-pub fn running(inventory: &Value, kernel: &str) -> Result<()> {
+pub(crate) fn running(inventory: &Value, kernel: &str) -> Result<()> {
     crate::identity::safe_id(kernel)?;
     require(
         inventory["schema"] == 1 && inventory["members"].is_object(),
@@ -224,7 +224,7 @@ pub fn running(inventory: &Value, kernel: &str) -> Result<()> {
     }
     Ok(())
 }
-pub fn generation(inventory: &Value, kernel: &str) -> Result<Value> {
+pub(crate) fn generation(inventory: &Value, kernel: &str) -> Result<Value> {
     running(inventory, kernel)?;
     let prefix = format!("{kernel}/");
     let rows = enzimos_platform::json::object(&inventory["members"])?
@@ -234,7 +234,7 @@ pub fn generation(inventory: &Value, kernel: &str) -> Result<Value> {
         .collect::<BTreeMap<_, _>>();
     Ok(value!(rows))
 }
-pub fn digest(inventory: &Value) -> Result<String> {
+pub(crate) fn digest(inventory: &Value) -> Result<String> {
     json::fingerprint(inventory)
 }
 pub fn directory(path: &Path, owner: u32) -> Result<File> {

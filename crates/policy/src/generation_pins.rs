@@ -20,7 +20,7 @@ fn shape(file: &File) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
-pub fn validate(v: &Value, id: &str, filesystem: &str) -> Result<()> {
+pub(crate) fn validate(v: &Value, id: &str, filesystem: &str) -> Result<()> {
     json::fields(
         v,
         "schema id filesystem_uuid generation created_boot material material_sha256",

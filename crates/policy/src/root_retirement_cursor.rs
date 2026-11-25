@@ -38,10 +38,10 @@ pub(crate) struct State<'j, 'a, 's> {
     index: usize,
     phase: Phase,
 }
-pub struct Executing<'j, 'a, 's> {
+pub(crate) struct Executing<'j, 'a, 's> {
     original: State<'j, 'a, 's>,
 }
-pub struct Succeeded<'j, 'a, 's> {
+pub(crate) struct Succeeded<'j, 'a, 's> {
     original: State<'j, 'a, 's>,
 }
 pub struct Progress<'j, 'a, 's> {
@@ -202,13 +202,13 @@ impl<'j, 'a, 's> Executing<'j, 'a, 's> {
     pub(crate) fn index(&self) -> usize {
         self.original.index
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.recheck()
     }
     /// One exact original ID call. Any failure consumes the live actor and
     /// leaves its durable in-flight row; there is no decoded retry constructor.
     #[allow(unsafe_code, reason = "Linux syscall ABI (close, ioctl, openat).")]
-    pub fn delete(mut self) -> Result<Succeeded<'j, 'a, 's>> {
+    pub(crate) fn delete(mut self) -> Result<Succeeded<'j, 'a, 's>> {
         self.recheck()?;
         let first = self
             .original
@@ -355,10 +355,10 @@ impl<'j, 'a, 's> Succeeded<'j, 'a, 's> {
     pub(crate) fn index(&self) -> usize {
         self.original.index
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.recheck()
     }
-    pub fn advance(mut self) -> Result<Progress<'j, 'a, 's>> {
+    pub(crate) fn advance(mut self) -> Result<Progress<'j, 'a, 's>> {
         self.recheck()?;
         self.original.step.advance_cursor(&self)?;
         self.original.phase = Phase::Progress;
@@ -376,14 +376,14 @@ impl<'j, 'a, 's> Progress<'j, 'a, 's> {
     pub(crate) fn next_index(&self) -> usize {
         self.original.index + 1
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.recheck()
     }
-    pub fn finished(&self) -> Result<bool> {
+    pub(crate) fn finished(&self) -> Result<bool> {
         self.recheck()?;
         Ok(self.original.remaining.is_empty())
     }
-    pub fn begin_next(mut self) -> Result<Executing<'j, 'a, 's>> {
+    pub(crate) fn begin_next(mut self) -> Result<Executing<'j, 'a, 's>> {
         self.recheck()?;
         require(
             !self.original.remaining.is_empty(),

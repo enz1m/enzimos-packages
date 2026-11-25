@@ -6,10 +6,10 @@ use crate::{
 use enzimos_platform::{Error, Result, require};
 use std::collections::BTreeMap;
 pub struct Detachment {
-    pub defaults: String,
-    pub bios: String,
+    pub(crate) defaults: String,
+    pub(crate) bios: String,
     pub remove_uefi: bool,
-    pub image: Option<String>,
+    pub(crate) image: Option<String>,
 }
 fn bound_image(fields: &BTreeMap<String, String>, bios: bool, p: &Parameters) -> Result<String> {
     let get = |name: &str| {
@@ -48,7 +48,12 @@ fn bound_image(fields: &BTreeMap<String, String>, bios: bool, p: &Parameters) ->
     }
     Ok(image.to_owned())
 }
-pub fn plan(p: &Parameters, defaults: &str, bios: &str, uefi: Option<&str>) -> Result<Detachment> {
+pub(crate) fn plan(
+    p: &Parameters,
+    defaults: &str,
+    bios: &str,
+    uefi: Option<&str>,
+) -> Result<Detachment> {
     let (name, title) = records::run_entry_names(&p.id)?;
     let loader = boot_entries::fields(defaults, false)?;
     let selected = loader

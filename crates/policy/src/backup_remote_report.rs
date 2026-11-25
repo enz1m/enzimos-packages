@@ -25,7 +25,7 @@ pub struct Reported<'g> {
     clippy::large_enum_variant,
     reason = "Built once per operation and rarely moved; boxing would only add an allocation."
 )]
-pub enum Incoming<'g> {
+pub(crate) enum Incoming<'g> {
     Challenge(Message),
     Observed(Reported<'g>),
 }
@@ -79,7 +79,7 @@ fn report(body: &Value, request: &Value, sequence: u64) -> Result<()> {
     }
     Ok(())
 }
-pub fn receive<'g>(
+pub(crate) fn receive<'g>(
     channel: &Packet,
     reserved: &Reserved<'_, '_, 'g>,
     sequence: u64,
@@ -171,7 +171,7 @@ impl<'g> Reported<'g> {
         )?;
         json::decode(&bytes, observation::LIMIT)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         report(
             &self.report,
@@ -193,7 +193,7 @@ impl<'g> Reported<'g> {
         }
         Ok(())
     }
-    pub fn report(&self) -> Result<&Value> {
+    pub(crate) fn report(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.report)
     }
@@ -213,7 +213,7 @@ pub struct Closed<'g> {
     closed: ClosedRequest,
 }
 impl Closed<'_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         self.closed
             .require_request(&self.original.request, &self.original.actor)
@@ -275,7 +275,7 @@ impl Closed<'_> {
             value!({"status":"remote-point-retrieved-to-local","id":receipt["id"],"remote_snapshot":receipt["remote_snapshot"],"local_snapshot":receipt["local_snapshot"],"local_restore_available":true,"live_home_written":false,"scheduler_enabled":false,"automatic_retry":false}),
         )
     }
-    pub fn result(&self) -> Result<Value> {
+    pub(crate) fn result(&self) -> Result<Value> {
         self.recheck()?;
         let mut result = self.original.report["result"].clone();
         result["worker_scope_closed"] = value!(true);

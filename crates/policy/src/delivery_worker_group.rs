@@ -70,7 +70,7 @@ fn populated(body: &str) -> Result<bool> {
         _ => Err(Error("delivery cgroup population unavailable".into())),
     }
 }
-pub fn membership_value(nonce: &str) -> Result<String> {
+pub(crate) fn membership_value(nonce: &str) -> Result<String> {
     require(
         nonce.len() == 32
             && nonce
@@ -89,7 +89,7 @@ pub struct Group {
 }
 impl Group {
     #[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, mkdirat).")]
-    pub fn create() -> Result<Self> {
+    pub(crate) fn create() -> Result<Self> {
         operation::root_only()?;
         namespaces::initial()?;
         let current = files::read_kernel(
@@ -136,7 +136,7 @@ impl Group {
         self.recheck()?;
         Ok(self.directory.as_fd())
     }
-    pub fn nonce(&self) -> Result<&str> {
+    pub(crate) fn nonce(&self) -> Result<&str> {
         self.recheck()?;
         let nonce = self
             .name
@@ -220,7 +220,7 @@ impl Group {
         self.recheck()?;
         Ok(file)
     }
-    pub fn contains_only(&self, pid: u32) -> Result<()> {
+    pub(crate) fn contains_only(&self, pid: u32) -> Result<()> {
         require(
             pid > 1 && pid < i32::MAX as u32,
             "actual delivery child PID bound",
@@ -232,7 +232,7 @@ impl Group {
             "delivery cgroup does not contain only the original worker",
         )
     }
-    pub fn empty(&self) -> Result<bool> {
+    pub(crate) fn empty(&self) -> Result<bool> {
         let empty = !populated(&self.read("cgroup.events", 4096)?)?;
         if empty {
             require(
@@ -245,7 +245,7 @@ impl Group {
     }
     /// No Drop cleanup. Unknown outcomes keep their original directory for review.
     #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
-    pub fn retire(self) -> Result<()> {
+    pub(crate) fn retire(self) -> Result<()> {
         self.recheck()?;
         require(self.empty()?, "populated delivery cgroup cannot retire")?;
         let name = CString::new(self.name.as_bytes())

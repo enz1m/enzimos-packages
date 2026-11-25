@@ -166,7 +166,7 @@ impl<'a> Destination<'a> {
     /// Free space comes from the actual original description. No directory
     /// traversal, mount, credential read or repository-size scan is performed.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
-    pub fn status(&self) -> Result<Value> {
+    pub(crate) fn status(&self) -> Result<Value> {
         self.recheck()?;
         // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut usage: libc::statvfs = unsafe { std::mem::zeroed() };

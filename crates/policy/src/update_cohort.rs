@@ -11,8 +11,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 pub(crate) const PATH: &str = "/var/lib/enzimos-update-cohort";
-pub const CONFIG: &str = "/etc/enzimos/update-pacman.conf";
-pub fn configuration() -> String {
+pub(crate) const CONFIG: &str = "/etc/enzimos/update-pacman.conf";
+pub(crate) fn configuration() -> String {
     format!(
         "[options]\nArchitecture = x86_64\nCacheDir = {PATH}/packages\nLogFile = /var/log/pacman-enzimos-api.log\nSigLevel = Required TrustedOnly DatabaseOptional\nLocalFileSigLevel = Required TrustedOnly\nCheckSpace\n[verified]\nServer = file://{PATH}/packages\n"
     )
@@ -53,7 +53,7 @@ fn now() -> Result<i64> {
         .try_into()
         .map_err(|_| Error("cohort clock overflow".into()))
 }
-pub fn metadata(document: &Value, at: i64) -> Result<BTreeMap<String, Value>> {
+pub(crate) fn metadata(document: &Value, at: i64) -> Result<BTreeMap<String, Value>> {
     json::fields(document, "schema files expires_at signature_policy")?;
     require(
         document["schema"].as_u64() == Some(1)
@@ -167,7 +167,7 @@ pub struct Cohort {
     kernels: Value,
 }
 impl Cohort {
-    pub fn observe() -> Result<Self> {
+    pub(crate) fn observe() -> Result<Self> {
         Self::at(Path::new(PATH), 0)
     }
     pub fn document(&self) -> &Value {

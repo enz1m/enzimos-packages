@@ -34,7 +34,7 @@ fn flags(source: &Block) -> Result<i32> {
     )?;
     Ok(value)
 }
-pub struct Source<'a, 's> {
+pub(crate) struct Source<'a, 's> {
     scope: &'s Scope,
     kernel: &'a Kernel<'s>,
     boot: &'a Restored<'a, 's>,
@@ -50,7 +50,7 @@ pub struct Verified<'b, 'a, 's> {
     mapping: CreatedMapping<'b>,
 }
 impl<'a, 's> Source<'a, 's> {
-    pub fn observe(
+    pub(crate) fn observe(
         scope: &'s Scope,
         kernel: &'a Kernel<'s>,
         boot: &'a Restored<'a, 's>,
@@ -94,7 +94,7 @@ impl<'a, 's> Source<'a, 's> {
         }
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.recheck()?;
         self.kernel.require_original_scope(self.scope)?;
         self.boot.require_original_kernel_boot(self.kernel)?;
@@ -109,7 +109,7 @@ impl<'a, 's> Source<'a, 's> {
         )?;
         self.scope.recheck()
     }
-    pub fn open_mapping(&self) -> Result<Verified<'_, 'a, 's>> {
+    pub(crate) fn open_mapping(&self) -> Result<Verified<'_, 'a, 's>> {
         self.query_original()?;
         let mapping = recovery_unlock::open_offline(
             self.scope,
@@ -128,7 +128,7 @@ impl<'a, 's> Source<'a, 's> {
     }
 }
 impl<'b, 'a, 's> Verified<'b, 'a, 's> {
-    pub fn into_mapping(self) -> Result<CreatedMapping<'b>> {
+    pub(crate) fn into_mapping(self) -> Result<CreatedMapping<'b>> {
         self.recheck()?;
         Ok(self.mapping)
     }
@@ -147,11 +147,11 @@ impl<'b, 'a, 's> Verified<'b, 'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         self.mapping.recheck()
     }
-    pub fn mapping(&self) -> Result<&CreatedMapping<'b>> {
+    pub(crate) fn mapping(&self) -> Result<&CreatedMapping<'b>> {
         self.recheck()?;
         Ok(&self.mapping)
     }

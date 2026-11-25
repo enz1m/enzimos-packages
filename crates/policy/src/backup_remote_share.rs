@@ -104,7 +104,7 @@ pub fn selection(v: &Value) -> Result<Value> {
 }
 /// What one authenticated identity query found in the share folder.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Probe {
+pub(crate) enum Probe {
     /// The password opens the repository with this ID.
     Opened(String),
     /// There is no repository in the folder.
@@ -116,7 +116,7 @@ pub enum Probe {
 }
 /// Classify a `restic cat config` run (exit codes of Restic 0.17+, with its
 /// messages as a fallback).
-pub fn probe(code: Option<i32>, signal: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Probe {
+pub(crate) fn probe(code: Option<i32>, signal: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Probe {
     let text = String::from_utf8_lossy(&stderr[..stderr.len().min(65536)]);
     if code == Some(0) {
         return json::decode(stdout, 32768)
@@ -144,7 +144,7 @@ pub fn probe(code: Option<i32>, signal: Option<i32>, stdout: &[u8], stderr: &[u8
 ///
 /// # Errors
 /// `remote-repository-foreign` for anything else.
-pub fn adoptable(inventory: &Value) -> Result<usize> {
+pub(crate) fn adoptable(inventory: &Value) -> Result<usize> {
     let rows = crate::backup_remote_points::inventory(inventory)
         .map_err(|e| refuse("remote-repository-foreign", &e.0))?;
     for (id, row) in &rows {
@@ -197,7 +197,7 @@ fn remove(path: &Path) -> Result<bool> {
 ///
 /// # Errors
 /// `remote-rotation-unfinished`, or a file system error part way.
-pub fn retire(etc: &Path, control: &Path) -> Result<Vec<String>> {
+pub(crate) fn retire(etc: &Path, control: &Path) -> Result<Vec<String>> {
     rotation_blocks(control)?;
     let mut removed = Vec::new();
     for name in INPUTS {

@@ -41,7 +41,7 @@ pub fn copy_owned(
     unsafe_code,
     reason = "Linux syscall ABI (fchmod, fremovexattr, getresuid, openat)."
 )]
-pub fn copy_named(
+pub(crate) fn copy_named(
     home: &File,
     source: &File,
     name: &str,

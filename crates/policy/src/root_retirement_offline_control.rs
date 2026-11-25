@@ -9,7 +9,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
-pub struct Control<'a, 's> {
+pub(crate) struct Control<'a, 's> {
     mapping: &'a CreatedMapping<'s>,
     mounts: &'a Mounts<'s>,
     file: File,
@@ -67,7 +67,7 @@ impl<'a, 's> Control<'a, 's> {
         self.recheck()?;
         Ok(self.mount)
     }
-    pub fn observe(
+    pub(crate) fn observe(
         mapping: &'a CreatedMapping<'s>,
         mounts: &'a Mounts<'s>,
         name: &str,
@@ -103,7 +103,7 @@ impl<'a, 's> Control<'a, 's> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.mapping.require_original_mount(self.mounts)?;
         let named =
             files::directory_relative(self.mounts.original_top()?, Path::new(&self.name), Some(0))?;
@@ -123,7 +123,7 @@ impl<'a, 's> Control<'a, 's> {
         )?;
         self.mapping.require_original_mount(self.mounts)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let result = value!({"identity":self.identity,"mount":self.mount,
             "original_epoch":self.epoch,"execution_authorized":false});

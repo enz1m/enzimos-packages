@@ -56,7 +56,7 @@ impl Published {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.source.recheck()?;
         let guard = &self.source.guard;
         crate::backup_publication_identity::recheck(
@@ -98,11 +98,11 @@ impl Published {
             "original newly published credential/receipt changed or replaced",
         )
     }
-    pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
+    pub(crate) fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self.file.as_fd())
     }
-    pub(crate) fn public_result(&self) -> Result<Value> {
+    pub fn public_result(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"credential_stored":true,"repository_enrolled":false,"recovery_key_exported":false,"automatic_backup_enabled":false}),

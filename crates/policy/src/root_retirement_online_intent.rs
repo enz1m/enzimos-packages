@@ -374,7 +374,7 @@ impl<'a> Intent<'a> {
         self.recheck(authorize)?;
         Ok(self)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.references.recheck(authorize)?;
         self.inventory.recheck(authorize)?;
         self.targets.recheck(authorize)?;

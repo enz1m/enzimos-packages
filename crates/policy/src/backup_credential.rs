@@ -119,7 +119,7 @@ impl Credential {
             "original backup credential epoch changed or replaced",
         )
     }
-    pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
+    pub(crate) fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self.file.as_fd())
     }

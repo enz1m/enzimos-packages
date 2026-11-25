@@ -276,7 +276,7 @@ impl<'p, 's, 'g> Prepared<'p, 's, 'g> {
         }
         Ok(())
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.retained()?;
         self.source
             .require_completion(self.attempt, self.stage, self.closed)

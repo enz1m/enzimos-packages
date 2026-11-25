@@ -290,7 +290,7 @@ pub fn grant<F: FnMut() -> Result<()>>(
     completion(&scope.id, scope.uid, text(&record, "grant_sha256")?)
 }
 /// Closed System1 data only; constructing a reply grants no delivery authority.
-pub fn completion(id: &str, uid: u32, digest: &str) -> Result<Value> {
+pub(crate) fn completion(id: &str, uid: u32, digest: &str) -> Result<Value> {
     identity::safe_id(id)?;
     identity::sha(digest)?;
     require(

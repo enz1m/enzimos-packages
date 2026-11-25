@@ -172,7 +172,7 @@ impl<'a> Original<'a> {
         filesystem(&self.directory)?;
         authorize()
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.barrier(authorize)?;
         require(
             files::identity(&self.directory.metadata()?) == self.epoch
@@ -337,7 +337,7 @@ impl Completed<'_> {
         )?;
         self.recheck(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.recheck_inner(None, authorize)
     }
     pub(crate) fn recheck_completed(

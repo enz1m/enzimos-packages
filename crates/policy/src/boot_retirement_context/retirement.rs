@@ -304,7 +304,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     }
     /// Bind a new-row writer to this independently retained original registry
     /// before first publication. Decoded records cannot supply original handles.
-    pub fn bind_existing_receipt_registry(
+    pub(crate) fn bind_existing_receipt_registry(
         &self,
         registry: &enzimos_platform::receipt_registry::Registry,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -365,7 +365,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     /// Read-only preview retains the original backend rows alongside this
     /// original boot context. A live coordinator must instead carry its own
     /// server-created ReferenceView; this method never exempts decoded rows.
-    pub fn preview_intent(
+    pub(crate) fn preview_intent(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<(Value, Value, Value)> {

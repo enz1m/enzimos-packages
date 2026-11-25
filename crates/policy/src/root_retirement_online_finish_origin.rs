@@ -261,7 +261,7 @@ impl<'a> Original<'a> {
 
 /// A single consumed original observation produces retirement metadata only.
 /// It cannot be reconstructed from a retired row or authorize offline deletion.
-pub struct Published<'a> {
+pub(crate) struct Published<'a> {
     original: Original<'a>,
     predecessor: Option<crate::control_record::Predecessor>,
     before_epoch: files::FileIdentity,
@@ -270,7 +270,10 @@ pub struct Published<'a> {
     successor_flags: i32,
 }
 impl<'a> Original<'a> {
-    pub fn publish(mut self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Published<'a>> {
+    pub(crate) fn publish(
+        mut self,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<Published<'a>> {
         self.recheck(authorize)?;
         let mut others = BTreeMap::new();
         for name in &self.names {
@@ -466,7 +469,7 @@ impl Published<'_> {
         original.inventory.recheck(authorize)?;
         authorize()
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.recheck_owned(authorize)?;
         self.original
             .references

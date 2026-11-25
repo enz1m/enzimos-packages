@@ -258,7 +258,9 @@ impl<'a, 'g> Repository<'a, 'g> {
         self.recheck()?;
         self.document.evidence()
     }
-    pub fn open(destination: &'a crate::backup_destination::Destination<'g>) -> Result<Self> {
+    pub(crate) fn open(
+        destination: &'a crate::backup_destination::Destination<'g>,
+    ) -> Result<Self> {
         destination.recheck()?;
         let document = Document::optional(
             &Path::new(crate::operation::CONTROL).join("backup-destination.json"),
@@ -279,11 +281,11 @@ impl<'a, 'g> Repository<'a, 'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.destination.recheck()?;
         self.document.recheck()
     }
-    pub fn public_bytes(&self) -> Result<&[u8]> {
+    pub(crate) fn public_bytes(&self) -> Result<&[u8]> {
         self.recheck()?;
         Ok(&self.document.bytes)
     }
@@ -330,7 +332,7 @@ impl<'a> StoredPin<'a> {
         self.storage.recheck()?;
         self.document.recheck()
     }
-    pub fn public_bytes(&self) -> Result<&[u8]> {
+    pub(crate) fn public_bytes(&self) -> Result<&[u8]> {
         self.recheck()?;
         self.document.bytes()
     }
@@ -438,7 +440,7 @@ impl OptIn {
     ///
     /// # Errors
     /// The opt-in document changed.
-    pub fn share(&self) -> Result<bool> {
+    pub(crate) fn share(&self) -> Result<bool> {
         self.recheck()?;
         Ok(
             json::decode(self.document.bytes()?, crate::backup_configuration::LIMIT)?

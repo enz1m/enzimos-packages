@@ -18,7 +18,7 @@ pub enum Direction {
     Retrieve,
 }
 impl Direction {
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Replicate => "replicate",
             Self::Retrieve => "retrieve",
@@ -152,7 +152,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     }
     /// Fourteen actual input descriptions. A sealed request and original one-use
     /// intent add two descriptions at handoff; neither is fabricated here.
-    pub fn descriptors(
+    pub(crate) fn descriptors(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<BTreeMap<&'static str, BorrowedFd<'_>>> {
@@ -205,7 +205,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     pub(crate) fn actor_identity(&self) -> Arc<()> {
         Arc::clone(&self.actor)
     }
-    pub fn require_description(&self, fd: BorrowedFd<'_>, number: u32) -> Result<()> {
+    pub(crate) fn require_description(&self, fd: BorrowedFd<'_>, number: u32) -> Result<()> {
         self.remote.require_description(fd, number)
     }
     /// Comparing original in-memory actors is intentionally distinct from

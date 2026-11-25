@@ -203,7 +203,7 @@ impl Handoff {
         Ok(&self.files[6])
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (flock).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.original_files()?;
         self.caller.recheck()?;

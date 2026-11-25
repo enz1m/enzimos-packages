@@ -19,7 +19,7 @@ pub fn read<F: FnMut(&Value, &str) -> Result<()>>(
 ) -> Result<Records> {
     read_bounded(guard, folder, maximum, catalog::MAX_CATALOG, validate)
 }
-pub fn read_bounded<F: FnMut(&Value, &str) -> Result<()>>(
+pub(crate) fn read_bounded<F: FnMut(&Value, &str) -> Result<()>>(
     guard: &Guard,
     folder: &str,
     maximum: usize,
@@ -38,7 +38,7 @@ pub fn read_bounded<F: FnMut(&Value, &str) -> Result<()>>(
 }
 /// Read through the actual independently mounted guard, without consulting an
 /// installed-root configuration file that is absent from the RAM environment.
-pub fn read_independent<F: FnMut(&Value, &str) -> Result<()>>(
+pub(crate) fn read_independent<F: FnMut(&Value, &str) -> Result<()>>(
     guard: &IndependentGuard,
     folder: &str,
     maximum: usize,

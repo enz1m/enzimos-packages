@@ -14,7 +14,7 @@ use std::{
 /// holds `RETIRE_AT` receipts, so hourly history never reaches its bound.
 const RETAINED: usize = 168;
 const RETIRE_AT: usize = 512;
-pub fn validate(body: &Value) -> Result<()> {
+pub(crate) fn validate(body: &Value) -> Result<()> {
     json::fields(
         body,
         "schema operation id boot_id phase source provider snapshot",

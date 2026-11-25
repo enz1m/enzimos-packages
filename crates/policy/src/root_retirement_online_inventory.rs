@@ -106,7 +106,7 @@ impl<'a> Inventory<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         operation::root_only()?;
         crate::namespaces::initial()?;
         authorize()?;

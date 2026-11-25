@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 //! Exact x86-64 offline PID1 coordinator filter; installation is never a host action.
 use enzimos_platform::{Error, Result, files, require};
-pub const ARCH: u32 = 0xc000003e;
-pub const ALLOW: u32 = 0x7fff0000;
-pub const DENY: u32 = 0x00050000 | libc::EPERM as u32;
-pub const KILL: u32 = 0x80000000;
+pub(crate) const ARCH: u32 = 0xc000003e;
+pub(crate) const ALLOW: u32 = 0x7fff0000;
+pub(crate) const DENY: u32 = 0x00050000 | libc::EPERM as u32;
+pub(crate) const KILL: u32 = 0x80000000;
 pub(crate) const BASE: &[u32] = &[
     0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 17, 19, 20, 21, 24, 25, 28, 32, 33, 35, 39,
     60, 63, 72, 74, 75, 78, 79, 89, 96, 97, 98, 99, 102, 104, 107, 108, 110, 137, 138, 162, 165,

@@ -27,7 +27,7 @@ pub struct Cleanup<'a, 'g> {
     original_entry_epoch: Option<files::FileIdentity>,
 }
 impl<'a, 'g: 'a> Cleanup<'a, 'g> {
-    pub fn observe(
+    pub(crate) fn observe(
         context: Context<'a, 'g>,
         journal: &Journal<'_>,
         inventory: &Inventory<'_>,
@@ -195,7 +195,7 @@ impl<'a, 'g: 'a> Cleanup<'a, 'g> {
             .recheck(&self.context.volume, authorize)?;
         authorize()
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.recheck_after_retired_entry(authorize)
     }
     fn replace(
@@ -231,7 +231,7 @@ impl<'a, 'g: 'a> Cleanup<'a, 'g> {
         self.context.texts.insert(name.into(), next.into());
         self.recheck(authorize)
     }
-    pub fn run(
+    pub(crate) fn run(
         mut self,
         inventory: &Inventory<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,

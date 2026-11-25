@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 use zeroize::Zeroizing;
-pub const MAPPER: &str = "enzimos-recover";
+pub(crate) const MAPPER: &str = "enzimos-recover";
 struct Echo {
     fd: i32,
     saved: libc::termios,
@@ -96,7 +96,7 @@ fn console_password() -> Result<Zeroizing<Vec<u8>>> {
     require(!result.is_empty(), "empty recovery password refused")?;
     Ok(result)
 }
-pub fn open(source: &Block, filesystem: &str) -> Result<(Block, Zeroizing<Vec<u8>>)> {
+pub(crate) fn open(source: &Block, filesystem: &str) -> Result<(Block, Zeroizing<Vec<u8>>)> {
     recovery_bootstrap::quiet()?;
     source.recheck()?;
     require(
@@ -146,7 +146,7 @@ pub fn open(source: &Block, filesystem: &str) -> Result<(Block, Zeroizing<Vec<u8
     source.recheck()?;
     Ok((mapper, secret))
 }
-pub fn close(source: &Block, mapper: Block) -> Result<()> {
+pub(crate) fn close(source: &Block, mapper: Block) -> Result<()> {
     recovery_bootstrap::quiet()?;
     source.recheck()?;
     mapper.recheck()?;
@@ -272,7 +272,7 @@ fn original_flags(file: &File) -> Result<i32> {
 /// The original scope is checked before prompting and after the actual vendor
 /// child is reaped. The LUKS passphrase is zeroed immediately after unlocking;
 /// it is not part of the mapping actor or a receipt.
-pub fn open_offline<'a>(
+pub(crate) fn open_offline<'a>(
     scope: &'a crate::root_retirement_offline_scope::Scope,
     source: &'a Block,
     filesystem: &str,
@@ -390,7 +390,7 @@ impl<'s> CreatedMapping<'s> {
         self.recheck()?;
         Ok(&self.filesystem)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.recheck()?;
         self.source.recheck()?;
         self.mapper.recheck()?;
@@ -413,7 +413,7 @@ impl<'s> CreatedMapping<'s> {
     }
     /// Join the actual created mapping to the actual original mounted filesystem;
     /// no UUID row or mapper pathname can supply either side of this join.
-    pub fn require_original_mount(
+    pub(crate) fn require_original_mount(
         &self,
         mounts: &crate::root_retirement_offline_scope::Mounts<'_>,
     ) -> Result<()> {
@@ -430,7 +430,7 @@ impl<'s> CreatedMapping<'s> {
     }
     /// Borrow the actual created read-only mapper description for mounting only;
     /// kernel filesystem checks and immutable retirement intent remain separate.
-    pub fn descriptor(&self) -> Result<std::os::fd::BorrowedFd<'_>> {
+    pub(crate) fn descriptor(&self) -> Result<std::os::fd::BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self.mapper.file.as_fd())
     }

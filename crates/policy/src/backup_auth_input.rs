@@ -155,7 +155,7 @@ impl<'i> Temporary<'i> {
         preflight()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.input.recheck()?;
         let parent = files::directory(Path::new("/run/enzimos"), Some(0))?;
         require(
@@ -180,7 +180,7 @@ impl<'i> Temporary<'i> {
         self.recheck()?;
         Ok(&self.file)
     }
-    pub fn evidence(&self) -> Result<serde_json::Value> {
+    pub(crate) fn evidence(&self) -> Result<serde_json::Value> {
         self.recheck()?;
         Ok(
             serde_json::json!({"name":self.name,"parent":self.parent_shape,
@@ -291,7 +291,7 @@ pub struct Retired<'i> {
     evidence: serde_json::Value,
 }
 impl Retired<'_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.input.recheck()?;
         let named = files::directory(Path::new("/run/enzimos"), Some(0))?;

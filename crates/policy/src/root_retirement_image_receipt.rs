@@ -62,7 +62,10 @@ impl<'b, 'a, 's> Receipt<'b, 'a, 's> {
         self.boot.require_original_kernel_boot(kernel)?;
         self.recheck()
     }
-    pub fn observe(control: &'b Control<'a, 's>, boot: &'b Restored<'a, 's>) -> Result<Self> {
+    pub(crate) fn observe(
+        control: &'b Control<'a, 's>,
+        boot: &'b Restored<'a, 's>,
+    ) -> Result<Self> {
         boot.require_original_control(control)?;
         let mount = control.mount_id()?;
         let folder = files::directory_relative(control.descriptor()?, Path::new(FOLDER), Some(0))?;
@@ -91,7 +94,7 @@ impl<'b, 'a, 's> Receipt<'b, 'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.boot.require_original_control(self.control)?;
         let named =
             files::directory_relative(self.control.descriptor()?, Path::new(FOLDER), Some(0))?;

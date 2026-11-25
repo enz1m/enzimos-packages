@@ -212,7 +212,7 @@ impl Member {
         Ok(value!({"file":self.epoch,"mount":self.mount}))
     }
 }
-pub struct Source<'a, 'g> {
+pub(crate) struct Source<'a, 'g> {
     configuration: &'a Configuration<'g>,
     row: &'a Row,
     parent: File,
@@ -259,7 +259,7 @@ impl<'a, 'g> Source<'a, 'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.configuration.recheck()?;
         let named = files::directory(
             self.row
@@ -294,11 +294,11 @@ impl<'a, 'g> Source<'a, 'g> {
     pub(crate) fn guard(&self) -> &'g Guard {
         self.configuration.guard
     }
-    pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
+    pub(crate) fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self.main.file.as_fd())
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"name":self.row.name,"path":self.row.path,"main":self.main.evidence(&self.parent)?,"sidecars":self.sidecars.iter().map(|(name,file)|Ok(value!({"name":name,"original":file.as_ref().map(|f|f.evidence(&self.parent)).transpose()?}))).collect::<Result<Vec<_>>>()?,"exported":false,"global_atomicity":false}),

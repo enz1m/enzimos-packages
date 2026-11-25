@@ -17,7 +17,7 @@ use std::{
 };
 use unicode_general_category::{GeneralCategory as Category, get_general_category};
 const LIMIT: usize = 512 * 1024;
-pub fn rows(bytes: &[u8]) -> Result<Vec<Value>> {
+pub(crate) fn rows(bytes: &[u8]) -> Result<Vec<Value>> {
     let v = json::decode(bytes, LIMIT)?;
     json::fields(&v, "blockdevices")?;
     let rows = v["blockdevices"]
@@ -110,7 +110,7 @@ fn device_number(s: &str) -> Result<topology::Device> {
     )?;
     Ok((a, b))
 }
-pub fn label(s: Option<&str>) -> String {
+pub(crate) fn label(s: Option<&str>) -> String {
     s.unwrap_or("")
         .chars()
         .filter(|c| {
@@ -579,7 +579,7 @@ pub struct Selection<'a> {
 /// their boundary many times per second.
 const ATTACHED_INVENTORY_INTERVAL: Duration = Duration::from_secs(5);
 impl Selection<'_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.discovery.recheck()?;
         self.device.recheck()?;
         require(
@@ -589,11 +589,11 @@ impl Selection<'_> {
         self.device.recheck()?;
         self.discovery.recheck()
     }
-    pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
+    pub(crate) fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self.device.file.as_fd())
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(self.device.evidence())
     }
@@ -672,11 +672,11 @@ impl Selection<'_> {
     pub(crate) fn guard(&self) -> &Guard {
         &self.discovery.guard
     }
-    pub fn token(&self) -> Result<String> {
+    pub(crate) fn token(&self) -> Result<String> {
         self.recheck()?;
         self.discovery.token(&self.row, &self.device)
     }
-    pub fn uuid_hint(&self) -> &str {
+    pub(crate) fn uuid_hint(&self) -> &str {
         self.row["uuid"]
             .as_str()
             .expect("candidates are admitted only with a valid filesystem UUID")

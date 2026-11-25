@@ -131,7 +131,7 @@ struct Present {
 }
 /// Borrowed running attempt and operation lock outlive both original OFD locks.
 /// Drop only closes descriptors; it never removes lock files or repairs contention.
-pub struct Capture<'a, 'g> {
+pub(crate) struct Capture<'a, 'g> {
     attempt: &'a Attempt<'g>,
     operation: &'a files::Lock,
     parent: File,
@@ -140,7 +140,7 @@ pub struct Capture<'a, 'g> {
     present: Option<Present>,
 }
 impl<'a, 'g> Capture<'a, 'g> {
-    pub fn acquire(
+    pub(crate) fn acquire(
         attempt: &'a Attempt<'g>,
         lock: &'a files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -220,7 +220,7 @@ impl<'a, 'g> Capture<'a, 'g> {
         )?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         namespaces::initial()?;
         self.attempt.evidence()?;
         self.operation.recheck()?;
@@ -261,7 +261,7 @@ impl<'a, 'g> Capture<'a, 'g> {
         }
         Ok(())
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(if let Some(p) = &self.present {
             json!({"system_installation_present":true,"version":p.version,"locks":["installation-OFD-exclusive","repository-OFD-exclusive"],"scope":"cooperating system Flatpak deployment/pull/prune only; not user installations, app state or raw OSTree writers","system":p.system_shape,"repository":p.repository_shape,"lock_epochs":p.locks.iter().map(|lock|json!({"file":lock.epoch,"mount":lock.mount})).collect::<Vec<_>>()})
@@ -269,7 +269,7 @@ impl<'a, 'g> Capture<'a, 'g> {
             json!({"system_installation_present":false,"scope":"no system repo observed; not user installation or app consistency"})
         })
     }
-    pub fn close(self) -> Result<()> {
+    pub(crate) fn close(self) -> Result<()> {
         self.recheck()
     }
 }

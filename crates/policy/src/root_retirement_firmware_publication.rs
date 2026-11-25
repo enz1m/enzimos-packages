@@ -304,7 +304,7 @@ impl<'a> Original<'a> {
         )?;
         self.recheck(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.source_barrier(authorize)?;
         let named = files::directory(Path::new(EFI), Some(0))?;
         require(
@@ -318,7 +318,7 @@ impl<'a> Original<'a> {
     }
     /// One exclusive kernel write from this original namespace and actual BIOS
     /// producer. Uncertain errors leave firmware state and receipt untouched.
-    pub fn select(
+    pub(crate) fn select(
         self,
         bios: crate::root_retirement_loader_publication::CommittedBios<'a>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -366,7 +366,7 @@ impl<'a> Original<'a> {
             .recheck_firmware_publication(&published, authorize)?;
         Ok(published)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
             json!({"firmware":self.state,"directory_epoch":self.epoch,"directory_flags":self.directory_flags,
@@ -557,7 +557,7 @@ fn one_shot_bytes(entry: &str) -> Result<Vec<u8>> {
 }
 /// Actual completed one-shot write retains all original firmware descriptions.
 /// Existing variables and decoded status cannot construct this actor.
-pub struct Published<'a> {
+pub(crate) struct Published<'a> {
     original: Original<'a>,
     bios: crate::root_retirement_loader_publication::CommittedBios<'a>,
     variable: Variable,
@@ -567,7 +567,7 @@ pub struct Published<'a> {
     entry: String,
 }
 impl Published<'_> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.written.recheck(&self.variable.bytes)?;
         self.original.source_barrier(authorize)?;
         self.bios.recheck(authorize)?;
@@ -608,7 +608,7 @@ impl Published<'_> {
         )?;
         self.recheck(authorize)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
             json!({"entry":self.entry,"original_firmware":self.original.state,

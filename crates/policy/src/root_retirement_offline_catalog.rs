@@ -130,7 +130,10 @@ impl<'a, 's> Catalog<'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn observe(control: &'a Control<'a, 's>, ledgers: &'a Ledgers<'a, 's>) -> Result<Self> {
+    pub(crate) fn observe(
+        control: &'a Control<'a, 's>,
+        ledgers: &'a Ledgers<'a, 's>,
+    ) -> Result<Self> {
         ledgers.require_original_control(control)?;
         let filesystem =
             crate::filesystem::observe(control.descriptor()?.as_fd())?["filesystem_uuid"]
@@ -179,7 +182,7 @@ impl<'a, 's> Catalog<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.ledgers.require_original_control(self.control)?;
         let named =
             files::directory_relative(self.control.descriptor()?, Path::new(FOLDER), Some(0))?;

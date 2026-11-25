@@ -5,7 +5,7 @@ use enzimos_platform::{Result, json, require};
 use serde_json::{Value, json as value};
 /// Historical System1 filename: canonical SHA256 including job_store's newline.
 /// This pure data helper never grants access to a home or backup path.
-pub fn destination_name(path: &str, id: &str) -> Result<String> {
+pub(crate) fn destination_name(path: &str, id: &str) -> Result<String> {
     enzimos_platform::delivery_name::restored(path, id)
 }
 

@@ -4,7 +4,7 @@ use crate::{identity, recovery_image, recovery_records as records};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub fn coordinator(v: &Value) -> Result<()> {
+pub(crate) fn coordinator(v: &Value) -> Result<()> {
     let fields = "image uefi_entry uefi_previous bios_title bios_previous bios_own options";
     json::fields(
         v,

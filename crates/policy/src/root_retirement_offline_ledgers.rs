@@ -537,7 +537,7 @@ impl<'a, 's> Ledgers<'a, 's> {
     }
     /// No caller-supplied owner ID or phase exempts another pending receipt.
     /// The one actual owned receipt is held separately by the original Journal.
-    pub fn require_idle(&self) -> Result<()> {
+    pub(crate) fn require_idle(&self) -> Result<()> {
         self.recheck()?;
         for registry in &self.registries {
             for (record, _) in registry.records.values() {
@@ -589,7 +589,10 @@ impl<'a, 's> Ledgers<'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn observe(control: &'a Control<'a, 's>, journal: &'a Journal<'a, 's>) -> Result<Self> {
+    pub(crate) fn observe(
+        control: &'a Control<'a, 's>,
+        journal: &'a Journal<'a, 's>,
+    ) -> Result<Self> {
         journal.require_original_control(control)?;
         journal.prepared_record()?;
         let filesystem =
@@ -618,7 +621,7 @@ impl<'a, 's> Ledgers<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.journal.require_original_control(self.control)?;
         require(
             crate::filesystem::observe(self.control.descriptor()?.as_fd())?["filesystem_uuid"]

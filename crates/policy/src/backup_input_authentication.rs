@@ -48,11 +48,11 @@ impl<'g, 'i> Authenticated<'g, 'i> {
             "original input authentication witness changed",
         )
     }
-    pub fn key_id(&self) -> Result<&str> {
+    pub(crate) fn key_id(&self) -> Result<&str> {
         self.recheck()?;
         enzimos_platform::json::string(&self.original["result"]["key_id"])
     }
-    pub fn input(&self) -> Result<&Validated> {
+    pub(crate) fn input(&self) -> Result<&Validated> {
         self.recheck()?;
         Ok(self.input)
     }
@@ -92,7 +92,7 @@ impl<'a, 'g, 'i> Confirmed<'a, 'g, 'i> {
     /// worker journal and re-asks the caller's approval, so this is evaluated
     /// once and then compared from the rechecked originals; it runs at every
     /// checkpoint of the adoption provision worker.
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.first.recheck()?;
         self.second.recheck()?;
         let (first, second) = (&self.first.original, &self.second.original);
@@ -112,7 +112,7 @@ impl<'a, 'g, 'i> Confirmed<'a, 'g, 'i> {
             "confirmation must retain same original input object",
         )
     }
-    pub fn input(&self) -> Result<&Validated> {
+    pub(crate) fn input(&self) -> Result<&Validated> {
         self.recheck()?;
         self.second.input()
     }

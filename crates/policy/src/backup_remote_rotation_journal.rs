@@ -10,7 +10,7 @@ use enzimos_platform::{
 use serde_json::{Value, json as value};
 use std::{fs::File, path::Path};
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Role {
+pub(crate) enum Role {
     Rotation,
     Pin,
 }
@@ -48,7 +48,7 @@ pub struct Journal<'a> {
     schema: u64,
 }
 impl<'a> Journal<'a> {
-    pub fn observe(guard: &'a Guard, lock: &'a files::Lock, role: Role) -> Result<Self> {
+    pub(crate) fn observe(guard: &'a Guard, lock: &'a files::Lock, role: Role) -> Result<Self> {
         Self::observe_schema(
             guard,
             lock,
@@ -56,7 +56,7 @@ impl<'a> Journal<'a> {
             if role == Role::Rotation { 2 } else { 1 },
         )
     }
-    pub fn observe_legacy(guard: &'a Guard, lock: &'a files::Lock) -> Result<Self> {
+    pub(crate) fn observe_legacy(guard: &'a Guard, lock: &'a files::Lock) -> Result<Self> {
         Self::observe_schema(guard, lock, Role::Rotation, 1)
     }
     fn observe_schema(
@@ -94,7 +94,7 @@ impl<'a> Journal<'a> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.lock.recheck()?;
         require(
@@ -134,18 +134,23 @@ impl<'a> Journal<'a> {
         self.lock.recheck()?;
         self.guard.recheck()
     }
-    pub fn require_scope(&self, guard: &Guard, lock: &files::Lock, role: Role) -> Result<()> {
+    pub(crate) fn require_scope(
+        &self,
+        guard: &Guard,
+        lock: &files::Lock,
+        role: Role,
+    ) -> Result<()> {
         self.recheck()?;
         require(
             std::ptr::eq(self.guard, guard) && std::ptr::eq(self.lock, lock) && self.role == role,
             "remote journal requires original actual guard/lock and fixed role",
         )
     }
-    pub fn value(&self) -> Result<&Value> {
+    pub(crate) fn value(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.record)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"role":self.role.name(),"record_sha256":json::fingerprint(&self.record)?,
@@ -155,7 +160,7 @@ impl<'a> Journal<'a> {
     }
     /// Caller retains its original authority/objects and durably records the
     /// closed operation phase before any file movement. No record-data constructor.
-    pub fn replace(
+    pub(crate) fn replace(
         &mut self,
         next: &Value,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -166,7 +171,7 @@ impl<'a> Journal<'a> {
         )?;
         self.replace_schema(next, self.schema, authorize)
     }
-    pub fn migrate_metadata(
+    pub(crate) fn migrate_metadata(
         &mut self,
         next: &Value,
         authorize: &mut dyn FnMut() -> Result<()>,

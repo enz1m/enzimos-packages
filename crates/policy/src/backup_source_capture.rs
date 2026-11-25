@@ -132,7 +132,7 @@ impl<'s, 'cfg, 'g> Released<'s, 'cfg, 'g> {
         retired.evidence()?;
         Ok(retired)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "source-capture", || self.recheck_fresh())
     }
     fn recheck_fresh(&self) -> Result<()> {
@@ -193,20 +193,20 @@ impl<'s, 'cfg, 'g> Released<'s, 'cfg, 'g> {
         self.boot.require_original(self)?;
         Ok(&self.boot)
     }
-    pub fn snapshots(&self) -> Result<&[Captured<'s, 'g>]> {
+    pub(crate) fn snapshots(&self) -> Result<&[Captured<'s, 'g>]> {
         self.recheck()?;
         Ok(&self.snapshots)
     }
     /// Exact package inventory copied before and checked after snapshot birth,
     /// while both cooperating barriers were still held. No later live refresh.
-    pub fn installed_packages(&self) -> Result<std::collections::BTreeMap<String, String>> {
+    pub(crate) fn installed_packages(&self) -> Result<std::collections::BTreeMap<String, String>> {
         self.recheck()?;
         let rows = serde_json::from_value(self.value["installed_packages"].clone())
             .map_err(|_| enzimos_platform::Error("original installed inventory shape".into()))?;
         self.recheck()?;
         Ok(rows)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(json!({"receipt":self.value,"record_epoch":self.record.evidence()?}))
     }
@@ -433,7 +433,7 @@ impl<'s, 'g> Retired<'s, 'g> {
             "completion differs from original attempt/stage/source/closed transfer",
         )
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.guard.recheck()?;
         self.lock.recheck()?;
         self.record.recheck()?;

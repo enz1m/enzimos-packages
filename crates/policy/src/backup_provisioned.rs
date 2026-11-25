@@ -9,7 +9,7 @@ pub struct Provisioned<'g> {
     bound: Option<crate::backup_setup_binding::Bound<'g>>,
 }
 impl<'g> Provisioned<'g> {
-    pub fn from_completed(intent: Intent<'g>) -> Result<Self> {
+    pub(crate) fn from_completed(intent: Intent<'g>) -> Result<Self> {
         let completed = intent.into_completed()?;
         let original = completed.value()?;
         require(
@@ -26,7 +26,7 @@ impl<'g> Provisioned<'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.completed.recheck()?;
         if let Some(bound) = &self.bound {
             let pin = bound.value()?;

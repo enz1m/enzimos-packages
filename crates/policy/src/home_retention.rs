@@ -15,7 +15,7 @@ const KEYS: [(&str, &str); 6] = [
     ("yearly", "TIMELINE_LIMIT_YEARLY"),
     ("manual", "NUMBER_LIMIT"),
 ];
-pub fn validate(policy: &Value) -> Result<()> {
+pub(crate) fn validate(policy: &Value) -> Result<()> {
     json::fields(policy, "hourly daily weekly monthly yearly manual")?;
     require(
         enzimos_platform::json::object(policy)?
@@ -33,7 +33,7 @@ pub fn validate(policy: &Value) -> Result<()> {
         "home retention timeline or manual bounds",
     )
 }
-pub fn policy(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn policy(bytes: &[u8]) -> Result<Value> {
     home_history_source::configuration(bytes)?;
     let mut policy = serde_json::Map::new();
     for line in std::str::from_utf8(bytes)
@@ -64,7 +64,7 @@ pub fn policy(bytes: &[u8]) -> Result<Value> {
     json::fields(&policy, "hourly daily weekly monthly yearly manual")?;
     Ok(policy)
 }
-pub fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
+pub(crate) fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
     validate(next)?;
     policy(bytes)?;
     let before = std::str::from_utf8(bytes).map_err(|_| Error("home retention encoding".into()))?;

@@ -166,7 +166,7 @@ impl<'a, 'g> Context<'a, 'g> {
     }
     /// Only actual retained descriptions; a future worker reservation must still
     /// prove each sender OFD and durably enter send before handing them off.
-    pub fn descriptors(
+    pub(crate) fn descriptors(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<BTreeMap<&str, BorrowedFd<'_>>> {

@@ -249,7 +249,7 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
     }
     /// Actual retained descriptions only. A worker still needs kernel-stamped
     /// admission, fresh authorization and its own original durable request.
-    pub fn descriptors(
+    pub(crate) fn descriptors(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<BTreeMap<&str, BorrowedFd<'_>>> {

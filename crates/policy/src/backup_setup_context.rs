@@ -124,7 +124,7 @@ impl<'p, 'a, 'r, 'd> Prepared<'p, 'a, 'r, 'd> {
     }
     /// No cold-load constructor: an existing receipt is an interrupted outcome,
     /// not authority to repeat publication or adopt a completed child operation.
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.plan.recheck_identity()?;
         let guard = self.plan.guard();
         let named = files::open_relative(guard.control(), Path::new(NAME))?;
@@ -204,7 +204,7 @@ pub struct Completed<'p, 'a, 'r, 'd, 'g> {
     provisioned: crate::backup_provisioned::Provisioned<'g>,
 }
 impl Completed<'_, '_, '_, '_, '_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.plan.recheck_identity()?;
         self.provisioned.recheck()?;
         let guard = self.plan.guard();

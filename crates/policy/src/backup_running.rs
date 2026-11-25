@@ -134,7 +134,7 @@ pub(crate) fn foreign() -> bool {
 }
 /// The current backup run, or `null` when idle (see the module documentation).
 #[must_use]
-pub fn read() -> Value {
+pub(crate) fn read() -> Value {
     Store::system().read()
 }
 

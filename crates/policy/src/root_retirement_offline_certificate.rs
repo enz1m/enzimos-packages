@@ -124,7 +124,7 @@ pub struct Certificate<'a, 's> {
     public: Vec<PublicFile>,
 }
 impl<'a, 's> Certificate<'a, 's> {
-    pub fn observe(control: &'a Control<'a, 's>) -> Result<Self> {
+    pub(crate) fn observe(control: &'a Control<'a, 's>) -> Result<Self> {
         control.recheck()?;
         let mount = control.mount_id()?;
         let folder =
@@ -186,7 +186,7 @@ impl<'a, 's> Certificate<'a, 's> {
         self.recheck()?;
         Ok(self.policy.is_some())
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.control.recheck()?;
         self.recheck_public_descriptions()?;
         self.control.recheck()

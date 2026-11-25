@@ -34,7 +34,7 @@ use std::{
     },
     path::Path,
 };
-pub const ASSERTION: &str = "saved-outside-this-computer";
+pub(crate) const ASSERTION: &str = "saved-outside-this-computer";
 const EXPORT: &str = "backup-recovery-export.json";
 const CONFIRMATION: &str = "backup-recovery-confirmation.json";
 const SEALS: i32 = libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL;
@@ -45,7 +45,7 @@ fn owner(uid: u32) -> Result<()> {
     )
 }
 /// The public, non-secret binding both records name (same as status reads).
-pub fn binding(
+pub(crate) fn binding(
     configuration: &Configuration,
     pin: &StoredPin<'_>,
     credential: &Credential,
@@ -129,7 +129,7 @@ fn write(name: &str, value: &Value) -> Result<()> {
     unsafe_code,
     reason = "Linux syscall ABI (fchmod, fchown, fcntl, lseek and others)."
 )]
-pub fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
+pub(crate) fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
     let length = File::from(source.try_clone_to_owned()?).metadata()?.len();
     require((1..=4096).contains(&length), "recovery credential bound")?;
     // SAFETY: The name is a NUL-terminated literal.
@@ -244,7 +244,7 @@ fn current_key(guard: &Guard, authorize: &mut dyn FnMut() -> Result<()>) -> Resu
         .0)
 }
 /// Runs its body with the configured destination mounted at its fixed path.
-pub type Mounted<'a> = dyn FnMut(&mut dyn FnMut() -> Result<String>) -> Result<String> + 'a;
+pub(crate) type Mounted<'a> = dyn FnMut(&mut dyn FnMut() -> Result<String>) -> Result<String> + 'a;
 /// Export under the held operation lock. Returns the public result and the
 /// sealed copy for `uid`.
 pub fn export_locked(

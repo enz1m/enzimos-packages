@@ -12,17 +12,17 @@ pub enum UefiMode {
     Default,
     OneShot,
 }
-pub struct Stage {
-    pub record: Value,
-    pub uefi: String,
-    pub bios: String,
-    pub defaults: String,
+pub(crate) struct Stage {
+    pub(crate) record: Value,
+    pub(crate) uefi: String,
+    pub(crate) bios: String,
+    pub(crate) defaults: String,
 }
 #[expect(
     clippy::too_many_arguments,
     reason = "Each argument is one independently reviewed stage input."
 )]
-pub fn prepare(
+pub(crate) fn prepare(
     record: &Value,
     image: &Value,
     luks_uuid: &str,

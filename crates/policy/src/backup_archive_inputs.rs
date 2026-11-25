@@ -96,7 +96,7 @@ impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
     pub(crate) fn guard(&self) -> &'g crate::storage_runtime::Guard {
         self.capture.guard()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::evaluation(|| {
             self.stage.require_original(self.capture)?;
             require(
@@ -123,7 +123,7 @@ impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
         })
     }
     /// Fixed archive targets and their actual original descriptors, never caller paths.
-    pub fn directories(&self) -> Result<BTreeMap<&str, &File>> {
+    pub(crate) fn directories(&self) -> Result<BTreeMap<&str, &File>> {
         enzimos_platform::recheck_scope::evaluation(|| {
             self.recheck()?;
             Ok(self
@@ -135,7 +135,7 @@ impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
     }
     /// Fixed backup command tail from the actual captured scope. Repository,
     /// credential, scratch and readonly source bindings are separate consumer roles.
-    pub fn arguments(&self) -> Result<Vec<String>> {
+    pub(crate) fn arguments(&self) -> Result<Vec<String>> {
         enzimos_platform::recheck_scope::evaluation(|| {
             self.recheck()?;
             let mut args = [
@@ -171,7 +171,7 @@ impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
         })
     }
     /// Review data only; an isolated consumer must admit readonly bindings separately.
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         enzimos_platform::recheck_scope::evaluation(|| {
             self.recheck()?;
             Ok(

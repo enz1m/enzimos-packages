@@ -182,7 +182,7 @@ impl<'g> Enrollment<'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.guard.recheck()?;
         self.lock.recheck()?;
@@ -217,7 +217,7 @@ impl<'g> Enrollment<'g> {
         )?;
         self.recheck()
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let row = self.store.prepared(&self.id)?;
         Ok(
@@ -225,7 +225,7 @@ impl<'g> Enrollment<'g> {
             "directory":self.store.shape,"mount":self.store.mount}),
         )
     }
-    pub fn record(&self) -> Result<&Value> {
+    pub(crate) fn record(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.store.prepared(&self.id)?.value)
     }
@@ -321,7 +321,7 @@ impl Completed<'_, '_> {
         self.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.guard.recheck()?;
         self.lock.recheck()?;
@@ -358,7 +358,7 @@ impl Completed<'_, '_> {
 /// Admit a fresh enrollment only from the original complete journal family.
 /// The returned registry retains those same actual member descriptions across
 /// its own known publication; no JSON snapshot can recreate that transition.
-pub fn new_registry(
+pub(crate) fn new_registry(
     guard: &Guard,
     id: &str,
 ) -> Result<enzimos_platform::receipt_registry::Registry> {

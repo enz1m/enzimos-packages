@@ -249,7 +249,7 @@ pub struct Completed<'a, 'g> {
     registry_shape: Shape,
 }
 impl<'a, 'g> Completed<'a, 'g> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.attempt.evidence()?;
         self.lock.recheck()?;
@@ -331,13 +331,13 @@ impl<'a, 'g> Completed<'a, 'g> {
         self.recheck()?;
         Ok(&self.readonly)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.value,"record_epoch":self.record.evidence()?,"file":self.epoch}))
     }
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
-pub fn export<'a, 'g>(
+pub(crate) fn export<'a, 'g>(
     source: &Source<'_, 'g>,
     attempt: &'a Attempt<'g>,
     lock: &'a files::Lock,
@@ -444,7 +444,7 @@ pub fn export<'a, 'g>(
 }
 
 /// Actual original SQLite output retired; original durable receipt retained.
-pub struct Retired<'a, 'g> {
+pub(crate) struct Retired<'a, 'g> {
     guard: &'g crate::storage_runtime::Guard,
     lock: &'a files::Lock,
     record: Retained,
@@ -454,7 +454,7 @@ pub struct Retired<'a, 'g> {
     removed: enzimos_platform::named_retirement::Removed,
 }
 impl Retired<'_, '_> {
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.guard.recheck()?;
         self.lock.recheck()?;
         self.record.recheck()?;

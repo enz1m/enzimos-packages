@@ -448,7 +448,7 @@ fn validate_complete(v: &Value, id: &str) -> Result<()> {
     }
     Ok(())
 }
-pub fn stage_locked(
+pub(crate) fn stage_locked(
     guard: &Guard,
     lock: &files::Lock,
     snapshot: &str,

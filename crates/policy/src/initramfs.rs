@@ -8,10 +8,10 @@ use std::{
 pub(crate) const MAX_UNPACKED: usize = 768 * 1024 * 1024;
 pub(crate) const MAX_MEMBERS: usize = 65536;
 #[derive(Debug, Clone)]
-pub struct Member {
-    pub mode: u32,
-    pub sha: Option<String>,
-    pub link: Option<String>,
+pub(crate) struct Member {
+    pub(crate) mode: u32,
+    pub(crate) sha: Option<String>,
+    pub(crate) link: Option<String>,
 }
 fn link_path(name: &str, link: &str) -> Result<String> {
     require(
@@ -180,7 +180,10 @@ fn archive<R: Read>(
     }
     Err(Error("newc archive lacks trailer".into()))
 }
-pub fn inventory(bytes: &[u8], wanted: &BTreeSet<String>) -> Result<BTreeMap<String, Member>> {
+pub(crate) fn inventory(
+    bytes: &[u8],
+    wanted: &BTreeSet<String>,
+) -> Result<BTreeMap<String, Member>> {
     require(
         !bytes.is_empty() && bytes.len() <= crate::recovery_image::MAX_IMAGE as usize,
         "compressed initramfs bound",
@@ -287,7 +290,7 @@ pub fn newc(name: &str, body: &[u8], mode: u32) -> Result<Vec<u8>> {
     }
     Ok(output)
 }
-pub fn append(base: &[u8], name: &str, body: &[u8], mode: u32) -> Result<Vec<u8>> {
+pub(crate) fn append(base: &[u8], name: &str, body: &[u8], mode: u32) -> Result<Vec<u8>> {
     let archive = newc(name, body, mode)?;
     require(
         base.len().saturating_add(3).saturating_add(archive.len())

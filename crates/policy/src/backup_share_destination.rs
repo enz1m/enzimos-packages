@@ -24,7 +24,7 @@ const CONFIGURATION: &str = "/etc/enzimos/backup-remote.json";
 /// The primary destination for a drive configuration that exists or not and
 /// a share that is ready or not.
 #[must_use]
-pub fn choose(drive_configured: bool, share_ready: bool) -> Option<&'static str> {
+pub(crate) fn choose(drive_configured: bool, share_ready: bool) -> Option<&'static str> {
     match (drive_configured, share_ready) {
         (true, _) => Some(DRIVE),
         (false, true) => Some(SHARE),

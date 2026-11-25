@@ -176,7 +176,7 @@ impl Handoff {
         Ok(this)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (flock).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         self.caller.recheck()?;
@@ -480,17 +480,17 @@ impl Handoff {
             "drive repository role of a share transfer",
         )
     }
-    pub fn repository_descriptor(&self) -> Result<&File> {
+    pub(crate) fn repository_descriptor(&self) -> Result<&File> {
         self.drive()?;
         Ok(&self.files[4])
     }
-    pub fn credential_descriptor(&self) -> Result<&File> {
+    pub(crate) fn credential_descriptor(&self) -> Result<&File> {
         self.drive()?;
         Ok(&self.files[5])
     }
     /// The share configuration, share password and repository password of a
     /// transfer into the NAS share, or `None` for a drive transfer.
-    pub fn share(&self) -> Result<Option<(&Value, &File, &File)>> {
+    pub(crate) fn share(&self) -> Result<Option<(&Value, &File, &File)>> {
         self.recheck()?;
         Ok(match &self.admitted {
             Admitted::Drive { .. } => None,
@@ -501,7 +501,7 @@ impl Handoff {
             )),
         })
     }
-    pub fn consumer_descriptor(&self) -> Result<&File> {
+    pub(crate) fn consumer_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.files[6])
     }

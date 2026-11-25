@@ -64,7 +64,7 @@ impl<'a> Protected<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.receipt.recheck()?;
         self.inventory.recheck(authorize)?;
         self.targets.recheck(authorize)?;
@@ -84,7 +84,7 @@ impl<'a> Protected<'a> {
         self.receipt.recheck()?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_staged(
+    pub(crate) fn recheck_staged(
         &self,
         published: &Published<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -398,7 +398,7 @@ impl<'a> Protected<'a> {
         source.recheck(authorize)?;
         Ok(result)
     }
-    pub fn measurement(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn measurement(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = value!({"filesystem_uuid":self.record["filesystem_uuid"],
             "plan_sha256":self.record["plan_sha256"],"receipt_sha256":json::fingerprint(&self.record)?,

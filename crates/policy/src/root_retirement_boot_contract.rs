@@ -5,15 +5,15 @@ use crate::{
     root_retirement_parameters::Parameters,
 };
 use enzimos_platform::{Error, Result, require};
-pub const INIT: &str = "/usr/lib/enzimos-native/enzimos-recovery-run-init";
-pub struct Entries {
-    pub uefi: String,
-    pub bios: String,
+pub(crate) const INIT: &str = "/usr/lib/enzimos-native/enzimos-recovery-run-init";
+pub(crate) struct Entries {
+    pub(crate) uefi: String,
+    pub(crate) bios: String,
 }
-pub struct Restoration {
-    pub defaults: String,
-    pub bios: String,
-    pub image: String,
+pub(crate) struct Restoration {
+    pub(crate) defaults: String,
+    pub(crate) bios: String,
+    pub(crate) image: String,
 }
 fn native_options(options: &str) -> Result<Parameters> {
     records::command_line(options)?;
@@ -33,7 +33,7 @@ fn native_options(options: &str) -> Result<Parameters> {
     )?;
     Ok(parameters)
 }
-pub fn entries(options: &str, image: &str) -> Result<Entries> {
+pub(crate) fn entries(options: &str, image: &str) -> Result<Entries> {
     let p = native_options(options)?;
     recovery_image::identifier(image)?;
     let title = format!(
@@ -76,7 +76,7 @@ fn exact(actual: &str, expected: &str, bios: bool) -> Result<()> {
         "retirement loader fields differ from exact native entry",
     )
 }
-pub fn restore(
+pub(crate) fn restore(
     record: &serde_json::Value,
     defaults: &str,
     bios: &str,
@@ -155,12 +155,12 @@ pub(crate) fn restore_original(
 /// bytes. Foreign selections are preserved; an owned entry must match exactly.
 /// This data plan cannot authorize a write or adopt a completed cleanup.
 pub struct Finish {
-    pub defaults: String,
-    pub bios: String,
-    pub remove_uefi: bool,
+    pub(crate) defaults: String,
+    pub(crate) bios: String,
+    pub(crate) remove_uefi: bool,
     pub clear_one_shot: bool,
 }
-pub fn finish(
+pub(crate) fn finish(
     record: &serde_json::Value,
     defaults: &str,
     bios: &str,

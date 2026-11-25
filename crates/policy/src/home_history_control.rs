@@ -4,7 +4,7 @@ use crate::{operation, settings_command::Command, storage_runtime};
 use enzimos_platform::{Error, Result, require};
 use serde_json::{Value, json};
 const TIMER: &str = "enzimos-home-history.timer";
-pub fn parse(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn parse(bytes: &[u8]) -> Result<Value> {
     let text = std::str::from_utf8(bytes)
         .map_err(|_| Error("history timer state encoding".into()))?
         .trim_end_matches('\n');

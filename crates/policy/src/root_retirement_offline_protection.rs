@@ -122,7 +122,7 @@ impl<'a, 's> Protection<'a, 's> {
         loaders.require_original_boot(self.boot)?;
         self.recheck()
     }
-    pub fn observe(
+    pub(crate) fn observe(
         control: &'a Control<'a, 's>,
         mounts: &'a Mounts<'s>,
         catalog: &'a Catalog<'a, 's>,
@@ -214,7 +214,7 @@ impl<'a, 's> Protection<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.control.require_original_mounts(self.mounts)?;
         self.catalog.require_original_control(self.control)?;
         self.boot.require_original_control(self.control)?;
@@ -273,7 +273,7 @@ impl<'a, 's> Protection<'a, 's> {
         )?;
         self.control.require_original_mounts(self.mounts)
     }
-    pub fn require_unmentioned(
+    pub(crate) fn require_unmentioned(
         &self,
         targets: &crate::root_retirement_offline_targets::Targets<'a, 's>,
     ) -> Result<()> {

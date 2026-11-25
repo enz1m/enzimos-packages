@@ -18,7 +18,7 @@ pub struct Reported {
     enrollment: Value,
     enrollment_actor: std::sync::Arc<()>,
 }
-pub enum Incoming {
+pub(crate) enum Incoming {
     Challenge(Message),
     Observed(Reported),
 }
@@ -53,7 +53,7 @@ fn report(body: &Value, request: &Value, sequence: u64) -> Result<()> {
     crate::identity::sha(body["stdout_sha256"].as_str().unwrap_or(""))?;
     crate::backup_credential_checkpoint::outcome(&body["result"])
 }
-pub fn receive(
+pub(crate) fn receive(
     channel: &Packet,
     reserved: &Reserved<'_, '_, '_>,
     sequence: u64,
@@ -113,7 +113,7 @@ pub fn receive(
     Ok(Incoming::Observed(observed))
 }
 impl Reported {
-    pub fn report(&self) -> Result<&Value> {
+    pub(crate) fn report(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.report)
     }
@@ -168,7 +168,7 @@ fn legacy_material(enrollment: &Value, input: &Value, boot: &Value, body: &Value
 impl Closed<'_> {
     /// Exact historical review digest material; it is data, not execution or
     /// completion authority. Completion still consumes the original typed actors.
-    pub fn review_sha256(&self) -> Result<String> {
+    pub(crate) fn review_sha256(&self) -> Result<String> {
         self.recheck()?;
         let bytes = enzimos_platform::memfile::read_sealed(
             &self.original.output,

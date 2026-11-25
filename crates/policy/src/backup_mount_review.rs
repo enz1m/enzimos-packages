@@ -149,7 +149,7 @@ impl<'a, 'd> Review<'a, 'd> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.selection.recheck()?;
         self.document_recheck()
     }
@@ -159,7 +159,7 @@ impl<'a, 'd> Review<'a, 'd> {
             "original native review changed",
         )
     }
-    pub fn repository(&self) -> Result<Value> {
+    pub(crate) fn repository(&self) -> Result<Value> {
         self.recheck()?;
         Ok(self.original["result"]["repository"].clone())
     }

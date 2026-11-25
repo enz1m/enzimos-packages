@@ -134,7 +134,7 @@ impl<'a, 's> Inventory<'a, 's> {
         self.targets.require_original_boot(kernel, receipt)?;
         self.recheck()
     }
-    pub fn observe(mounts: &'a Mounts<'s>, targets: &'a Targets<'a, 's>) -> Result<Self> {
+    pub(crate) fn observe(mounts: &'a Mounts<'s>, targets: &'a Targets<'a, 's>) -> Result<Self> {
         targets.require_original_mounts(mounts)?;
         let original = Self::query(mounts, targets)?;
         closure(&original, targets.rows()?)?;
@@ -152,7 +152,7 @@ impl<'a, 's> Inventory<'a, 's> {
         targets.require_original_mounts(mounts)?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.targets.require_original_mounts(self.mounts)?;
         let current = Self::query(self.mounts, self.targets)?;
         require(

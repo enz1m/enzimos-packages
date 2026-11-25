@@ -113,7 +113,7 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.components(authorize)?;
         require(
             *self.scope.binding()? == self.request["worker"],
@@ -187,7 +187,7 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         }
         Ok(files)
     }
-    pub fn request(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
+    pub(crate) fn request(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.request)
     }
@@ -287,7 +287,7 @@ impl ClosedRequest<'_> {
         self.recheck()?;
         self.closed.binding()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let named = files::directory_relative(self.guard.control(), Path::new(FOLDER), Some(0))?;
         require(

@@ -8,7 +8,7 @@ fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str> {
     v[k].as_str()
         .ok_or_else(|| Error("birth text field".into()))
 }
-pub fn object(v: &Value, path: &str, parent: Option<&str>) -> Result<()> {
+pub(crate) fn object(v: &Value, path: &str, parent: Option<&str>) -> Result<()> {
     json::fields(v, "path id uuid parent_uuid")?;
     require(
         text(v, "path")? == path && v["id"].as_u64().is_some_and(|n| n >= 256),
@@ -23,7 +23,7 @@ pub fn object(v: &Value, path: &str, parent: Option<&str>) -> Result<()> {
         None => require(v["parent_uuid"].is_null(), "birth parent lineage mismatch"),
     }
 }
-pub fn validate(v: &Value, identifier: &str, fs_uuid: &str) -> Result<()> {
+pub(crate) fn validate(v: &Value, identifier: &str, fs_uuid: &str) -> Result<()> {
     json::fields(
         v,
         "schema transaction phase filesystem_uuid created_boot source target_name inventory_sha256 snapshot root history",
@@ -142,7 +142,7 @@ pub fn parse_show(body: &str, path: &str) -> Result<Value> {
     Ok(serde_json::json!({"path":path,"id":id,"uuid":uuid(get("UUID")?)?,"parent_uuid":parent}))
 }
 /// A checkpoint cannot skip ahead, change its already recorded origin, or replay.
-pub fn advance(previous: &Value, next: &Value) -> Result<()> {
+pub(crate) fn advance(previous: &Value, next: &Value) -> Result<()> {
     let identifier = text(previous, "transaction")?;
     let filesystem = text(previous, "filesystem_uuid")?;
     validate(previous, identifier, filesystem)?;

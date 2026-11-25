@@ -17,7 +17,7 @@ use serde_json::{Value, json as value};
 use std::fs::File;
 
 impl Runtime {
-    pub fn retain_remote(
+    pub(crate) fn retain_remote(
         &self,
         context: &Context<'_>,
         policy: &Value,

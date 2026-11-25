@@ -382,7 +382,7 @@ impl Scope<'_, '_, '_> {
             .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
             .as_fd())
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(self.owned.binding())
     }
@@ -442,7 +442,7 @@ impl<'a, 'r, 'd, T> Closed<'a, 'r, 'd, T> {
         self.lock.recheck()?;
         (self.authorize)()
     }
-    pub fn binding(&self) -> Result<&Value> {
+    pub(crate) fn binding(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.binding)
     }
@@ -465,7 +465,7 @@ pub struct Active<'a, 'r, 'd> {
     id: String,
 }
 impl<'a, 'r, 'd> Active<'a, 'r, 'd> {
-    pub fn open(
+    pub(crate) fn open(
         review: &'a Review<'r, 'd>,
         id: &str,
         lock: &'a files::Lock,
@@ -600,7 +600,7 @@ impl<'a, 'r, 'd> Active<'a, 'r, 'd> {
             }
         }
     }
-    pub fn scope(&self) -> Result<&Scope<'a, 'r, 'd>> {
+    pub(crate) fn scope(&self) -> Result<&Scope<'a, 'r, 'd>> {
         self.scope.recheck()?;
         self.store.recheck()?;
         Ok(&self.scope)

@@ -680,7 +680,7 @@ fn never_appended(record: &Value, current: Option<&[u8]>) -> bool {
 }
 /// Abandon an unfinished enrollment only when firmware is provably unchanged;
 /// a later `enroll-db` may then run again. Returns the enrollment outcome.
-pub fn abandon_unchanged(authorize: &mut dyn FnMut() -> Result<()>) -> Result<&'static str> {
+pub(crate) fn abandon_unchanged(authorize: &mut dyn FnMut() -> Result<()>) -> Result<&'static str> {
     let Some(owner) = files::optional_directory_relative(
         &files::directory(Path::new(crate::operation::CONTROL), Some(0))?,
         Path::new("secure-boot"),

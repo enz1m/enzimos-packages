@@ -67,7 +67,7 @@ fn same_object(before: files::FileIdentity, after: files::FileIdentity) -> bool 
     (before.0, before.1, before.7, before.8, before.9)
         == (after.0, after.1, after.7, after.8, after.9)
 }
-pub struct Original<'a> {
+pub(crate) struct Original<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
     volume: Volume,
@@ -85,7 +85,7 @@ pub struct Original<'a> {
     clippy::large_enum_variant,
     reason = "Built once per operation and rarely moved; boxing would only add an allocation."
 )]
-pub enum Namespace<'a> {
+pub(crate) enum Namespace<'a> {
     Present(Original<'a>),
     Absent {
         guard: &'a Guard,
@@ -102,7 +102,7 @@ pub(crate) fn absent(path: &Path) -> Result<bool> {
     }
 }
 impl<'a> Namespace<'a> {
-    pub fn observe(
+    pub(crate) fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -125,7 +125,7 @@ impl<'a> Namespace<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         match self {
             Self::Present(original) => original.recheck(authorize),
             Self::Absent {
@@ -148,7 +148,7 @@ impl<'a> Namespace<'a> {
         }
     }
     /// The signing actor that staging requires; absent before any publication.
-    pub fn original(&self) -> Result<&Original<'a>> {
+    pub(crate) fn original(&self) -> Result<&Original<'a>> {
         match self {
             Self::Present(original) => Ok(original),
             Self::Absent { .. } => Err(enzimos_platform::Error(
@@ -156,7 +156,7 @@ impl<'a> Namespace<'a> {
             )),
         }
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         match self {
             Self::Present(original) => original.evidence(authorize),
             Self::Absent { volume, .. } => {
@@ -175,7 +175,7 @@ pub struct Prepared<'a> {
     created: bool,
 }
 impl<'a> Original<'a> {
-    pub fn observe(
+    pub(crate) fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -246,7 +246,7 @@ impl<'a> Original<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.source_barrier(authorize)?;
         self.parent.recheck(
             &self.volume.directory(Path::new(PARENT))?,
@@ -359,7 +359,7 @@ impl<'a> Original<'a> {
         self.source_barrier(authorize)?;
         other.source_barrier(authorize)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
             json!({"parent_epoch":self.parent.epoch,"parent_flags":self.parent.flags,
@@ -373,7 +373,7 @@ impl<'a> Original<'a> {
     }
     /// Consume one original absence into exactly one mkdir; failures preserve
     /// evidence and have no deletion, retry, rollback or Drop cleanup.
-    pub fn prepare(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Prepared<'a>> {
+    pub(crate) fn prepare(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Prepared<'a>> {
         self.recheck(authorize)?;
         let created = self.folder.is_none();
         require(
@@ -448,7 +448,7 @@ impl<'a> Prepared<'a> {
         self.original.original_members(authorize)?;
         self.original.source_barrier(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.parent_barrier(authorize)?;
         self.folder.recheck(
             &files::directory_relative(&self.original.parent.file, Path::new(CHILD), Some(0))?,
@@ -464,7 +464,7 @@ impl<'a> Prepared<'a> {
     /// Derive signing input only from the actual staged receipt, then consume
     /// this namespace through the actual retained signer. Partial errors remain
     /// durable; no retry, named-output adoption or rollback is available.
-    pub fn sign(
+    pub(crate) fn sign(
         self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         protected: &crate::root_retirement_online_stage_targets::Protected<'_>,
@@ -497,7 +497,7 @@ impl<'a> Prepared<'a> {
     }
     /// Consume only the actual retained signer output, preserving original
     /// unrelated members. Cold files and reopened paths cannot supply creation.
-    pub fn finish(
+    pub(crate) fn finish(
         self,
         wrapped: crate::signed_entry::Wrapped,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -565,7 +565,7 @@ impl<'a> Prepared<'a> {
         result.recheck(authorize)?;
         Ok(result)
     }
-    pub fn require_original(
+    pub(crate) fn require_original(
         &self,
         original: &Original<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -608,7 +608,7 @@ pub struct Published<'a> {
     output: Option<(String, files::FileIdentity, bool)>,
 }
 impl Published<'_> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.prepared.parent_barrier(authorize)?;
         let named = files::directory_relative(
             &self.prepared.original.parent.file,
@@ -634,7 +634,7 @@ impl Published<'_> {
             .recheck(&named, self.prepared.original.volume.unique)?;
         self.prepared.parent_barrier(authorize)
     }
-    pub fn require_original(
+    pub(crate) fn require_original(
         &self,
         original: &Original<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -658,7 +658,7 @@ impl Published<'_> {
         }
         self.recheck(authorize)
     }
-    pub fn require_original_entry(
+    pub(crate) fn require_original_entry(
         &self,
         expected: &str,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -667,7 +667,7 @@ impl Published<'_> {
         self.wrapped.require_original_entry(expected, authorize)?;
         self.recheck(authorize)
     }
-    pub fn entry(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&str> {
+    pub(crate) fn entry(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&str> {
         self.recheck(authorize)?;
         self.wrapped.text(authorize)
     }
@@ -681,12 +681,12 @@ impl Published<'_> {
 }
 
 /// Closed actual owned namespace states; decoded values cannot supply variants.
-pub enum State<'b, 'a> {
+pub(crate) enum State<'b, 'a> {
     Prepared(&'b Prepared<'a>),
     Published(&'b Published<'a>),
 }
 impl State<'_, '_> {
-    pub fn require_original(
+    pub(crate) fn require_original(
         &self,
         original: &Original<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,

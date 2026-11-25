@@ -754,7 +754,7 @@ impl<'a> Context<'a> {
     }
     /// Exact legacy review material, backed by original retained objects and
     /// authenticated fixed queries. This grants no switch/discard authority.
-    pub fn review(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn review(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let observed = self.evidence(authorize)?;
         let record = self.record.value()?;
@@ -842,7 +842,7 @@ impl<'a> Context<'a> {
         self.recheck(authorize)?;
         Ok(review)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let root = self.mount.descriptor()?;
         require(

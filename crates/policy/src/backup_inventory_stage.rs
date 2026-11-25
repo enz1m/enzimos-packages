@@ -226,7 +226,7 @@ impl<'c, 's, 'cfg, 'g> Staged<'c, 's, 'cfg, 'g> {
         retired.evidence()?;
         Ok(retired)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "inventory-stage", || self.recheck_fresh())
     }
     fn recheck_fresh(&self) -> Result<()> {
@@ -317,11 +317,11 @@ impl<'c, 's, 'cfg, 'g> Staged<'c, 's, 'cfg, 'g> {
     }
     /// Actual staged tree retained from this same original capture. Data only;
     /// consumers must separately admit their own readonly mount/transfer role.
-    pub fn boot_directory(&self) -> Result<&File> {
+    pub(crate) fn boot_directory(&self) -> Result<&File> {
         self.recheck()?;
         self.boot.descriptor()
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.value,"record_epoch":self.record.evidence()?}))
     }
@@ -731,7 +731,7 @@ impl Retired<'_, '_> {
             "retired stage does not belong to original live capture/closed transfer",
         )
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.guard.recheck()?;
         self.lock.recheck()?;
         self.record.recheck()?;

@@ -59,7 +59,7 @@ impl<'a> Original<'a> {
         self.recheck()
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
-    pub fn observe(scope: &'a Scope) -> Result<Self> {
+    pub(crate) fn observe(scope: &'a Scope) -> Result<Self> {
         let proc = scope.original_proc()?;
         let descriptor = files::open_relative(proc, Path::new("cmdline"))?;
         let metadata = descriptor.metadata()?;
@@ -95,7 +95,7 @@ impl<'a> Original<'a> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         let proc = self.scope.original_proc()?;
         let named = files::open_relative(proc, Path::new("cmdline"))?;
         require(
@@ -110,11 +110,11 @@ impl<'a> Original<'a> {
         )?;
         self.scope.recheck()
     }
-    pub fn parameters(&self) -> Result<&Parameters> {
+    pub(crate) fn parameters(&self) -> Result<&Parameters> {
         self.recheck()?;
         Ok(&self.parameters)
     }
-    pub fn matches_record(&self, record: &Value) -> Result<()> {
+    pub(crate) fn matches_record(&self, record: &Value) -> Result<()> {
         self.recheck()?;
         self.parameters.matches_record(record)?;
         self.recheck()

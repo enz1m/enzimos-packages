@@ -25,7 +25,7 @@ fn shape(file: &File) -> Result<Value> {
     )
 }
 pub struct Stage {
-    pub path: PathBuf,
+    pub(crate) path: PathBuf,
     directory: File,
     identity: Value,
     files: BTreeMap<String, (File, files::FileIdentity)>,
@@ -35,7 +35,7 @@ impl Stage {
     pub fn capture(plan: &Plan, id: &str, lock: &files::Lock) -> Result<Self> {
         Self::capture_authorized(plan, id, lock, &mut || lock.recheck())
     }
-    pub fn capture_authorized(
+    pub(crate) fn capture_authorized(
         plan: &Plan,
         id: &str,
         lock: &files::Lock,
@@ -219,13 +219,13 @@ impl Stage {
         lock.recheck()?;
         Ok(stage)
     }
-    pub fn directory(&self) -> &File {
+    pub(crate) fn directory(&self) -> &File {
         &self.directory
     }
-    pub fn evidence(&self) -> Value {
+    pub(crate) fn evidence(&self) -> Value {
         value!({"directory":self.identity,"files":self.rows})
     }
-    pub fn recheck_directory(&self) -> Result<()> {
+    pub(crate) fn recheck_directory(&self) -> Result<()> {
         let named = files::directory(&self.path, Some(0))?;
         require(
             shape(&named)? == self.identity && shape(&self.directory)? == self.identity,
@@ -243,7 +243,7 @@ impl Stage {
             "update stage member set differs",
         )
     }
-    pub fn recheck_original(&self) -> Result<()> {
+    pub(crate) fn recheck_original(&self) -> Result<()> {
         self.recheck_directory()?;
         for (name, (file, identity)) in &self.files {
             let named = files::open_relative(&self.directory, Path::new(name))?;

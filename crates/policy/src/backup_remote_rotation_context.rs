@@ -749,7 +749,7 @@ impl<'a> Context<'a> {
             value!({"status":"remote-rotation-complete","retired_local_material_removed":true,"old_remote_repository_deleted":false}),
         )
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = value!({"inventory":self.inventory.evidence(self.guard)?,"record":self.record.evidence()?,"pin":self.pin.evidence()?,
             "caller":self.caller.evidence()?,"credential_bytes_read":false,"remote_repository_verified":false});

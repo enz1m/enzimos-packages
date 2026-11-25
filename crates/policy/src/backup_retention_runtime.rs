@@ -23,8 +23,8 @@ use std::{
     path::Path,
 };
 
-pub struct Plan {
-    pub before: BTreeMap<String, String>,
+pub(crate) struct Plan {
+    pub(crate) before: BTreeMap<String, String>,
     pub(crate) remaining: BTreeMap<String, String>,
     pub(crate) remove: Vec<String>,
     /// Managed enzimOS points, oldest first.
@@ -96,7 +96,7 @@ impl Plan {
     }
     /// Also remove the `count` oldest managed points the policy keeps, never the
     /// newest one and never a protected one (the space limit).
-    pub fn add_oldest(&mut self, count: usize, protect: &[String]) {
+    pub(crate) fn add_oldest(&mut self, count: usize, protect: &[String]) {
         let newest = self.managed.last().map(|(_, id)| id.clone());
         let extra: Vec<String> = self
             .managed
@@ -403,12 +403,16 @@ impl Rotations {
     }
 }
 /// Manual cleanup with the current policy (`enzimos-policy backup retain`).
-pub fn retain_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
+pub(crate) fn retain_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     retain_policy_locked(guard, lock, &crate::backup_retention::policy()?, &[], 0)
 }
 /// After a successful backup: clean up by policy unless the user turned automatic
 /// cleanup off. Never fails the backup; the outcome is published as status.
-pub fn after_backup_locked(guard: &Guard, lock: &files::Lock, created: Option<&str>) -> Value {
+pub(crate) fn after_backup_locked(
+    guard: &Guard,
+    lock: &files::Lock,
+    created: Option<&str>,
+) -> Value {
     // Best effort and independent of the policy: failed backups' leftovers
     // are not backups, so they are retired even with automatic cleanup off.
     let _ = crate::backup_history::retire_failed_locked(guard, lock);
@@ -495,7 +499,7 @@ pub fn retain_attached_locked(guard: &Guard, lock: &files::Lock) -> Result<Value
         || retain_locked(guard, lock),
     )
 }
-pub fn retain_policy_locked(
+pub(crate) fn retain_policy_locked(
     guard: &Guard,
     lock: &files::Lock,
     policy: &Value,
@@ -664,7 +668,7 @@ pub fn retain_policy_locked(
 /// # Errors
 /// Fails when the destination is unusable or a step fails (nothing is
 /// claimed; the queue keeps the paths for the next backup).
-pub fn rewrite_locked(guard: &Guard, lock: &files::Lock, paths: &[String]) -> Result<()> {
+pub(crate) fn rewrite_locked(guard: &Guard, lock: &files::Lock, paths: &[String]) -> Result<()> {
     operation::root_only()?;
     crate::namespaces::initial()?;
     let recipe = local_restic::Rewrite::new(paths)?;
@@ -738,7 +742,7 @@ pub fn rewrite_locked(guard: &Guard, lock: &files::Lock, paths: &[String]) -> Re
 ///
 /// # Errors
 /// Fails when the configured destination is not attached.
-pub fn repository_bytes(guard: &Guard) -> Result<u64> {
+pub(crate) fn repository_bytes(guard: &Guard) -> Result<u64> {
     let config = Configuration::open()?;
     let destination = Destination::open(&config, guard)?;
     let repository = File::from(destination.repository_descriptor()?.try_clone_to_owned()?);

@@ -213,7 +213,7 @@ pub fn publish_locked(source: &Stage, generation: &str, lock: &files::Lock) -> R
     publish_authorized(source, generation, lock, &mut || lock.recheck())
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
-pub fn publish_authorized(
+pub(crate) fn publish_authorized(
     source: &Stage,
     generation: &str,
     lock: &files::Lock,

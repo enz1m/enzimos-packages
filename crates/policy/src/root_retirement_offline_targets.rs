@@ -81,7 +81,7 @@ impl<'a, 's> Targets<'a, 's> {
         self.recheck()?;
         Ok(&self.record["targets"])
     }
-    pub fn observe(
+    pub(crate) fn observe(
         control: &'a Control<'a, 's>,
         mounts: &'a Mounts<'s>,
         journal: &'a Journal<'a, 's>,
@@ -145,7 +145,7 @@ impl<'a, 's> Targets<'a, 's> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.control.require_original_mounts(self.mounts)?;
         self.journal.require_original_control(self.control)?;
         self.origins.require_original_control(self.control)?;

@@ -131,7 +131,7 @@ impl<'g> Bound<'g> {
         closed.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.lock.recheck()?;
         (self.authorize)()?;
@@ -153,7 +153,7 @@ impl<'g> Bound<'g> {
             "original newly published pin changed or automatic work enabled",
         )
     }
-    pub fn value(&self) -> Result<&Value> {
+    pub(crate) fn value(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.value)
     }

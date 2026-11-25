@@ -14,7 +14,7 @@ use enzimos_platform::{Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
 
-pub const PATH: &str = "/etc/enzimos/backup-retention.json";
+pub(crate) const PATH: &str = "/etc/enzimos/backup-retention.json";
 const LIMIT: usize = 4096;
 pub(crate) const TIERS: [&str; 5] = ["last", "daily", "weekly", "monthly", "yearly"];
 
@@ -67,7 +67,7 @@ pub(crate) fn validate_policy(v: &Value) -> Result<()> {
 }
 
 /// A Settings selection: the same fields without the schema.
-pub fn validate(selection: &Value) -> Result<()> {
+pub(crate) fn validate(selection: &Value) -> Result<()> {
     let budget = budget_valid(selection)?;
     json::fields(
         selection,
@@ -78,12 +78,12 @@ pub fn validate(selection: &Value) -> Result<()> {
 
 /// The space limit, if one is set.
 #[must_use]
-pub fn budget(policy: &Value) -> Option<u64> {
+pub(crate) fn budget(policy: &Value) -> Option<u64> {
     policy["budget_bytes"].as_u64()
 }
 
 /// The current policy; the shipped file is required, a missing one is the default.
-pub fn policy() -> Result<Value> {
+pub(crate) fn policy() -> Result<Value> {
     if std::fs::symlink_metadata(PATH).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
         return Ok(default_policy());
     }
@@ -94,7 +94,7 @@ pub fn policy() -> Result<Value> {
 }
 
 /// Snapshot IDs a policy removes from `points` (time, id), any order.
-pub fn select(points: &[(DateTime<Utc>, String)], policy: &Value) -> Vec<String> {
+pub(crate) fn select(points: &[(DateTime<Utc>, String)], policy: &Value) -> Vec<String> {
     let mut ordered = points.to_vec();
     // Newest first; equal times break ties by ID so the result is deterministic.
     ordered.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
@@ -133,7 +133,7 @@ pub fn select(points: &[(DateTime<Utc>, String)], policy: &Value) -> Vec<String>
 const STATUS: &str = "backup-retention-status.json";
 const STATUS_LIMIT: usize = 8192;
 
-pub fn status() -> Result<Value> {
+pub(crate) fn status() -> Result<Value> {
     let path = std::path::Path::new(operation::CONTROL).join(STATUS);
     Ok(
         match enzimos_platform::files::read_optional(&path, STATUS_LIMIT, Some(0), true)? {
@@ -143,7 +143,7 @@ pub fn status() -> Result<Value> {
     )
 }
 
-pub fn publish_status(kind: &str, outcome: &Value) -> Result<()> {
+pub(crate) fn publish_status(kind: &str, outcome: &Value) -> Result<()> {
     require(
         matches!(kind, "local" | "remote"),
         "backup retention status kind",

@@ -99,7 +99,7 @@ pub struct Observation<'g> {
     records: BTreeMap<String, Retained>,
 }
 impl<'g> Observation<'g> {
-    pub fn observe(guard: &'g Guard) -> Result<Self> {
+    pub(crate) fn observe(guard: &'g Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         guard.recheck()?;
@@ -150,7 +150,7 @@ impl<'g> Observation<'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let named =
             files::optional_directory_relative(self.guard.control(), Path::new(FOLDER), Some(0))?;
@@ -194,7 +194,7 @@ impl<'g> Observation<'g> {
         let conclusions = crate::recovery_conclusions::Observation::observe(self.guard)?;
         self.require_unmentioned_with_conclusions(generation, &conclusions)
     }
-    pub fn require_unmentioned_with_conclusions(
+    pub(crate) fn require_unmentioned_with_conclusions(
         &self,
         generation: &str,
         conclusions: &crate::recovery_conclusions::Observation<'_>,
@@ -222,7 +222,7 @@ impl<'g> Observation<'g> {
         conclusions.recheck()?;
         self.recheck()
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let records = self
             .records

@@ -60,7 +60,7 @@ pub struct Observation<'a> {
     pins: crate::generation_pins::Snapshot<'a>,
 }
 impl<'a> Observation<'a> {
-    pub fn observe(
+    pub(crate) fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -195,7 +195,7 @@ impl<'a> Observation<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         authorize()?;

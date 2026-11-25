@@ -349,10 +349,10 @@ impl<'a, 'g> Inventory<'a, 'g> {
     pub(crate) fn guard(&self) -> &'g Guard {
         self.guard
     }
-    pub fn sources(&self) -> &[Source<'g>] {
+    pub(crate) fn sources(&self) -> &[Source<'g>] {
         &self.sources
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             json!({"configuration":self.configuration.evidence()?,"sources":self.sources.iter().map(Source::evidence).collect::<Result<Vec<_>>>()?,"nested":self.nested_value()?,"provider":self.vendor.evidence()?}),

@@ -75,7 +75,7 @@ impl<'a> Source<'a> {
         )?;
         self.verify(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         authorize()?;
@@ -95,7 +95,7 @@ impl<'a> Source<'a> {
     }
     /// Re-probe the retained description without consulting the UUID cache,
     /// and rejoin the currently guarded live Root ancestry on both sides.
-    pub fn verify(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn verify(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.recheck(authorize)?;
         require(
             crate::recovery_run_stage::luks_uuid(self.guard)? == self.uuid,
@@ -122,11 +122,11 @@ impl<'a> Source<'a> {
         )?;
         self.recheck(authorize)
     }
-    pub fn uuid(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&str> {
+    pub(crate) fn uuid(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&str> {
         self.verify(authorize)?;
         Ok(&self.uuid)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.verify(authorize)?;
         Ok(
             json!({"luks_uuid":self.uuid,"original_epoch":self.epoch,"flags":self.flags,

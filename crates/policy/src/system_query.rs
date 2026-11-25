@@ -189,7 +189,7 @@ pub(crate) fn os_release(bytes: &[u8]) -> Result<Value> {
     }
     Ok(Value::Object(out))
 }
-pub fn marker(cmdline: &[u8]) -> Result<Option<String>> {
+pub(crate) fn marker(cmdline: &[u8]) -> Result<Option<String>> {
     require(
         cmdline.len() <= 65536 && !cmdline.contains(&0),
         "kernel command line bound",

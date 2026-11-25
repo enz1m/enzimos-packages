@@ -64,7 +64,7 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.caller.recheck()?;
         self.reserved.recheck()?;
         require(

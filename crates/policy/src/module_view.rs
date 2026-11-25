@@ -200,7 +200,7 @@ impl ModuleView {
     pub fn enter_locked(id: &str, _lock: &files::Lock) -> Result<Self> {
         Self::enter_authorized(id, _lock, &mut || _lock.recheck())
     }
-    pub fn enter_authorized(
+    pub(crate) fn enter_authorized(
         id: &str,
         lock: &files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -371,7 +371,7 @@ impl ModuleView {
         self.checkpoint_authorized("active", authorize)?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.snapshot.recheck()?;
         require(
             self.record["phase"] == "active",
@@ -396,7 +396,7 @@ impl ModuleView {
         )?;
         Ok(())
     }
-    pub fn transaction_directory(&self) -> Result<&File> {
+    pub(crate) fn transaction_directory(&self) -> Result<&File> {
         self.recheck()?;
         self.alias
             .as_ref()
@@ -408,12 +408,12 @@ impl ModuleView {
     pub fn kernel(&self) -> &str {
         &self.kernel
     }
-    pub fn prepare_worker(&mut self, id: &str) -> Result<Value> {
+    pub(crate) fn prepare_worker(&mut self, id: &str) -> Result<Value> {
         self.recheck()?;
         self.snapshot.prepare_worker(id)?;
         Ok(self.record.clone())
     }
-    pub fn worker_checkpoint(&mut self, record: &Value) -> Result<()> {
+    pub(crate) fn worker_checkpoint(&mut self, record: &Value) -> Result<()> {
         require(
             record["request"]["module_view"] == self.record
                 && record["request"]["caller"]["pid"] == std::process::id(),
@@ -422,7 +422,7 @@ impl ModuleView {
         self.snapshot.worker_checkpoint(record)?;
         self.recheck()
     }
-    pub fn worker_history(&mut self, id: &str, checkpoints: &[Value]) -> Result<()> {
+    pub(crate) fn worker_history(&mut self, id: &str, checkpoints: &[Value]) -> Result<()> {
         require(
             checkpoints
                 .last()
@@ -435,7 +435,7 @@ impl ModuleView {
     pub fn leave_locked(&mut self, _lock: &files::Lock) -> Result<()> {
         self.leave_authorized(_lock, &mut || _lock.recheck())
     }
-    pub fn leave_authorized(
+    pub(crate) fn leave_authorized(
         &mut self,
         lock: &files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,

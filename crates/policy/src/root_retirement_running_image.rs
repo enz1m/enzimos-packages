@@ -110,7 +110,7 @@ impl<'a> Original<'a> {
         self.recheck()?;
         Ok(&self.image)
     }
-    pub fn observe(scope: &'a Scope) -> Result<Self> {
+    pub(crate) fn observe(scope: &'a Scope) -> Result<Self> {
         scope.recheck()?;
         let directory = files::directory(Path::new(DIRECTORY), Some(0))?;
         scope.require_ram_member(&directory)?;
@@ -191,7 +191,7 @@ impl<'a> Original<'a> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.require_ram_member(&self.directory)?;
         self.process.recheck()?;
         let named = files::directory(Path::new(DIRECTORY), Some(0))?;

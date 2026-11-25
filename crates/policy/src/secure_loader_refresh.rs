@@ -8,7 +8,7 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{collections::BTreeMap, os::fd::AsFd, path::Path, time::Duration};
-pub const LOADERS: [(&str, &str); 4] = [
+pub(crate) const LOADERS: [(&str, &str); 4] = [
     (
         "EFI/systemd/systemd-bootx64.efi",
         "/usr/lib/systemd/boot/efi/systemd-bootx64.efi",
@@ -26,7 +26,7 @@ pub const LOADERS: [(&str, &str); 4] = [
         "/usr/share/enzimos-boot/select-entry.efi",
     ),
 ];
-pub fn validate(record: &Value) -> Result<()> {
+pub(crate) fn validate(record: &Value) -> Result<()> {
     let rows = record
         .as_object()
         .ok_or_else(|| enzimos_platform::Error("loader receipt object".into()))?;
@@ -49,7 +49,7 @@ pub fn validate(record: &Value) -> Result<()> {
 pub fn refresh_locked(volume: &Volume, lock: &files::Lock) -> Result<()> {
     refresh_authorized(volume, lock, &mut || lock.recheck())
 }
-pub fn refresh_authorized(
+pub(crate) fn refresh_authorized(
     volume: &Volume,
     lock: &files::Lock,
     authorize: &mut dyn FnMut() -> Result<()>,

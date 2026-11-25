@@ -39,7 +39,7 @@ fn ram(file: &File) -> Result<()> {
         "actual original RAM mountpoint directory required",
     )
 }
-pub struct OwnedTop<'a, 's> {
+pub(crate) struct OwnedTop<'a, 's> {
     mapping: &'a CreatedMapping<'s>,
     parent: File,
     point: File,
@@ -106,7 +106,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
             .ok_or_else(|| Error("owned top already released".into()))
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (mount).")]
-    pub fn mount(mapping: &'a CreatedMapping<'s>) -> Result<Self> {
+    pub(crate) fn mount(mapping: &'a CreatedMapping<'s>) -> Result<Self> {
         mapping.recheck()?;
         let exclusive = Held::acquire(mapping)?;
         let parent = files::ensure_directory(Path::new(PARENT), 0o700, 0)?;
@@ -208,7 +208,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
         }
         Ok(())
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.mapping.recheck()?;
         self.before_mount.require_original_mapping(self.mapping)?;
         self.point_recheck(false)?;
@@ -238,7 +238,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
         self.mapping.recheck()
     }
     /// Returned observation borrows this owner; it must retire before unmount.
-    pub fn observation(&self) -> Result<Mounts<'_>> {
+    pub(crate) fn observation(&self) -> Result<Mounts<'_>> {
         self.recheck()?;
         Mounts::observe(
             self.mapping.original_scope()?,
@@ -249,7 +249,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
         )
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (umount2).")]
-    pub fn unmount(mut self) -> Result<Unmounted<'a, 's>> {
+    pub(crate) fn unmount(mut self) -> Result<Unmounted<'a, 's>> {
         self.recheck()?;
         crate::subvolume::sync(
             self.top
@@ -279,7 +279,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
 impl<'a, 's> Unmounted<'a, 's> {
     /// Consume the actual unmount while its exact created mapping still exists.
     /// The returned private owner releases the mapping borrow, not its lineage.
-    pub fn release(self) -> Result<ReleasedMount<'s>> {
+    pub(crate) fn release(self) -> Result<ReleasedMount<'s>> {
         self.recheck()?;
         let mapping = self.original.mapping;
         let scope = mapping.original_scope()?;
@@ -310,7 +310,7 @@ impl<'a, 's> Unmounted<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         require(
             self.original.top.is_none(),
             "actual owned top descriptor still held after unmount",
@@ -344,7 +344,7 @@ impl ReleasedMount<'_> {
         )?;
         mapping.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.recheck()?;
         let parent = files::directory(Path::new(PARENT), Some(0))?;
         let point = files::directory_relative(&self.parent, Path::new(NAME), Some(0))?;

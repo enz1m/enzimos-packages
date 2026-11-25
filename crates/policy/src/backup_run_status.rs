@@ -38,7 +38,7 @@ pub fn read() -> Value {
 
 /// The next document after a run ended in `state` (pure, for tests).
 #[must_use]
-pub fn next(previous: &Value, state: &str, code: Option<&str>, at: u64) -> Value {
+pub(crate) fn next(previous: &Value, state: &str, code: Option<&str>, at: u64) -> Value {
     let since = if previous["state"] == state {
         previous["since"].as_u64().unwrap_or(at)
     } else {
@@ -58,7 +58,7 @@ pub fn next(previous: &Value, state: &str, code: Option<&str>, at: u64) -> Value
 ///
 /// # Errors
 /// Fails when the control directory cannot be written.
-pub fn record(state: &str, code: Option<&str>) -> Result<()> {
+pub(crate) fn record(state: &str, code: Option<&str>) -> Result<()> {
     let document = next(&read(), state, code, now());
     files::atomic_bounded(
         &Path::new(operation::CONTROL).join(NAME),
@@ -78,7 +78,7 @@ pub fn record_outcome(error: Option<&str>) {
 
 /// The run state of a run that ended with `error`, or succeeded without one.
 #[must_use]
-pub fn outcome(error: Option<&str>) -> &'static str {
+pub(crate) fn outcome(error: Option<&str>) -> &'static str {
     match error {
         None => "ok",
         Some(error) if is_absent(error) => "waiting-for-drive",

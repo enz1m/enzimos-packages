@@ -49,7 +49,7 @@ pub fn run_locked(
     run_authorized(id, view, boot_stage, lock, &mut || lock.recheck())
 }
 /// Fresh orchestration entry checks; original caller is one closed installed native coordinator role.
-pub fn run_authorized(
+pub(crate) fn run_authorized(
     id: &str,
     view: &mut ModuleView,
     boot_stage: &File,

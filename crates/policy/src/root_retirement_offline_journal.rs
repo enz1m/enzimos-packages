@@ -139,7 +139,7 @@ impl<'a, 's> Journal<'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn observe(control: &'a Control<'a, 's>, id: &str) -> Result<Self> {
+    pub(crate) fn observe(control: &'a Control<'a, 's>, id: &str) -> Result<Self> {
         control.recheck()?;
         crate::identity::safe_id(id)?;
         let mount = control.mount_id()?;
@@ -172,7 +172,7 @@ impl<'a, 's> Journal<'a, 's> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.control.recheck()?;
         let state = self
             .state
@@ -211,7 +211,7 @@ impl<'a, 's> Journal<'a, 's> {
         self.control.recheck()
     }
     /// Read-only diagnostic data; no cold in-flight row authorizes a delete.
-    pub fn record(&self) -> Result<Value> {
+    pub(crate) fn record(&self) -> Result<Value> {
         self.recheck()?;
         let state = self
             .state
@@ -231,7 +231,7 @@ impl<'a, 's> Journal<'a, 's> {
     }
     /// Only the still-live original sealed actor can durably enter once. This
     /// receipt does not perform or grant a delete, and cannot be cold replayed.
-    pub fn enter<'j>(
+    pub(crate) fn enter<'j>(
         &'j self,
         sealed: &'j crate::root_retirement_seal::Installed<'a, 's>,
     ) -> Result<Entered<'j, 'a, 's>> {
@@ -293,7 +293,7 @@ impl<'a, 's> Journal<'a, 's> {
 impl<'j, 'a, 's> Entered<'j, 'a, 's> {
     /// Consume this actual entry and persist the first original in-flight step.
     /// There is no decoded-row constructor or cold continuation.
-    pub fn begin_first(self) -> Result<StepEntered<'j, 'a, 's>> {
+    pub(crate) fn begin_first(self) -> Result<StepEntered<'j, 'a, 's>> {
         self.recheck()?;
         let previous = entered_data(&self.original.prepared)?;
         let next = first_step_data(&self.original.prepared)?;
@@ -302,7 +302,7 @@ impl<'j, 'a, 's> Entered<'j, 'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.sealed.require_original_journal(self.original)?;
         self.original.recheck()?;
         let state = self
@@ -478,7 +478,7 @@ impl<'j, 'a, 's> StepEntered<'j, 'a, 's> {
             "actual first syscall attempt differs from original durable in-flight lineage",
         )
     }
-    pub fn prepare_first_delete(
+    pub(crate) fn prepare_first_delete(
         self,
     ) -> Result<crate::root_retirement_first_delete::First<'j, 'a, 's>> {
         crate::root_retirement_first_delete::First::prepare(self)
@@ -489,7 +489,7 @@ impl<'j, 'a, 's> StepEntered<'j, 'a, 's> {
         self.recheck()?;
         self.original.sealed.first_descriptions()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         let original = &self.original;
         original
             .sealed

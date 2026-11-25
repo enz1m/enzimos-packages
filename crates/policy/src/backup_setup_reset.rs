@@ -31,7 +31,7 @@ const TARGET: &str = "/backup-repository";
 /// on that request's next status and records the job `rolled-back`.
 pub const RESET_PROOF: &str = "backup-setup-reset.json";
 /// The proof for one retracted setup intent (`backup-initial-setup.json`).
-pub fn reset_proof(intent: &Value) -> Result<Value> {
+pub(crate) fn reset_proof(intent: &Value) -> Result<Value> {
     let plan = &intent["plan"];
     let id = plan["id"]
         .as_str()

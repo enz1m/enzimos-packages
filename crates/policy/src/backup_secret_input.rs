@@ -46,7 +46,7 @@ impl Validated {
         self.original.recheck()?;
         self.reader.recheck()
     }
-    pub fn length(&self) -> Result<usize> {
+    pub(crate) fn length(&self) -> Result<usize> {
         self.recheck()?;
         self.original.length()
     }

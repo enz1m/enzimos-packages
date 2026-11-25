@@ -348,7 +348,7 @@ impl<'a, 's> Loaders<'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn observe(
+    pub(crate) fn observe(
         control: &'a Control<'a, 's>,
         catalog: &'a Catalog<'a, 's>,
         boot: &'a Restored<'a, 's>,
@@ -538,7 +538,7 @@ impl<'a, 's> Loaders<'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.catalog.require_original_control(self.control)?;
         self.certificate.require_original_control(self.control)?;
         self.automatic.recheck(self.boot.original_volume()?)?;

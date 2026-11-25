@@ -36,7 +36,7 @@ pub(crate) fn worker(v: &Value, id: &str) -> Result<()> {
         "worker receipt binding shape differs from native backup role",
     )
 }
-pub fn validate(v: &Value, id: &str) -> Result<()> {
+pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(
         v,
         "schema id phase request_sha256 request worker_scope_closed worker result",

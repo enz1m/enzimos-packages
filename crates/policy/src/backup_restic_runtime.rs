@@ -27,7 +27,7 @@ fn shape(file: &File) -> Result<Shape> {
 /// Observed command completion, never repository pinning, enrollment, recovery
 /// export, schedule admission or completion of the owning setup transaction.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Observed {
+pub(crate) enum Observed {
     Initialized,
     Authenticated(String),
     IncorrectPassword,
@@ -104,7 +104,7 @@ impl BackupObservation {
         self.stdout()?;
         Ok(&self.stdout_sha256)
     }
-    pub fn value(&self) -> Value {
+    pub(crate) fn value(&self) -> Value {
         serde_json::json!({"status":"backup-observed","snapshot_id":self.snapshot,
             "transfer_complete":true,"worker_scope_closed":false,
             "source_cleanup_complete":false,"backup_complete":false})
@@ -121,7 +121,7 @@ impl Image {
             command: Command::open("/usr/bin/restic")?,
         })
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.command.evidence()
     }
     pub fn descriptor(&self) -> Result<&File> {
@@ -635,7 +635,7 @@ impl Runtime {
     /// The fresh worker's creator must have durably recorded intent before
     /// making this fixed scratch directory. Existing partial scratch is refused.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
-    pub fn open(id: &str) -> Result<Self> {
+    pub(crate) fn open(id: &str) -> Result<Self> {
         crate::namespaces::initial()?;
         require(
             id.len() == 32
@@ -674,7 +674,7 @@ impl Runtime {
             "backup scratch contains an unknown outcome; no adoption",
         )
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.image.recheck()?;
         let named = files::directory(&self.path, Some(0))?;
@@ -752,7 +752,7 @@ impl Runtime {
     /// Only the native worker uses this after verifying its actual PID1 MainPID,
     /// original sender/caller pidfd, durable request and owned mount scope.
     /// The boundary is sampled throughout child execution, including idle time.
-    pub fn run(
+    pub(crate) fn run(
         &self,
         task: Task,
         repository: &File,

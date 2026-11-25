@@ -72,7 +72,7 @@ impl<'a> Boot<'a> {
         )?;
         cleanup.run(inventory, authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.namespace.recheck(authorize)?;
         self.original.recheck(authorize)?;
         self.namespace.recheck(authorize)
@@ -134,7 +134,7 @@ impl<'a> Boot<'a> {
         self.original
             .compile_root_stage(targets, record, image, source, exit, mode, authorize)
     }
-    pub fn verify_staged_root_receipt(
+    pub(crate) fn verify_staged_root_receipt(
         &self,
         published: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -145,7 +145,7 @@ impl<'a> Boot<'a> {
             .verify_staged_root_receipt(published, targets, authorize)?;
         self.namespace.recheck(authorize)
     }
-    pub fn verify_owned_signing_namespace(
+    pub(crate) fn verify_owned_signing_namespace(
         &self,
         published: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -160,7 +160,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_pending_root_entry(
+    pub(crate) fn verify_pending_root_entry(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -177,7 +177,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_committed_root_entry(
+    pub(crate) fn verify_committed_root_entry(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -194,7 +194,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_pending_bios(
+    pub(crate) fn verify_pending_bios(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -211,7 +211,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_committed_bios(
+    pub(crate) fn verify_committed_bios(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -228,7 +228,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_firmware_publication(
+    pub(crate) fn verify_firmware_publication(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -245,7 +245,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_committed_defaults(
+    pub(crate) fn verify_committed_defaults(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,
@@ -262,7 +262,7 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
-    pub fn verify_pending_defaults(
+    pub(crate) fn verify_pending_defaults(
         &self,
         receipt: &crate::root_retirement_online_journal::Published<'_>,
         targets: &Targets<'_>,

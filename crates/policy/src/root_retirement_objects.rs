@@ -45,7 +45,7 @@ fn path(value: &str) -> Result<()> {
     }
     Ok(())
 }
-pub(crate) struct Original {
+pub struct Original {
     path: String,
     role: String,
     file: File,
@@ -138,7 +138,7 @@ impl Original {
     pub(crate) fn readonly(&self) -> bool {
         self.readonly
     }
-    pub(crate) fn evidence(&self) -> Value {
+    pub fn evidence(&self) -> Value {
         value!({"role":self.role,"identity":self.identity,"readonly":self.readonly,
             "mount_id":self.mount})
     }
@@ -262,7 +262,7 @@ impl Original {
 /// This actor observes actual originals. It cannot destroy, rename or finish a
 /// receipt. Offline exclusivity, live reference checks and durable intent remain
 /// independent prerequisites for a future consuming executor.
-pub struct Targets<'a> {
+pub(crate) struct Targets<'a> {
     guard: &'a Guard,
     top: &'a TopMount,
     lock: &'a files::Lock,
@@ -270,7 +270,7 @@ pub struct Targets<'a> {
     objects: Vec<Original>,
 }
 impl<'a> Targets<'a> {
-    pub fn observe(
+    pub(crate) fn observe(
         guard: &'a Guard,
         top: &'a TopMount,
         lock: &'a files::Lock,
@@ -435,7 +435,7 @@ impl<'a> Targets<'a> {
                 .collect::<Vec<_>>()
         ))
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         operation::root_only()?;
         crate::namespaces::initial()?;
         authorize()?;
@@ -536,7 +536,7 @@ impl<'a> Targets<'a> {
         authorize()?;
         Ok(value!({"role":object.role,"identity":object.identity}))
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = value!({"source":self.source,"targets":self.objects.iter().map(|object|
             value!({"role":object.role,"identity":object.identity,"readonly":object.readonly,

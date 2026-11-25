@@ -111,7 +111,7 @@ impl<'a, 's> Installed<'a, 's> {
         clippy::too_many_arguments,
         reason = "Each argument is a distinct retained input of this step."
     )]
-    pub fn install(
+    pub(crate) fn install(
         scope: &'s Scope,
         mounts: &'a Mounts<'s>,
         owner: &'a OwnedTop<'a, 's>,
@@ -221,7 +221,7 @@ impl<'a, 's> Installed<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.recheck_retained_references()?;
         self.inventory.require_original_ledgers(self.ledgers)?;
         self.inventory

@@ -94,7 +94,7 @@ fn installed_disk_group() -> Result<u32> {
     )?;
     Ok(gid)
 }
-pub struct Block {
+pub(crate) struct Block {
     pub path: PathBuf,
     pub file: File,
     identity: files::FileIdentity,
@@ -102,7 +102,7 @@ pub struct Block {
     graph: topology::Graph,
 }
 impl Block {
-    pub fn by_device(device: topology::Device) -> Result<Self> {
+    pub(crate) fn by_device(device: topology::Device) -> Result<Self> {
         crate::storage_runtime::initial_namespace()?;
         let node = topology::kernel_node(device)?;
         let name = node
@@ -120,7 +120,7 @@ impl Block {
         )?;
         Ok(block)
     }
-    pub fn by_uuid(uuid: &str, fat: bool) -> Result<Self> {
+    pub(crate) fn by_uuid(uuid: &str, fat: bool) -> Result<Self> {
         if fat {
             crate::recovery_records::fat_uuid(uuid)?;
         } else {
@@ -143,7 +143,7 @@ impl Block {
         )?;
         Self::open(Path::new(paths[0]))
     }
-    pub fn open(path: &Path) -> Result<Self> {
+    pub(crate) fn open(path: &Path) -> Result<Self> {
         Self::open_role(path, false)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (major, minor, openat).")]
@@ -200,7 +200,7 @@ impl Block {
         block.recheck()?;
         Ok(block)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         let named = std::fs::symlink_metadata(&self.path)?;
         require(
             files::identity(&self.file.metadata()?) == self.identity

@@ -15,7 +15,7 @@ impl Work {
             _ => Task::parse(name).map(Self::Single),
         }
     }
-    pub fn input(self) -> bool {
+    pub(crate) fn input(self) -> bool {
         self == Self::Single(Task::AuthenticateInput)
     }
     pub fn name(self) -> &'static str {

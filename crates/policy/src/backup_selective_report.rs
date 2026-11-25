@@ -16,7 +16,7 @@ pub struct Reported {
     report: Value,
     output: File,
 }
-pub enum Incoming {
+pub(crate) enum Incoming {
     Challenge(Message),
     Observed(Reported),
 }
@@ -51,7 +51,7 @@ fn report(body: &Value, request: &Value, sequence: u64) -> Result<()> {
     crate::identity::sha(body["stdout_sha256"].as_str().unwrap_or(""))?;
     crate::backup_selective_checkpoint::outcome(&body["result"])
 }
-pub fn receive(
+pub(crate) fn receive(
     channel: &Packet,
     reserved: &Reserved<'_, '_, '_>,
     sequence: u64,
@@ -108,7 +108,7 @@ pub fn receive(
     Ok(Incoming::Observed(observed))
 }
 impl Reported {
-    pub fn report(&self) -> Result<&Value> {
+    pub(crate) fn report(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.report)
     }

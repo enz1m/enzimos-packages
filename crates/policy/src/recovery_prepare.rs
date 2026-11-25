@@ -87,7 +87,7 @@ pub fn prepare<F: FnMut() -> Result<()>>(
     )
 }
 /// Closed reply data alone grants no preparation or activation authority.
-pub fn completion(request_id: &str, digest: &str) -> Result<Value> {
+pub(crate) fn completion(request_id: &str, digest: &str) -> Result<Value> {
     require(
         request_id.len() == 32
             && request_id

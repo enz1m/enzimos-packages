@@ -74,7 +74,7 @@ pub struct Original<'a> {
     next_defaults: String,
 }
 impl<'a> Original<'a> {
-    pub fn observe(
+    pub(crate) fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
         receipt: &'a Receipt<'a>,
@@ -214,7 +214,7 @@ impl<'a> Original<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.recheck_default_directories()?;
         self.receipt.require_source(self.guard, self.lock)?;
         self.protected.recheck_signing(
@@ -257,7 +257,7 @@ impl<'a> Original<'a> {
     /// Consume one original observation into exactly one pending entry write.
     /// The durable staged receipt already exists. Errors preserve pending bytes
     /// and have no retry, adoption, unlink or rollback.
-    pub fn prepare_entry(
+    pub(crate) fn prepare_entry(
         self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<PendingEntry<'a>> {
@@ -388,7 +388,7 @@ impl<'a> PendingEntry<'a> {
         )?;
         self.recheck(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.original.recheck_default_directories()?;
         self.original.source_barrier(authorize)?;
         self.prepared
@@ -415,7 +415,10 @@ impl<'a> PendingEntry<'a> {
     /// One retained no-replace commit. The full independent boot/target
     /// protection is checked before this consuming attempt; uncertain errors
     /// preserve the staged receipt and pending evidence without replay.
-    pub fn commit(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<CommittedEntry<'a>>
+    pub(crate) fn commit(
+        self,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<CommittedEntry<'a>>
     where
         Self: Sized,
     {
@@ -499,7 +502,7 @@ impl<'a> CommittedEntry<'a> {
         )?;
         self.recheck(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.original.recheck_default_directories()?;
         self.recheck_body(authorize)
     }
@@ -545,7 +548,7 @@ impl<'a> CommittedEntry<'a> {
     }
     /// Create exactly one pending BIOS selection from the retained original file.
     /// No retry/adoption or rollback is available after this consuming attempt.
-    pub fn prepare_bios(
+    pub(crate) fn prepare_bios(
         self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<PendingBios<'a>> {
@@ -619,7 +622,7 @@ pub struct PendingDefaults<'a> {
     epoch: files::FileIdentity,
 }
 impl<'a> PendingDefaults<'a> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.bios.recheck_body(None, authorize)?;
         let original = &self.bios.entry.original;
         let directory = &original.default_directories["loader"];
@@ -640,7 +643,7 @@ impl<'a> PendingDefaults<'a> {
             .require_original_publication(&self.prepared)?;
         self.bios.recheck_body(None, authorize)
     }
-    pub fn commit(
+    pub(crate) fn commit(
         self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<CommittedDefaults<'a>> {
@@ -689,13 +692,13 @@ impl<'a> PendingDefaults<'a> {
     }
 }
 /// Actual UEFI selection replacement; no decoded record constructs it.
-pub struct CommittedDefaults<'a> {
+pub(crate) struct CommittedDefaults<'a> {
     bios: CommittedBios<'a>,
     committed: enzimos_platform::publication::Committed,
     epoch: files::FileIdentity,
 }
 impl CommittedDefaults<'_> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.bios.recheck_body(Some(&self.committed), authorize)?;
         let original = &self.bios.entry.original;
         let directory = &original.default_directories["loader"];
@@ -722,7 +725,7 @@ impl CommittedDefaults<'_> {
         )?;
         self.bios.recheck_body(Some(&self.committed), authorize)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
             json!({"entry":self.bios.entry.original.entry,"loader_directory_epoch":self.epoch,
@@ -732,7 +735,7 @@ impl CommittedDefaults<'_> {
 }
 
 /// Closed states of actual one-attempt loader publication, never decoded markers.
-pub enum State<'b, 'a> {
+pub(crate) enum State<'b, 'a> {
     Pending(&'b PendingEntry<'a>),
     Committed(&'b CommittedEntry<'a>),
     BiosPending(&'b PendingBios<'a>),

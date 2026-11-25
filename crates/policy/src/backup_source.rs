@@ -36,7 +36,7 @@ fn same(f: &File, named: &File, expected: Shape, mount: u64) -> Result<()> {
 }
 /// Dataset binding does not authorize capture: callers must additionally qualify
 /// all nested subvolumes/mounts and retain their complete source inventory.
-pub struct Source<'a> {
+pub(crate) struct Source<'a> {
     guard: &'a Guard,
     dataset: Dataset,
     file: File,
@@ -54,7 +54,7 @@ pub struct Source<'a> {
     config_body: Vec<u8>,
 }
 impl<'a> Source<'a> {
-    pub fn open(dataset: Dataset, guard: &'a Guard) -> Result<Self> {
+    pub(crate) fn open(dataset: Dataset, guard: &'a Guard) -> Result<Self> {
         validate_dataset(&dataset)?;
         guard.recheck()?;
         let file = files::directory(Path::new(&dataset.path), Some(0))?;
@@ -137,7 +137,7 @@ impl<'a> Source<'a> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "backup-source", || self.recheck_fresh())
     }
     fn recheck_fresh(&self) -> Result<()> {
@@ -182,7 +182,7 @@ impl<'a> Source<'a> {
             "original backup Snapper configuration changed or replaced",
         )
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"filesystem_uuid":self.guard.configuration["filesystem_uuid"],"object":self.object,
@@ -191,7 +191,7 @@ impl<'a> Source<'a> {
             "source_shape":self.shape,"source_mount":self.mount,"name":self.dataset.name,"archive":self.dataset.archive}),
         )
     }
-    pub fn dataset(&self) -> &Dataset {
+    pub(crate) fn dataset(&self) -> &Dataset {
         &self.dataset
     }
     pub(crate) fn guard(&self) -> &'a Guard {
@@ -292,7 +292,7 @@ impl<'a, 'g> Snapshot<'a, 'g> {
             "created backup snapshot left original snapshot directory",
         )
     }
-    pub fn open(source: &'a Source<'g>, number: u64) -> Result<Self> {
+    pub(crate) fn open(source: &'a Source<'g>, number: u64) -> Result<Self> {
         require(
             (1..(1u64 << 63)).contains(&number),
             "invalid backup snapshot number",
@@ -355,7 +355,7 @@ impl<'a, 'g> Snapshot<'a, 'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.source.recheck()?;
         let parent =
             files::directory_relative(&self.source.file, Path::new(".snapshots"), Some(0))?;
@@ -422,11 +422,11 @@ impl<'a, 'g> Snapshot<'a, 'g> {
         self.recheck()?;
         Ok(&self.file)
     }
-    pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
+    pub(crate) fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self.file.as_fd())
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"number":self.number,"object":self.object,"shape":self.shape,"mount":self.mount,"source":self.source.evidence()?}),
@@ -436,11 +436,11 @@ impl<'a, 'g> Snapshot<'a, 'g> {
 
 /// Original subvolume directory entry retired. Snapper metadata and parent
 /// directory cleanup remain separate; this is never a completed-backup actor.
-pub struct RemovedSnapshot<'a, 'g> {
+pub(crate) struct RemovedSnapshot<'a, 'g> {
     original: Snapshot<'a, 'g>,
 }
 impl<'a, 'g> RemovedSnapshot<'a, 'g> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         let original = &self.original;
         original.source.recheck()?;
         let parent =
@@ -515,7 +515,7 @@ impl<'a, 'g> RemovedSnapshot<'a, 'g> {
         retired.recheck()?;
         Ok(retired)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"snapshot":self.original.object,"subvolume_removed":true,
@@ -525,13 +525,13 @@ impl<'a, 'g> RemovedSnapshot<'a, 'g> {
 }
 
 /// Actual original Snapper metadata and empty number directory retired.
-pub struct RemovedMetadata<'a, 'g> {
+pub(crate) struct RemovedMetadata<'a, 'g> {
     original: Snapshot<'a, 'g>,
     metadata: enzimos_platform::named_retirement::Removed,
     directory: enzimos_platform::named_retirement::Removed,
 }
 impl RemovedMetadata<'_, '_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.source.recheck()?;
         let parent = files::directory_relative(
             &self.original.source.file,
@@ -547,7 +547,7 @@ impl RemovedMetadata<'_, '_> {
         self.metadata.recheck()?;
         self.directory.recheck()
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"snapshot":self.original.object,"subvolume_removed":true,

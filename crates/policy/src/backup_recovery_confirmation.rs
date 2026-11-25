@@ -90,7 +90,7 @@ pub(crate) fn verify_pair(exported: &Value, confirmed: &Value, expected: &Value)
 /// Redacted existing attestation status, independent of destination presence.
 /// Credential observation is metadata-only; no password byte or hash is read.
 /// A malformed/stale/missing half of a pair never becomes a positive claim.
-pub fn status(
+pub(crate) fn status(
     configuration: &Configuration,
     storage: &crate::storage_runtime::Guard,
 ) -> Result<Value> {
@@ -179,7 +179,7 @@ fn status_value(state: &str) -> Value {
     value!({"state":state,"user_attested_independent_copy":state=="user-attested",
         "physical_copy_verified":false})
 }
-pub struct Confirmation<'a, 'd, 'g> {
+pub(crate) struct Confirmation<'a, 'd, 'g> {
     configuration: &'a Configuration,
     repository: &'a Repository<'d, 'g>,
     credential: &'a Credential,
@@ -189,7 +189,7 @@ pub struct Confirmation<'a, 'd, 'g> {
     key: String,
 }
 impl<'a, 'd, 'g> Confirmation<'a, 'd, 'g> {
-    pub fn open(
+    pub(crate) fn open(
         configuration: &'a Configuration,
         repository: &'a Repository<'d, 'g>,
         credential: &'a Credential,
@@ -234,7 +234,7 @@ impl<'a, 'd, 'g> Confirmation<'a, 'd, 'g> {
             "destination_pin_sha256":json::sha256(repository.public_bytes()?),"credential_identity":credential.binding(repository.storage())?}),
         )
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.exported.recheck()?;
         self.confirmed.recheck()?;
         require(
@@ -244,7 +244,7 @@ impl<'a, 'd, 'g> Confirmation<'a, 'd, 'g> {
         self.exported.recheck()?;
         self.confirmed.recheck()
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"user_attested_independent_copy":true,"physical_copy_verified":false,"repository_key_id":self.key}),

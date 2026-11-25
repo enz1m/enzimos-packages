@@ -23,7 +23,7 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str> {
 fn sha(v: &Value, key: &str) -> Result<()> {
     crate::identity::sha(text(v, key)?).map(|_| ())
 }
-pub fn file(v: &Value) -> Result<()> {
+pub(crate) fn file(v: &Value) -> Result<()> {
     let a = v
         .as_array()
         .ok_or_else(|| Error("native original file identity required".into()))?;
@@ -55,7 +55,7 @@ fn private_root(v: &Value) -> Result<()> {
         "private original Root file required",
     )
 }
-pub fn directory(v: &Value) -> Result<()> {
+pub(crate) fn directory(v: &Value) -> Result<()> {
     json::fields(v, "device inode mount mode uid gid")?;
     require(
         ["device", "inode", "mount"]
@@ -76,7 +76,7 @@ fn document(v: &Value) -> Result<()> {
     private_root(&v["identity"])?;
     sha(v, "sha256")
 }
-pub fn request(v: &Value) -> Result<()> {
+pub(crate) fn request(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema id stage task boot_id caller plan mount root repository header credential reader restic outer configuration consumer_input",
@@ -248,7 +248,7 @@ pub fn request(v: &Value) -> Result<()> {
         "native backup request bound",
     )
 }
-pub fn consumer(v: &Value, id: &str, length: u64) -> Result<()> {
+pub(crate) fn consumer(v: &Value, id: &str, length: u64) -> Result<()> {
     self::id(id)?;
     json::fields(v, "name parent directory mount identity")?;
     require(
@@ -296,7 +296,7 @@ pub fn descriptors(v: &Value) -> Result<usize> {
         + usize::from(!v["configuration"].is_null())
         + usize::from(!v["consumer_input"].is_null()))
 }
-pub fn frame(
+pub(crate) fn frame(
     v: &Value,
     request: &Value,
     sender: &enzimos_platform::fd_packet::Credentials,

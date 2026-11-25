@@ -308,7 +308,7 @@ pub struct Reserved<'a, 'b, 'c, 's, 'cfg, 'g> {
     scope: enzimos_platform::backup_worker_scope::Scope,
 }
 impl Reserved<'_, '_, '_, '_, '_, '_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.prepared.components()?;
         require(
             matches!(
@@ -356,7 +356,7 @@ impl Reserved<'_, '_, '_, '_, '_, '_> {
     /// Only the producer of this actual reserved worker may borrow these trees.
     /// Receiver-side original caller/OFD and private namespace checks are still
     /// required; this does not perform SCM transfer or attach a mount.
-    pub fn descriptors(
+    pub(crate) fn descriptors(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<BTreeMap<&str, std::os::fd::BorrowedFd<'_>>> {
@@ -372,13 +372,16 @@ impl Reserved<'_, '_, '_, '_, '_, '_> {
         self.recheck()?;
         Ok(files)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.prepared.value,"record_epoch":self.prepared.record.evidence()?}))
     }
     /// Release only our private descriptors after actual worker pidfd death and
     /// whole original cgroup emptiness. No guessed mount/snapshot deletion.
-    pub fn close(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<ReleasedDescriptors> {
+    pub(crate) fn close(
+        self,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<ReleasedDescriptors> {
         authorize()?;
         self.prepared.components()?;
         let closed = self.scope.close()?;
@@ -441,7 +444,7 @@ impl ReleasedDescriptors {
             "retired source descriptions differ from original captured transfer",
         )
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.closed.recheck()?;
         self.record.recheck()?;
         require(

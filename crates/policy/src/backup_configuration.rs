@@ -3,12 +3,12 @@
 use enzimos_platform::{Result, json, require};
 use serde_json::Value;
 
-pub const PATH: &str = "/etc/enzimos/backup.json";
+pub(crate) const PATH: &str = "/etc/enzimos/backup.json";
 pub(crate) const REPOSITORY: &str = "/backup-repository/restic";
 pub(crate) const PASSWORD: &str = "/etc/enzimos/backup.password";
 pub(crate) const LIMIT: usize = 32768;
 
-pub fn validate(value: &Value) -> Result<()> {
+pub(crate) fn validate(value: &Value) -> Result<()> {
     let row = value
         .as_object()
         .ok_or_else(|| enzimos_platform::Error("backup configuration object required".into()))?;
@@ -70,7 +70,7 @@ pub fn validate(value: &Value) -> Result<()> {
     Ok(())
 }
 
-pub fn decode(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<Value> {
     let value = json::decode(bytes, LIMIT)?;
     validate(&value)?;
     Ok(value)
@@ -113,13 +113,13 @@ impl Configuration {
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()
     }
-    pub fn value(&self) -> &Value {
+    pub(crate) fn value(&self) -> &Value {
         &self.value
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.original.evidence()
     }
-    pub fn public_bytes(&self) -> Result<&[u8]> {
+    pub(crate) fn public_bytes(&self) -> Result<&[u8]> {
         self.recheck()?;
         Ok(&self.original.body)
     }

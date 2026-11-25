@@ -4,7 +4,12 @@ use enzimos_platform::{Result, require};
 use serde_json::{Value, json};
 const OPTIONS: &str = "noatime,compress=zstd:3,discard=async";
 const QUIET: &str = "zswap.enabled=0 quiet splash plymouth.ignore-serial-consoles loglevel=0 rd.systemd.show_status=false systemd.show_status=false rd.udev.log_level=0 udev.log_level=0 vt.global_cursor_default=0";
-pub fn layout(filesystem: &str, boot: &str, luks: Option<&str>, diagnostic: bool) -> Result<Value> {
+pub(crate) fn layout(
+    filesystem: &str,
+    boot: &str,
+    luks: Option<&str>,
+    diagnostic: bool,
+) -> Result<Value> {
     crate::identity::uuid(filesystem)?;
     require(
         boot.len() == 9

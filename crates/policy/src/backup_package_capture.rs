@@ -472,7 +472,7 @@ impl Api {
 }
 /// Explicit close is mandatory. On uncertain ownership, Drop leaves the ALPM
 /// context and lock untouched until process death; it never unlinks a named file.
-pub struct Capture<'a, 'g> {
+pub(crate) struct Capture<'a, 'g> {
     attempt: &'a Attempt<'g>,
     operation: &'a files::Lock,
     library: Option<Library>,
@@ -487,7 +487,7 @@ pub struct Capture<'a, 'g> {
 }
 impl<'a, 'g> Capture<'a, 'g> {
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
-    pub fn acquire(
+    pub(crate) fn acquire(
         attempt: &'a Attempt<'g>,
         operation_lock: &'a files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -575,7 +575,7 @@ impl<'a, 'g> Capture<'a, 'g> {
         self.recheck()
     }
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         require(!self.closed, "package capture already closed")?;
         namespaces::initial()?;
         self.attempt.evidence()?;
@@ -626,7 +626,7 @@ impl<'a, 'g> Capture<'a, 'g> {
     /// Copy the actual local database while this original empty transaction
     /// still owns its native lock. Native pointers never leave the call.
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
-    pub fn installed_packages(&self) -> Result<BTreeMap<String, String>> {
+    pub(crate) fn installed_packages(&self) -> Result<BTreeMap<String, String>> {
         self.recheck()?;
         // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from the
         // isolated library with its ABI signature.
@@ -671,7 +671,7 @@ impl<'a, 'g> Capture<'a, 'g> {
         self.recheck()?;
         Ok(packages)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let l = self
             .library
@@ -682,7 +682,7 @@ impl<'a, 'g> Capture<'a, 'g> {
         )
     }
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
-    pub fn close(mut self) -> Result<()> {
+    pub(crate) fn close(mut self) -> Result<()> {
         self.recheck()?;
         require(
             // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from

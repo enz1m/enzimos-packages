@@ -79,7 +79,7 @@ impl<'a> Store<'a> {
     pub fn create(document: &Value, image: &File, lock: &'a files::Lock) -> Result<Self> {
         Self::create_authorized(document, image, lock, None, &mut || lock.recheck())
     }
-    pub fn create_authorized(
+    pub(crate) fn create_authorized(
         document: &Value,
         image: &File,
         lock: &'a files::Lock,
@@ -203,7 +203,7 @@ impl<'a> Store<'a> {
         )?;
         enzimos_platform::flock_identity::exclusive(lock.as_file())
     }
-    pub fn id(&self) -> &str {
+    pub(crate) fn id(&self) -> &str {
         self.current["id"]
             .as_str()
             .expect("update records are validated with a string id")
@@ -211,7 +211,7 @@ impl<'a> Store<'a> {
     pub fn current(&self) -> &Value {
         &self.current
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.caller.recheck()?;
         Self::verify_lock(self.lock, &self.lock_identity, self.lock_mount)?;
@@ -250,7 +250,7 @@ impl<'a> Store<'a> {
         )?;
         record::validate(&self.current, self.id())
     }
-    pub fn checkpoint(
+    pub(crate) fn checkpoint(
         &mut self,
         phase: &str,
         evidence: &Value,

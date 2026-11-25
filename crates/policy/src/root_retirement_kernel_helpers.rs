@@ -18,7 +18,7 @@ struct Setting {
     epoch: files::FileIdentity,
     flags: i32,
 }
-pub struct Disabled<'s> {
+pub(crate) struct Disabled<'s> {
     scope: &'s Scope,
     parent: File,
     parent_epoch: files::FileIdentity,
@@ -69,7 +69,7 @@ impl<'s> Disabled<'s> {
     /// Coldplug is fully reaped before this actual sole PID1 operation. An
     /// uncertain write is not retried or restored by Drop.
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat, write).")]
-    pub fn disable(scope: &'s Scope) -> Result<Self> {
+    pub(crate) fn disable(scope: &'s Scope) -> Result<Self> {
         scope.recheck()?;
         let parent =
             files::directory_relative(scope.original_proc()?, Path::new("sys/kernel"), Some(0))?;
@@ -153,7 +153,7 @@ impl<'s> Disabled<'s> {
         )?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.recheck()?;
         let named = files::directory_relative(
             self.scope.original_proc()?,

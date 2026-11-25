@@ -11,12 +11,12 @@ use std::{
     path::Path,
 };
 pub(crate) struct Descriptions<'a> {
-    pub top: &'a File,
-    pub target: &'a File,
-    pub parent: &'a File,
-    pub identity: &'a Value,
-    pub before: &'a Records,
-    pub objects: &'a [crate::root_retirement_objects::Original],
+    pub(crate) top: &'a File,
+    pub(crate) target: &'a File,
+    pub(crate) parent: &'a File,
+    pub(crate) identity: &'a Value,
+    pub(crate) before: &'a Records,
+    pub(crate) objects: &'a [crate::root_retirement_objects::Original],
 }
 pub(crate) fn selector(id: u64) -> Result<[u64; 512]> {
     require(
@@ -102,7 +102,7 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
     /// Consume the original preparation. An uncertain call is never retried,
     /// and no progress is adopted from a cold absent-name or in-flight row.
     #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
-    pub fn delete(self) -> Result<After<'j, 'a, 's>> {
+    pub(crate) fn delete(self) -> Result<After<'j, 'a, 's>> {
         self.recheck()?;
         let originals = self.entered.first_descriptions()?;
         let top = originals.top.try_clone()?;
@@ -239,7 +239,7 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.entered.recheck()?;
         let originals = self.entered.first_descriptions()?;
         require(
@@ -304,7 +304,7 @@ impl<'j, 'a, 's> After<'j, 'a, 's> {
             before,
         )
     }
-    pub fn advance(self) -> Result<Advanced<'j, 'a, 's>> {
+    pub(crate) fn advance(self) -> Result<Advanced<'j, 'a, 's>> {
         self.recheck()?;
         self.original.entered.advance_first(&self)?;
         let result = Advanced { original: self };
@@ -376,7 +376,7 @@ impl<'j, 'a, 's> After<'j, 'a, 's> {
         }
         Ok(())
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original
             .entered
             .original_seal()
@@ -413,7 +413,7 @@ impl<'j, 'a, 's> Advanced<'j, 'a, 's> {
     pub(crate) fn require_original_step(&self, step: &StepEntered<'j, 'a, 's>) -> Result<()> {
         self.original.require_original_step(step)
     }
-    pub fn begin_next(self) -> Result<Next<'j, 'a, 's>> {
+    pub(crate) fn begin_next(self) -> Result<Next<'j, 'a, 's>> {
         self.recheck()?;
         require(
             !self.original.original.remaining.is_empty(),
@@ -471,7 +471,7 @@ impl<'j, 'a, 's> Advanced<'j, 'a, 's> {
         self.original.recheck_physical()?;
         self.original.original.entered.require_first_advanced()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original
             .original
             .entered
@@ -488,7 +488,9 @@ impl<'j, 'a, 's> Advanced<'j, 'a, 's> {
     }
 }
 impl<'j, 'a, 's> Next<'j, 'a, 's> {
-    pub fn into_cursor(self) -> Result<crate::root_retirement_cursor::Executing<'j, 'a, 's>> {
+    pub(crate) fn into_cursor(
+        self,
+    ) -> Result<crate::root_retirement_cursor::Executing<'j, 'a, 's>> {
         self.recheck()?;
         let After {
             original,
@@ -556,7 +558,7 @@ impl<'j, 'a, 's> Next<'j, 'a, 's> {
             .entered
             .require_second_inflight()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original
             .original
             .original

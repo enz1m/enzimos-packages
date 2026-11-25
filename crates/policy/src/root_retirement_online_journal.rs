@@ -32,7 +32,7 @@ impl Phase {
             Self::Abandoned => "abandoned",
         }
     }
-    pub fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         [
             Self::Prepared,
             Self::Executing,
@@ -162,11 +162,11 @@ impl<'a> Journal<'a> {
         };
         Self::observe(guard, lock, id, phase)
     }
-    pub fn phase(&self) -> Phase {
+    pub(crate) fn phase(&self) -> Phase {
         self.phase
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         operation::root_only()?;
         crate::namespaces::initial()?;
         self.guard.recheck()?;
@@ -415,7 +415,7 @@ impl Published<'_> {
         self.recheck()?;
         Ok(&self.before)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         require(
             enzimos_platform::files::status_flags(&self.journal.folder) == self.directory_flags,
             "owned staging original directory description flags changed",
@@ -445,7 +445,7 @@ impl Published<'_> {
         self.predecessor.require_original_observation(original)?;
         self.recheck()
     }
-    pub fn record(&self) -> Result<&Value> {
+    pub(crate) fn record(&self) -> Result<&Value> {
         self.recheck()?;
         self.journal.record.value()
     }
@@ -502,7 +502,7 @@ pub(crate) fn validate_staging_transition(before: &Value, next: &Value, id: &str
 
 /// Completion retains the actual deleted predecessor and current complete inode.
 /// Only the consuming finish orchestrator may request its one publication.
-pub struct Completed<'a> {
+pub(crate) struct Completed<'a> {
     published: Published<'a>,
 }
 impl<'a> Journal<'a> {
@@ -520,7 +520,7 @@ impl<'a> Journal<'a> {
     }
 }
 impl Completed<'_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.published.recheck()
     }
     pub(crate) fn require_source(&self, guard: &Guard, lock: &files::Lock) -> Result<()> {
@@ -545,7 +545,7 @@ impl Completed<'_> {
     pub(crate) fn before(&self) -> Result<&Value> {
         self.published.before()
     }
-    pub fn record(&self) -> Result<&Value> {
+    pub(crate) fn record(&self) -> Result<&Value> {
         self.published.record()
     }
 }

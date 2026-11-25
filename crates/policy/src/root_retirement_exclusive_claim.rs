@@ -20,7 +20,7 @@ fn flags(file: &File) -> Result<i32> {
     )?;
     Ok(value)
 }
-pub struct Held<'a, 's> {
+pub(crate) struct Held<'a, 's> {
     mapping: &'a CreatedMapping<'s>,
     file: File,
     epoch: files::FileIdentity,
@@ -35,7 +35,7 @@ pub struct Released<'a, 's> {
 }
 impl<'a, 's> Held<'a, 's> {
     #[allow(unsafe_code, reason = "Linux syscall ABI (open).")]
-    pub fn acquire(mapping: &'a CreatedMapping<'s>) -> Result<Self> {
+    pub(crate) fn acquire(mapping: &'a CreatedMapping<'s>) -> Result<Self> {
         mapping.recheck()?;
         let (original, path) = mapping.original_mapper_node()?;
         let path = CString::new(path.as_os_str().as_encoded_bytes())
@@ -82,7 +82,7 @@ impl<'a, 's> Held<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.mapping.recheck()?;
         let (original, _) = self.mapping.original_mapper_node()?;
         require(
@@ -97,7 +97,7 @@ impl<'a, 's> Held<'a, 's> {
         self.mapping.recheck()
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (close, fcntl).")]
-    pub fn release(self) -> Result<Released<'a, 's>> {
+    pub(crate) fn release(self) -> Result<Released<'a, 's>> {
         self.recheck()?;
         let Self {
             mapping,
@@ -135,7 +135,7 @@ impl Released<'_, '_> {
         )?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.mapping.recheck()?;
         let (original, _) = self.mapping.original_mapper_node()?;
         require(

@@ -106,7 +106,7 @@ impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.components(authorize)?;
         require(
             *self.scope.binding()? == self.request["worker"],
@@ -260,7 +260,7 @@ impl ClosedRequest {
         self.recheck()?;
         self.closed.binding()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.closed.recheck()?;
         require(
             *self.record.value()? == self.value

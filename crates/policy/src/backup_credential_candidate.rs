@@ -55,7 +55,7 @@ impl<'g> Candidate<'g> {
             "next_file":files::identity(&file.metadata()?),
             "next_mount":enzimos_platform::mount_identity::id(file.as_fd(),true)?}))
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         require(
             self.metadata()? == self.original,
@@ -66,7 +66,7 @@ impl<'g> Candidate<'g> {
         self.recheck()?;
         Ok(&self.original["input_identity"])
     }
-    pub fn evidence(&self) -> Result<&Value> {
+    pub(crate) fn evidence(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.original)
     }

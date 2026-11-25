@@ -201,7 +201,7 @@ fn status_value(record: &Value, id: &str, boot: &str) -> Result<Value> {
     )
 }
 /// Closed System1 result; a value alone grants no cancellation authority.
-pub fn completion(id: &str) -> Result<Value> {
+pub(crate) fn completion(id: &str) -> Result<Value> {
     identity::safe_id(id)?;
     Ok(
         value!({"status":"delivery-grant-cancelled","grant_id":id,"output_removed":false,"copy_replayed":false}),

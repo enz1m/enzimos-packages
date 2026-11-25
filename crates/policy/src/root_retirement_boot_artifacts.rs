@@ -160,7 +160,7 @@ pub struct Original<'a, 's> {
     plan: contract::Restoration,
 }
 impl<'a, 's> Original<'a, 's> {
-    pub fn observe(
+    pub(crate) fn observe(
         scope: &'s Scope,
         kernel_boot: &'a root_retirement_kernel_boot::Original<'s>,
         running: &'a root_retirement_running_image::Original<'s>,
@@ -291,7 +291,7 @@ impl<'a, 's> Original<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.sources_recheck()?;
         let defaults = self
             .defaults
@@ -358,7 +358,7 @@ impl<'a, 's> Original<'a, 's> {
     }
     /// Consume actual original loader descriptions into their actual publications.
     /// An uncertain write leaves evidence for review; no Drop cleanup or retry.
-    pub fn restore_defaults(mut self) -> Result<Restored<'a, 's>> {
+    pub(crate) fn restore_defaults(mut self) -> Result<Restored<'a, 's>> {
         self.recheck()?;
         self.volume.writable()?;
         let defaults = self
@@ -477,7 +477,7 @@ impl Restored<'_, '_> {
         )?;
         self.recheck()
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         require(
             self.original

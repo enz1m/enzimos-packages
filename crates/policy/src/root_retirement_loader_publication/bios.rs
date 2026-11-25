@@ -1,7 +1,7 @@
 use super::*;
 
 impl<'a> PendingBios<'a> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.entry.recheck_body(authorize)?;
         let original = &self.entry.original;
         original.default_directories["loader"].recheck(&original.volume, "loader")?;
@@ -24,7 +24,10 @@ impl<'a> PendingBios<'a> {
         self.entry.recheck_body(authorize)
     }
     /// Consume the actual pending BIOS write through one checked replacement.
-    pub fn commit(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<CommittedBios<'a>> {
+    pub(crate) fn commit(
+        self,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<CommittedBios<'a>> {
         self.recheck(authorize)?;
         self.entry.original.protected.recheck_pending_bios(
             self.entry.original.receipt,
@@ -72,7 +75,7 @@ impl<'a> PendingBios<'a> {
 }
 
 impl<'a> CommittedBios<'a> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.entry.original.default_directories["loader"]
             .recheck(&self.entry.original.volume, "loader")?;
         self.recheck_body(None, authorize)
@@ -147,7 +150,7 @@ impl<'a> CommittedBios<'a> {
     }
     /// Default mode consumes the actual BIOS commit into one pending UEFI selection.
     /// One-shot mode requires a separate original firmware actor and cannot use this path.
-    pub fn prepare_defaults(
+    pub(crate) fn prepare_defaults(
         self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<PendingDefaults<'a>> {

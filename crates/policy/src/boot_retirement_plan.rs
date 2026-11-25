@@ -71,7 +71,7 @@ pub(crate) fn without_bios(text: &str, generation: &str) -> Result<String> {
     )?;
     Ok(rewritten)
 }
-pub fn retention(
+pub(crate) fn retention(
     data: &Value,
     generation: &str,
     boot: &str,
@@ -252,7 +252,7 @@ pub(crate) fn file_state(sha: &str) -> Result<String> {
     clippy::too_many_arguments,
     reason = "Each argument is one independently reviewed plan input."
 )]
-pub fn intent(
+pub(crate) fn intent(
     data: &Value,
     generation: &str,
     boot: &str,

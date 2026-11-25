@@ -139,7 +139,7 @@ impl<'a, 'c, 'g> Created<'a, 'c, 'g> {
             "uuid":object["uuid"],"parent_uuid":object["parent_uuid"]}),
         ))
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.capture.require_original(self.attempt, self.lock)?;
         self.packages.require_original(self.attempt, self.lock)?;
         self.lock.recheck()?;
@@ -178,7 +178,10 @@ impl<'a, 'c, 'g> Created<'a, 'c, 'g> {
     /// cooperating capture barriers are still held. Their later normal release
     /// cannot invalidate the factual capture evidence. This grants no deletion
     /// or completed backup, and has no observation/pathname constructor.
-    pub fn seal<F: FnMut() -> Result<()>>(mut self, authorize: &mut F) -> Result<Captured<'a, 'g>> {
+    pub(crate) fn seal<F: FnMut() -> Result<()>>(
+        mut self,
+        authorize: &mut F,
+    ) -> Result<Captured<'a, 'g>> {
         authorize()?;
         self.recheck()?;
         let mut next = self.value.clone();
@@ -216,7 +219,7 @@ impl<'a, 'c, 'g> Created<'a, 'c, 'g> {
 }
 /// An original readonly snapshot retained beyond normal capture-barrier release.
 /// The stored barrier evidence describes the completed capture interval only.
-pub struct Captured<'a, 'g> {
+pub(crate) struct Captured<'a, 'g> {
     snapshot: Snapshot<'a, 'g>,
     record: Retained,
     directory: File,
@@ -230,7 +233,7 @@ pub struct Captured<'a, 'g> {
     value: Value,
 }
 impl<'a, 'g> Captured<'a, 'g> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "captured-snapshot", || self.recheck_fresh())
     }
     fn recheck_fresh(&self) -> Result<()> {
@@ -265,7 +268,7 @@ impl<'a, 'g> Captured<'a, 'g> {
     }
     /// Consume this actual capture after typed worker/source retirement. Intent
     /// precedes the exact-ID ioctl; uncertain outcomes cannot reopen this actor.
-    pub fn retire_subvolume(
+    pub(crate) fn retire_subvolume(
         mut self,
         closed: &crate::backup_transfer_observation::ClosedObservation<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -311,22 +314,22 @@ impl<'a, 'g> Captured<'a, 'g> {
         retired.evidence()?;
         Ok(retired)
     }
-    pub fn dataset(&self) -> Result<&crate::backup_source_layout::Dataset> {
+    pub(crate) fn dataset(&self) -> Result<&crate::backup_source_layout::Dataset> {
         self.recheck()?;
         Ok(self.source.dataset())
     }
-    pub fn snapshot(&self) -> Result<&Snapshot<'a, 'g>> {
+    pub(crate) fn snapshot(&self) -> Result<&Snapshot<'a, 'g>> {
         self.recheck()?;
         Ok(&self.snapshot)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.value,"record_epoch":self.record.evidence()?}))
     }
 }
 /// Caller must retain the complete source inventory and package/Flatpak capture barriers.
 /// This creates one source only; it grants no transfer, deletion or completed backup.
-pub fn create<'a, 'c, 'g, F: FnMut() -> Result<()>>(
+pub(crate) fn create<'a, 'c, 'g, F: FnMut() -> Result<()>>(
     source: &'a Source<'g>,
     attempt: &'a Attempt<'g>,
     lock: &'a files::Lock,
@@ -476,7 +479,7 @@ pub fn create<'a, 'c, 'g, F: FnMut() -> Result<()>>(
 
 /// Original capture receipt plus actual removed subvolume. Metadata/stage cleanup
 /// is still pending; no filesystem pathname can construct this actor.
-pub struct Retired<'a, 'g> {
+pub(crate) struct Retired<'a, 'g> {
     directory: File,
     directory_shape: Shape,
     parent: File,
@@ -490,7 +493,7 @@ pub struct Retired<'a, 'g> {
 impl<'a, 'g> Retired<'a, 'g> {
     /// One-use metadata intent precedes both original metadata and empty-parent
     /// retirement. Any quarantined/partial outcome remains for explicit review.
-    pub fn retire_metadata(
+    pub(crate) fn retire_metadata(
         mut self,
         closed: &crate::backup_transfer_observation::ClosedObservation<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -531,7 +534,7 @@ impl<'a, 'g> Retired<'a, 'g> {
         retired.evidence()?;
         Ok(retired)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.lock.recheck()?;
         self.source.recheck()?;
         registry_recheck(self.source, &self.directory, self.directory_shape)?;
@@ -550,7 +553,7 @@ impl<'a, 'g> Retired<'a, 'g> {
 }
 
 /// One source snapshot retired. Aggregate capture/boot/stage cleanup still pending.
-pub struct MetadataRetired<'a, 'g> {
+pub(crate) struct MetadataRetired<'a, 'g> {
     snapshot: crate::backup_source::RemovedMetadata<'a, 'g>,
     record: Retained,
     value: Value,
@@ -562,7 +565,7 @@ pub struct MetadataRetired<'a, 'g> {
     lock: &'a files::Lock,
 }
 impl MetadataRetired<'_, '_> {
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.lock.recheck()?;
         self.source.recheck()?;
         registry_recheck(self.source, &self.directory, self.directory_shape)?;

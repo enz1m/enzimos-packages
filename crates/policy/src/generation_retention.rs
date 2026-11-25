@@ -37,12 +37,12 @@ const TRANSIENT_FOLDERS: [&str; 2] = ["boot-stage", "module-views"];
 const MAX_TREE_DEPTH: usize = 32;
 const MAX_TREE_MEMBERS: u64 = 1_000_000;
 /// Generation count after which the next update (two fresh generations) fits.
-pub const fn target() -> usize {
+pub(crate) const fn target() -> usize {
     BOOT_GENERATIONS - 2
 }
 /// Retirement candidates in order: ready generations older than the newest
 /// `keep` by ordinal, oldest first, excluding explicitly protected names.
-pub fn candidates(
+pub(crate) fn candidates(
     generations: &Value,
     keep: usize,
     protected: &BTreeSet<String>,
@@ -130,7 +130,7 @@ fn transient_count(folder: &str) -> Result<usize> {
     )
 }
 /// Whether the next update would be refused by a retention bound.
-pub fn needed() -> Result<bool> {
+pub(crate) fn needed() -> Result<bool> {
     let generations = catalog_generations()?
         .as_object()
         .map_or(0, serde_json::Map::len);

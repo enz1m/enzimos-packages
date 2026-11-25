@@ -14,11 +14,11 @@ pub struct Observation {
     worker: Value,
     output: Option<File>,
 }
-pub enum Incoming {
+pub(crate) enum Incoming {
     Challenge(Message),
     Observed(Observation),
 }
-pub fn receive(
+pub(crate) fn receive(
     channel: &Packet,
     scope: &Scope,
     request: &Value,
@@ -141,7 +141,7 @@ impl Observation {
     pub fn value(&self) -> &Value {
         &self.report["result"]
     }
-    pub fn report(&self) -> &Value {
+    pub(crate) fn report(&self) -> &Value {
         &self.report
     }
     /// Legacy reports intentionally have no stdout/publication authority.
@@ -284,15 +284,15 @@ impl ClosedObservation<'_> {
             &self.original.request["context"]["input_sha256"],
         )
     }
-    pub fn original_summary(&self) -> Result<Value> {
+    pub(crate) fn original_summary(&self) -> Result<Value> {
         self.recheck()?;
         Ok(self.original.output()?.1)
     }
-    pub fn original_log(&self) -> Result<Vec<u8>> {
+    pub(crate) fn original_log(&self) -> Result<Vec<u8>> {
         self.recheck()?;
         Ok(self.original.output()?.0)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"request_sha256":json::fingerprint(&self.original.request)?,

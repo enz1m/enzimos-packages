@@ -49,7 +49,7 @@ fn epoch(v: &Value, limit: u64) -> Result<()> {
     )?;
     crate::identity::sha(text(v, "bytes_sha256")?).map(|_| ())
 }
-pub fn context(v: &Value) -> Result<()> {
+pub(crate) fn context(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema role id receipt_id direction snapshot remote source destination local_configuration local_pin local_root local_repository local_header local_credential operation_lock remote_authenticated copy_complete worker_closed receipt_complete scheduler_enabled automatic_retry",
@@ -224,7 +224,7 @@ pub(crate) fn remote<'v>(remote: &'v Value, source: &Value) -> Result<&'v Vec<Va
     }
     Ok(epochs)
 }
-pub fn request(v: &Value) -> Result<()> {
+pub(crate) fn request(v: &Value) -> Result<()> {
     json::fields(v, "schema kind id boot_id worker context")?;
     require(
         v["schema"].as_u64() == Some(1) && v["kind"] == "remote-copy",
@@ -241,7 +241,7 @@ pub fn request(v: &Value) -> Result<()> {
         "bounded sealed remote request",
     )
 }
-pub fn frame(v: &Value, r: &Value, sender: &Credentials) -> Result<Vec<u32>> {
+pub(crate) fn frame(v: &Value, r: &Value, sender: &Credentials) -> Result<Vec<u32>> {
     request(r)?;
     json::fields(v, "schema kind id request_sha256 descriptor_numbers intent")?;
     require(

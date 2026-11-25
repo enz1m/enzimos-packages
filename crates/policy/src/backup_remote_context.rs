@@ -7,7 +7,7 @@ use crate::{
 use enzimos_platform::{Result, files, require};
 use serde_json::{Value, json as value};
 use std::path::Path;
-pub struct Context<'a> {
+pub(crate) struct Context<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
     inputs: Inputs,
@@ -18,7 +18,7 @@ pub struct Context<'a> {
     original: Value,
 }
 impl<'a> Context<'a> {
-    pub fn observe(
+    pub(crate) fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -100,27 +100,30 @@ impl<'a> Context<'a> {
             "remote_identity_authenticated":false,"copy_complete":false,"worker_closed":false,"scheduler_enabled":false}),
         )
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         require(
             self.current(authorize)? == self.original,
             "original remote context changed; no replacement adoption/replay",
         )
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.original)
     }
     /// Original actual descriptions only; the future reservation must still
     /// prove sender OFDs, durably enter one send and close the actual worker scope.
-    pub fn configuration(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
+    pub(crate) fn configuration(
+        &self,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<&Value> {
         self.recheck(authorize)?;
         self.inputs.configuration(self.guard)
     }
-    pub fn binding(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
+    pub(crate) fn binding(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         self.inputs.binding(self.guard)
     }
-    pub fn descriptors(
+    pub(crate) fn descriptors(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<std::collections::BTreeMap<&'static str, std::os::fd::BorrowedFd<'_>>> {
@@ -166,7 +169,7 @@ impl<'a> Context<'a> {
     ) -> Result<()> {
         self.caller.require_description(fd, number)
     }
-    pub fn compare_identity_data(
+    pub(crate) fn compare_identity_data(
         &self,
         observed: &Value,
         authorize: &mut dyn FnMut() -> Result<()>,

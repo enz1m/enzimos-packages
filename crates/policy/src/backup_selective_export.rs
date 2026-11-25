@@ -47,7 +47,7 @@ fn space(guard: &Guard) -> Result<()> {
     )
 }
 /// Read-only admission; an existing ID or unsafe/crowded registry always refuses.
-pub fn preflight(guard: &Guard, id: &str) -> Result<()> {
+pub(crate) fn preflight(guard: &Guard, id: &str) -> Result<()> {
     crate::operation::root_only()?;
     crate::namespaces::initial()?;
     crate::identity::safe_id(id)?;
@@ -154,7 +154,7 @@ impl<'r, 'a, 'g> Staging<'r, 'a, 'g> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.context.recheck(authorize)?;
         require(
             *self.context.evidence(authorize)? == self.original,

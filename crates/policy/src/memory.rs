@@ -156,7 +156,7 @@ fn disk_reserve(swaps: &str, swap_total: u64) -> Option<u64> {
         .then_some(disk)
 }
 
-pub fn arguments(mode: &str) -> Result<Vec<String>> {
+pub(crate) fn arguments(mode: &str) -> Result<Vec<String>> {
     let (memory, swap, reserve) = capacity()?;
     arguments_for_capacity(mode, memory, swap, reserve)
 }

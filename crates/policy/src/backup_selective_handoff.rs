@@ -142,7 +142,7 @@ impl Handoff {
         Ok(this)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (flock).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         self.caller.recheck()?;
@@ -322,7 +322,7 @@ impl Handoff {
         self.recheck()?;
         Ok(&self.caller)
     }
-    pub fn repository_descriptor(&self) -> Result<&File> {
+    pub(crate) fn repository_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.files[4])
     }
@@ -330,7 +330,7 @@ impl Handoff {
         self.recheck()?;
         Ok(&self.files[5])
     }
-    pub fn consumer_descriptor(&self) -> Result<&File> {
+    pub(crate) fn consumer_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.files[6])
     }

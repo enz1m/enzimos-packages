@@ -39,7 +39,7 @@ fn header(line: &str) -> Result<Option<&str>> {
     require(head.len() > 1, "empty power section")?;
     Ok(Some(head.strip_prefix('[').unwrap_or(head).trim()))
 }
-pub fn parse(text: &str) -> Result<(String, bool)> {
+pub(crate) fn parse(text: &str) -> Result<(String, bool)> {
     require(
         text.len() <= 65536 && !text.contains('\0'),
         "power configuration bound",
@@ -87,7 +87,7 @@ pub fn parse(text: &str) -> Result<(String, bool)> {
     };
     Ok((action.into(), risk))
 }
-pub fn replacement(text: &str, action: &str) -> Result<String> {
+pub(crate) fn replacement(text: &str, action: &str) -> Result<String> {
     parse(text)?;
     let configured = ACTIONS
         .iter()

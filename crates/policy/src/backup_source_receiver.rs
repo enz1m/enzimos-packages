@@ -85,7 +85,7 @@ pub struct PreparedChild<'a, 'b> {
     attachment: std::sync::Arc<enzimos_platform::backup_mount_child::Prepared>,
 }
 impl PreparedChild<'_, '_> {
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         self.received.recheck_partial()?;
         require(
@@ -404,7 +404,7 @@ impl<'a> Received<'a> {
         }
         Ok(())
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.recheck_partial()?;
         require(
             self.value["phase"] == "descriptors-admitted"

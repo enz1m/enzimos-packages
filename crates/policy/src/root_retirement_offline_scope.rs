@@ -201,7 +201,7 @@ impl Scope {
         self.recheck()?;
         Ok(&self.proc)
     }
-    pub fn observe() -> Result<Self> {
+    pub(crate) fn observe() -> Result<Self> {
         operation::root_only()?;
         require(
             enzimos_platform::process_identity::current_pid() == 1,
@@ -237,7 +237,7 @@ impl Scope {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         operation::root_only()?;
         require(
             enzimos_platform::process_identity::current_pid() == 1,
@@ -367,7 +367,11 @@ impl<'a> Mounts<'a> {
         self.recheck()?;
         Ok(self.filesystem.clone())
     }
-    pub fn observe(scope: &'a Scope, original_top: &File, filesystem_uuid: &str) -> Result<Self> {
+    pub(crate) fn observe(
+        scope: &'a Scope,
+        original_top: &File,
+        filesystem_uuid: &str,
+    ) -> Result<Self> {
         scope.recheck()?;
         crate::identity::uuid(filesystem_uuid)?;
         let top = original_top.try_clone()?;
@@ -407,7 +411,7 @@ impl<'a> Mounts<'a> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.recheck()?;
         let named = files::directory(Path::new(OFFLINE_TOP), Some(0))?;
         require(

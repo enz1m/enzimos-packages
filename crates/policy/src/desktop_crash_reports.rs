@@ -27,7 +27,7 @@ fn text(v: &Value, n: usize) -> String {
         .take(n)
         .collect()
 }
-pub fn reports(body: &[u8], uid: u32) -> Result<Value> {
+pub(crate) fn reports(body: &[u8], uid: u32) -> Result<Value> {
     require(body.len() <= LIMIT, "journal response exceeds bound")?;
     let body =
         std::str::from_utf8(body).map_err(|_| Error("invalid journal response text".into()))?;

@@ -174,7 +174,7 @@ pub struct Origins<'a, 's> {
     jobs: Registry,
 }
 impl<'a, 's> Origins<'a, 's> {
-    pub fn observe(control: &'a Control<'a, 's>) -> Result<Self> {
+    pub(crate) fn observe(control: &'a Control<'a, 's>) -> Result<Self> {
         control.recheck()?;
         let fs = enzimos_platform::json::string(
             &crate::filesystem::observe(control.descriptor()?.as_fd())?["filesystem_uuid"],
@@ -190,7 +190,7 @@ impl<'a, 's> Origins<'a, 's> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.control.recheck()?;
         require(
             crate::filesystem::observe(self.control.descriptor()?.as_fd())?["filesystem_uuid"]
@@ -211,7 +211,7 @@ impl<'a, 's> Origins<'a, 's> {
     }
     /// Join ownership only to original retained records and actual target identity.
     /// Result remains comparison data; current loader/kernel protection is separate.
-    pub fn require_owner(&self, record: &Value, actual_root: &Value) -> Result<()> {
+    pub(crate) fn require_owner(&self, record: &Value, actual_root: &Value) -> Result<()> {
         self.recheck()?;
         crate::root_retirement_record::validate(record, record["id"].as_str().unwrap_or(""))?;
         require(

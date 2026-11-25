@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 pub(crate) const KIND: &str = "selective-file-export";
 pub(crate) const LIMIT: usize = 65536;
-pub const DESCRIPTORS: usize = 11;
+pub(crate) const DESCRIPTORS: usize = 11;
 pub(crate) const ROLES: [&str; 9] = [
     "caller-pidfd",
     "caller-image",
@@ -127,7 +127,7 @@ pub(crate) fn context_kind(v: &Value, kind: Kind) -> Result<()> {
         "selective context bound",
     )
 }
-pub fn request(v: &Value) -> Result<()> {
+pub(crate) fn request(v: &Value) -> Result<()> {
     json::fields(v, "schema kind id boot_id worker context")?;
     require(
         v["schema"] == 1,
@@ -144,7 +144,7 @@ pub fn request(v: &Value) -> Result<()> {
         "sealed selective request bound",
     )
 }
-pub fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<Vec<u32>> {
+pub(crate) fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<Vec<u32>> {
     request(request_value)?;
     json::fields(v, "schema kind id request_sha256 descriptor_numbers intent")?;
     require(

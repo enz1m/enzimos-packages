@@ -263,7 +263,7 @@ pub mod update_apply_runtime;
 pub mod update_apply_store;
 pub mod update_boot_stage;
 pub mod update_cohort;
-mod update_cohort_root;
+pub mod update_cohort_root;
 pub mod update_plan;
 mod update_resolution;
 mod update_resources;

@@ -230,7 +230,7 @@ impl<'a> Configuration<'a> {
         self.recheck()?;
         Ok(&self.bytes)
     }
-    pub fn value(&self) -> Result<Value> {
+    pub(crate) fn value(&self) -> Result<Value> {
         self.recheck()?;
         json::decode(&self.bytes, LIMIT)
     }

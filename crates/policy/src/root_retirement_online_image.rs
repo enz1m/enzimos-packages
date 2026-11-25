@@ -154,7 +154,7 @@ impl<'a> Image<'a> {
         published.require_source(guard, lock)?;
         self.recheck_staged(published, authorize)
     }
-    pub fn staged_record(
+    pub(crate) fn staged_record(
         &self,
         published: &crate::root_retirement_online_journal::Published<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -162,10 +162,10 @@ impl<'a> Image<'a> {
         self.recheck_staged(published, authorize)?;
         Ok(&self.record)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.recheck_inner(None, authorize)
     }
-    pub fn recheck_staged(
+    pub(crate) fn recheck_staged(
         &self,
         published: &crate::root_retirement_online_journal::Published<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -237,11 +237,11 @@ impl<'a> Image<'a> {
             self.references.recheck(authorize)
         }
     }
-    pub fn record(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
+    pub(crate) fn record(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.record)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
             value!({"record":self.record,"directory_epoch":self.epoch,"directory_flags":self.folder_flags,"member_flags":self.member_flags,"boot_uuid":self.volume.uuid,"mount":self.volume.unique,

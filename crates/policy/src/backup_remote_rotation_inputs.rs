@@ -24,7 +24,7 @@ pub enum Role {
     SharePassword,
 }
 impl Role {
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::CurrentConfiguration => "backup-remote.json",
             Self::StagedConfiguration => "backup-remote-rotation.json",
@@ -77,7 +77,7 @@ pub struct Object {
     credential: Option<Value>,
 }
 impl Object {
-    pub fn observe(guard: &Guard, role: Role) -> Result<Option<Self>> {
+    pub(crate) fn observe(guard: &Guard, role: Role) -> Result<Option<Self>> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         guard.recheck()?;
@@ -162,7 +162,7 @@ impl Object {
         Ok(Some(this))
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
-    pub fn recheck(&self, guard: &Guard) -> Result<()> {
+    pub(crate) fn recheck(&self, guard: &Guard) -> Result<()> {
         guard.recheck()?;
         let parent = files::directory(Path::new("/etc/enzimos"), Some(0))?;
         let named = files::open_relative(&self.parent, Path::new(self.role.name()))?;
@@ -201,26 +201,26 @@ impl Object {
     pub fn role(&self) -> Role {
         self.role
     }
-    pub fn configuration(&self, guard: &Guard) -> Result<&Value> {
+    pub(crate) fn configuration(&self, guard: &Guard) -> Result<&Value> {
         self.recheck(guard)?;
         self.decoded.as_ref().ok_or_else(|| {
             enzimos_platform::Error("remote rotation configuration role required".into())
         })
     }
-    pub fn credential_identity(&self, guard: &Guard) -> Result<&Value> {
+    pub(crate) fn credential_identity(&self, guard: &Guard) -> Result<&Value> {
         self.recheck(guard)?;
         self.credential.as_ref().ok_or_else(|| {
             enzimos_platform::Error("remote rotation credential role required".into())
         })
     }
-    pub fn public_sha256(&self, guard: &Guard) -> Result<String> {
+    pub(crate) fn public_sha256(&self, guard: &Guard) -> Result<String> {
         self.recheck(guard)?;
         self.public
             .as_ref()
             .map(|bytes| json::sha256(bytes))
             .ok_or_else(|| enzimos_platform::Error("credential hashing refused".into()))
     }
-    pub fn evidence(&self, guard: &Guard) -> Result<Value> {
+    pub(crate) fn evidence(&self, guard: &Guard) -> Result<Value> {
         self.recheck(guard)?;
         Ok(
             value!({"role":self.role.name(),"epoch":self.epoch,"parent":self.shape,"mount":self.mount,
@@ -228,7 +228,7 @@ impl Object {
             "credential_identity":self.credential,"credential_bytes_read":false}),
         )
     }
-    pub fn require_distinct(&self, other: &Self, guard: &Guard) -> Result<()> {
+    pub(crate) fn require_distinct(&self, other: &Self, guard: &Guard) -> Result<()> {
         self.recheck(guard)?;
         other.recheck(guard)?;
         require(
@@ -239,7 +239,7 @@ impl Object {
 }
 /// Original complete fixed-name inventory, including each originally absent slot.
 /// Registry data may classify these actors but never supplies a File constructor.
-pub struct Inventory {
+pub(crate) struct Inventory {
     parent: File,
     shape: Shape,
     mount: u64,
@@ -248,7 +248,7 @@ pub struct Inventory {
     removed: Vec<RemovedObject>,
 }
 impl Inventory {
-    pub fn observe(guard: &Guard) -> Result<Self> {
+    pub(crate) fn observe(guard: &Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         guard.recheck()?;
@@ -281,7 +281,7 @@ impl Inventory {
         this.recheck(guard)?;
         Ok(this)
     }
-    pub fn recheck(&self, guard: &Guard) -> Result<()> {
+    pub(crate) fn recheck(&self, guard: &Guard) -> Result<()> {
         guard.recheck()?;
         let named = files::directory(Path::new("/etc/enzimos"), Some(0))?;
         require(
@@ -313,7 +313,7 @@ impl Inventory {
         }
         guard.recheck()
     }
-    pub fn object(&self, role: Role, guard: &Guard) -> Result<Option<&Object>> {
+    pub(crate) fn object(&self, role: Role, guard: &Guard) -> Result<Option<&Object>> {
         self.recheck(guard)?;
         Ok(self
             .objects
@@ -323,7 +323,7 @@ impl Inventory {
             .1
             .as_ref())
     }
-    pub fn evidence(&self, guard: &Guard) -> Result<Value> {
+    pub(crate) fn evidence(&self, guard: &Guard) -> Result<Value> {
         self.recheck(guard)?;
         let mut objects = serde_json::Map::new();
         for (role, object) in &self.objects {
@@ -344,7 +344,12 @@ impl Inventory {
     /// Read-only candidate data derived from actual original fixed inputs. No
     /// publication/mutation authority follows; migration must also retain the
     /// original legacy journal/pin and independently authenticate vendor results.
-    pub fn legacy_candidate(&self, legacy: &Value, pin: &Value, guard: &Guard) -> Result<Value> {
+    pub(crate) fn legacy_candidate(
+        &self,
+        legacy: &Value,
+        pin: &Value,
+        guard: &Guard,
+    ) -> Result<Value> {
         crate::backup_remote_record::rotation(legacy)?;
         crate::backup_remote_record::pin(pin)?;
         require(
@@ -465,7 +470,7 @@ impl Inventory {
         self.recheck(guard)?;
         Ok(candidate)
     }
-    pub fn state(&self, record: &Value, guard: &Guard) -> Result<[Option<&'static str>; 6]> {
+    pub(crate) fn state(&self, record: &Value, guard: &Guard) -> Result<[Option<&'static str>; 6]> {
         crate::backup_remote_record::rotation(record)?;
         require(
             record["schema"] == 2,
@@ -787,7 +792,7 @@ impl Inventory {
     }
 }
 /// Endpoint syntax checks are pure data validation, never an actor constructor.
-pub fn staged_endpoint(current: &Value, staged: &Value) -> Result<()> {
+pub(crate) fn staged_endpoint(current: &Value, staged: &Value) -> Result<()> {
     endpoint::validate(current)?;
     endpoint::validate(staged)?;
     for key in ["server", "share", "user", "domain"] {

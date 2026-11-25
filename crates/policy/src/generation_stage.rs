@@ -28,7 +28,7 @@ pub struct Stage {
     filesystem: Value,
     inputs: BTreeMap<String, (File, files::FileIdentity)>,
     kernels: BTreeMap<String, (File, files::FileIdentity)>,
-    pub material: Value,
+    pub(crate) material: Value,
 }
 fn shape(directory: &File) -> Result<Value> {
     let m = directory.metadata()?;
@@ -40,7 +40,7 @@ fn shape(directory: &File) -> Result<Value> {
         value!({"inode":[m.dev(),m.ino(),m.mode(),m.uid(),m.gid()],"mount":mount_identity::id(directory.as_fd(),true)?}),
     )
 }
-pub fn inventory(root: &File) -> Result<String> {
+pub(crate) fn inventory(root: &File) -> Result<String> {
     let result = process::run_with_fds(
         "/usr/bin/pacman",
         &["--root", "@fd:0", "-Q"],
@@ -78,7 +78,7 @@ pub fn initrd_release(body: &[u8], release: &str) -> Result<()> {
     )
 }
 impl Stage {
-    pub fn observe(
+    pub(crate) fn observe(
         path: &Path,
         generation: &str,
         kernels: &Value,
@@ -184,7 +184,7 @@ impl Stage {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         require(
             shape(&self.directory)? == self.directory_identity
                 && shape(&files::directory(&self.path, Some(0))?)? == self.directory_identity,
@@ -227,7 +227,7 @@ impl Stage {
         }
         Ok(())
     }
-    pub fn filesystem_uuid(&self) -> &Value {
+    pub(crate) fn filesystem_uuid(&self) -> &Value {
         &self.filesystem["filesystem_uuid"]
     }
     pub fn copy(&self, destination: &File) -> Result<()> {

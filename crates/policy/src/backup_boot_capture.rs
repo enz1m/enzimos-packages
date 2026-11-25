@@ -574,7 +574,7 @@ fn copy_tree(
     source.recheck()?;
     Ok(Value::Object(hashes))
 }
-pub struct Captured<'s, 'g> {
+pub(crate) struct Captured<'s, 'g> {
     snapshot: Snapshot<'s, 'g>,
     attempt: &'s Attempt<'g>,
     lock: &'s files::Lock,
@@ -649,7 +649,7 @@ impl<'s, 'g> Captured<'s, 'g> {
         retired.evidence()?;
         Ok(retired)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "boot-capture", || self.recheck_fresh())
     }
     fn recheck_fresh(&self) -> Result<()> {
@@ -729,11 +729,11 @@ impl<'s, 'g> Captured<'s, 'g> {
             "original boot/source capture pair required",
         )
     }
-    pub fn descriptor(&self) -> Result<&File> {
+    pub(crate) fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.output.nodes[0].file)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.value,"record_epoch":self.record.evidence()?}))
     }

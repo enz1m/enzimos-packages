@@ -42,7 +42,7 @@ pub(crate) fn installed_kernels() -> Result<Value> {
     )?;
     Ok(result)
 }
-pub fn options(body: &str, root: &str) -> Result<String> {
+pub(crate) fn options(body: &str, root: &str) -> Result<String> {
     require(
         body.len() <= 65536 && !body.contains('\0'),
         "actual kernel options bound",
@@ -192,10 +192,10 @@ impl Plan {
     pub fn document(&self) -> &Value {
         &self.document
     }
-    pub fn admitted(&self) -> &Admitted {
+    pub(crate) fn admitted(&self) -> &Admitted {
         &self.admitted
     }
-    pub fn image(&self) -> &File {
+    pub(crate) fn image(&self) -> &File {
         &self.image
     }
     pub fn recheck_before_mutation(&self) -> Result<()> {

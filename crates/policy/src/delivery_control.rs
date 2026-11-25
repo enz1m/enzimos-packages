@@ -315,7 +315,7 @@ fn deliver_scope<F: FnMut() -> Result<()>>(
     Ok(result)
 }
 /// Closed System1 result data; no grant or output authority is created here.
-pub fn completion(id: &str, uid: u32, bytes: u64, digest: &str) -> Result<Value> {
+pub(crate) fn completion(id: &str, uid: u32, bytes: u64, digest: &str) -> Result<Value> {
     identity::safe_id(id)?;
     identity::sha(digest)?;
     require(

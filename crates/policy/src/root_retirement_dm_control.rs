@@ -318,7 +318,7 @@ impl OriginalName {
         Ok(self)
     }
 }
-pub struct Original<'s> {
+pub(crate) struct Original<'s> {
     scope: &'s Scope,
     file: File,
     epoch: files::FileIdentity,
@@ -367,7 +367,7 @@ impl<'s> Original<'s> {
         unsafe_code,
         reason = "Linux syscall ABI (fstatfs, ioctl, major, minor)."
     )]
-    pub fn observe(verified: &Verified<'_, '_, 's>) -> Result<Self> {
+    pub(crate) fn observe(verified: &Verified<'_, '_, 's>) -> Result<Self> {
         verified.recheck()?;
         require(
             std::mem::size_of::<Header>() == 312
@@ -461,7 +461,7 @@ impl<'s> Original<'s> {
         Ok(result)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.scope.recheck()?;
         self.name.recheck()?;
         self.recheck_descriptions()?;
@@ -529,7 +529,7 @@ impl<'s> Original<'s> {
         self.recheck()?;
         Ok(self.file.as_raw_fd())
     }
-    pub fn prepare_close(
+    pub(crate) fn prepare_close(
         self,
         unmounted: ReleasedMount<'s>,
         mapping: &CreatedMapping<'_>,
@@ -547,7 +547,7 @@ impl<'s> Original<'s> {
 impl<'s> CloseReady<'s> {
     /// Close only the actual original mapper FD after the actual normal unmount.
     /// Kernel mapping and fixed name remain for a separate consuming removal.
-    pub fn close_description<'m>(
+    pub(crate) fn close_description<'m>(
         self,
         mapping: CreatedMapping<'m>,
     ) -> Result<DescriptionClosed<'s, 'm>> {
@@ -561,7 +561,7 @@ impl<'s> CloseReady<'s> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.unmounted.recheck()?;
         self.control.recheck()
     }
@@ -616,7 +616,7 @@ impl<'s, 'm> DescriptionClosed<'s, 'm> {
     /// One nondeferred removal of the actual closed original mapper. Errors are
     /// terminal and leave artifacts for review; this method never retries.
     #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
-    pub fn remove(self) -> Result<Removed<'s, 'm>> {
+    pub(crate) fn remove(self) -> Result<Removed<'s, 'm>> {
         self.recheck()?;
         let DescriptionClosed { original, closed } = self;
         let CloseReady {
@@ -653,7 +653,7 @@ impl<'s, 'm> DescriptionClosed<'s, 'm> {
         Ok(result)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.closed.recheck()?;
         self.original.recheck()?;
         let control = &self.original.control;
@@ -687,7 +687,7 @@ impl<'s, 'm> DescriptionClosed<'s, 'm> {
     }
 }
 impl Removed<'_, '_> {
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.source.recheck()?;
         self.unmounted.recheck()?;
         require(

@@ -102,7 +102,7 @@ impl<'a, 's> Publications<'a, 's> {
         )?;
         self.recheck()
     }
-    pub fn observe(
+    pub(crate) fn observe(
         control: &'a Control<'a, 's>,
         ledgers: &'a Ledgers<'a, 's>,
         loaders: &'a Loaders<'a, 's>,
@@ -197,7 +197,7 @@ impl<'a, 's> Publications<'a, 's> {
         result.recheck()?;
         Ok(result)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.ledgers.require_original_control(self.control)?;
         self.loaders.require_original_boot(self.boot)?;
         self.loaders.require_original_ledgers(self.ledgers)?;
@@ -248,7 +248,7 @@ impl<'a, 's> Publications<'a, 's> {
         }
         self.ledgers.require_original_control(self.control)
     }
-    pub fn require_unmentioned(
+    pub(crate) fn require_unmentioned(
         &self,
         targets: &crate::root_retirement_offline_targets::Targets<'a, 's>,
     ) -> Result<()> {

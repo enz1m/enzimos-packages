@@ -258,7 +258,7 @@ pub fn finish<F: FnMut() -> Result<()>>(
     completion(id)
 }
 /// Closed System1 result, independent of the more detailed policy CLI response.
-pub fn completion(id: &str) -> Result<Value> {
+pub(crate) fn completion(id: &str) -> Result<Value> {
     records::job_id(id)?;
     Ok(value!({"id":id,"status":"recovery-run-complete","old_roots_retired":false}))
 }
