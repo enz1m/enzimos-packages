@@ -330,6 +330,8 @@ impl Mask {
             CString::new(MASK).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::stat = unsafe { std::mem::zeroed() };
+        // SAFETY: `leaf` is a NUL-terminated CString, `status` is a writable `libc::stat`, and
+        // `parent` stays open.
         let found = unsafe {
             libc::fstatat(
                 parent.as_raw_fd(),
@@ -385,6 +387,7 @@ impl Mask {
     fn retain_link(&mut self) -> Result<()> {
         let leaf =
             CString::new(MASK).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        // SAFETY: `leaf` is a NUL-terminated C string and `self.parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 self.parent.as_raw_fd(),
@@ -393,6 +396,7 @@ impl Mask {
             )
         };
         require(fd >= 0, "original updater mask handle unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(fd) };
         let m = file.metadata()?;
         require(
@@ -433,6 +437,8 @@ impl Mask {
             // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
             let mut status: libc::stat = unsafe { std::mem::zeroed() };
             require(
+                // SAFETY: `leaf` is a NUL-terminated CString, the stat buffer is writable, and
+                // `self.parent` stays open.
                 unsafe {
                     libc::fstatat(
                         self.parent.as_raw_fd(),
@@ -450,6 +456,8 @@ impl Mask {
             let leaf = CString::new(MASK)
                 .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             let mut target = [0u8; 32];
+            // SAFETY: `leaf` is NUL-terminated, the buffer pointer and length describe `target`,
+            // and `self.parent` stays open.
             let count = unsafe {
                 libc::readlinkat(
                     self.parent.as_raw_fd(),
@@ -495,6 +503,8 @@ impl Mask {
             CString::new(MASK).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         if self.original.is_some() {
             require(
+                // SAFETY: `leaf` is a NUL-terminated C string and `self.parent` keeps the
+                // descriptor open.
                 unsafe { libc::unlinkat(self.parent.as_raw_fd(), leaf.as_ptr(), 0) } == 0,
                 "owned updater unit unlink uncertain; no replay",
             )?;
@@ -510,6 +520,7 @@ impl Mask {
         }
         self.parent()?;
         require(
+            // SAFETY: Both paths are NUL-terminated and `self.parent` keeps the descriptor open.
             unsafe {
                 libc::symlinkat(
                     c"/dev/null".as_ptr(),

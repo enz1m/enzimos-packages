@@ -26,6 +26,7 @@ const FOLDER: &str = "backup-complete-stages";
 fn open_member(parent: &File, name: &std::ffi::OsStr, flags: i32) -> Result<File> {
     let name =
         CString::new(name.as_bytes()).map_err(|_| Error("replacement member encoding".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -34,6 +35,7 @@ fn open_member(parent: &File, name: &std::ffi::OsStr, flags: i32) -> Result<File
         )
     };
     require(fd >= 0, "original replacement member unavailable")?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(fd) })
 }
 fn checked_mount(file: &File, mount: u64) -> Result<()> {
@@ -86,6 +88,8 @@ fn remove_contents(
                 .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             authorize()?;
             require(
+                // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor
+                // open.
                 unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
                     == 0,
                 "owned restored metadata directory removal failed",
@@ -105,6 +109,8 @@ fn remove_contents(
                 .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             authorize()?;
             require(
+                // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor
+                // open.
                 unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), 0) } == 0,
                 "owned restored metadata member removal failed",
             )?;
@@ -123,6 +129,7 @@ fn placeholder(root: &File, path: &str, mode: u32, mount: u64) -> Result<File> {
         "captured mount placeholder content refused",
     )?;
     require(
+        // SAFETY: fchmod takes no pointers and `dir` keeps the descriptor open.
         unsafe { libc::fchmod(dir.as_raw_fd(), mode) } == 0,
         "restored placeholder mode failed",
     )?;
@@ -162,6 +169,8 @@ fn freeze(
     stage.recheck(guard)?;
     let mut flags = 0u64;
     require(
+        // SAFETY: BTRFS_IOC_SUBVOL_GETFLAGS writes one u64 into the passed buffer, and the
+        // directory stays open.
         unsafe {
             libc::ioctl(
                 stage.directory.as_raw_fd(),
@@ -174,6 +183,8 @@ fn freeze(
     )?;
     flags = 2;
     require(
+        // SAFETY: BTRFS_IOC_SUBVOL_SETFLAGS reads one u64 from the passed buffer, and the directory
+        // stays open.
         unsafe {
             libc::ioctl(
                 stage.directory.as_raw_fd(),
@@ -231,6 +242,7 @@ fn copy_tree(
         "replacement archive copy failed; publishing receipt retained",
     )?;
     require(
+        // SAFETY: fchmod takes no pointers and `target.directory` keeps the descriptor open.
         unsafe { libc::fchmod(target.directory.as_raw_fd(), 0o755) } == 0,
         "replacement root mode publication failed",
     )?;
@@ -481,6 +493,7 @@ pub fn prepare_locked(
         files::ensure_directory_relative(&root.directory, Path::new("var/lib/enzimos"), 0o700, 0)?;
     remove_contents(&state, root.mount, &mut 262144, 0, &mut || entered())?;
     require(
+        // SAFETY: fchmod takes no pointers and `state` keeps the descriptor open.
         unsafe { libc::fchmod(state.as_raw_fd(), 0o700) } == 0,
         "restored service state private mode failed",
     )?;
@@ -491,6 +504,7 @@ pub fn prepare_locked(
     )? {
         checked_mount(&timers, root.mount)?;
         let name = c"enzimos-backup.timer";
+        // SAFETY: `name` is a NUL-terminated C string and `timers` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 timers.as_raw_fd(),
@@ -499,6 +513,7 @@ pub fn prepare_locked(
             )
         };
         if raw >= 0 {
+            // SAFETY: `raw` was just returned by openat and is owned by nothing else.
             let original = unsafe { File::from_raw_fd(raw) };
             checked_mount(&original, root.mount)?;
             require(
@@ -517,6 +532,8 @@ pub fn prepare_locked(
                 "original restored timer replaced",
             )?;
             require(
+                // SAFETY: `name` is a NUL-terminated CString and `timers` keeps the descriptor
+                // open.
                 unsafe { libc::unlinkat(timers.as_raw_fd(), name.as_ptr(), 0) } == 0,
                 "restored timer retirement failed",
             )?;
@@ -567,6 +584,8 @@ pub fn prepare_locked(
                 "restored history directory replaced",
             )?;
             require(
+                // SAFETY: The name is a NUL-terminated literal and `target.directory` keeps the
+                // descriptor open.
                 unsafe {
                     libc::unlinkat(
                         target.directory.as_raw_fd(),
@@ -588,6 +607,7 @@ pub fn prepare_locked(
             "created restored history is not a new subvolume",
         )?;
         require(
+            // SAFETY: fchmod takes no pointers and `history` keeps the descriptor open.
             unsafe { libc::fchmod(history.as_raw_fd(), 0o750) } == 0,
             "created history mode failed",
         )?;

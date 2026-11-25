@@ -136,6 +136,7 @@ fn sys_device(file: &File) -> Result<u64> {
 fn link_description(parent: &File) -> Result<File> {
     let name = std::ffi::CString::new(MAPPER)
         .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -144,12 +145,14 @@ fn link_description(parent: &File) -> Result<File> {
         )
     };
     require(raw >= 0, "original fixed mapper symlink unavailable")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw) })
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn link_absent(parent: &File) -> Result<()> {
     let name = std::ffi::CString::new(MAPPER)
         .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -159,6 +162,7 @@ fn link_absent(parent: &File) -> Result<()> {
     };
     let error = std::io::Error::last_os_error();
     if raw >= 0 {
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         drop(unsafe { File::from_raw_fd(raw) });
     }
     require(
@@ -169,6 +173,8 @@ fn link_absent(parent: &File) -> Result<()> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (readlinkat).")]
 fn link_value(file: &File) -> Result<Vec<u8>> {
     let mut bytes = [0u8; 129];
+    // SAFETY: The empty path is NUL-terminated, the buffer pointer and length describe `bytes`, and
+    // `file` stays open.
     let count = unsafe {
         libc::readlinkat(
             file.as_raw_fd(),
@@ -282,6 +288,8 @@ impl OriginalName {
         let name = std::ffi::CString::new(MAPPER)
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: `name` is a NUL-terminated C string and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), 0) } == 0,
             "actual original mapper symlink retirement uncertain; no retry",
         )?;
@@ -378,7 +386,10 @@ impl<'s> Original<'s> {
         let sys = files::open_relative(&directory, Path::new("dev"))?;
         let mut stat = std::mem::MaybeUninit::<libc::statfs>::uninit();
         require(
+            // SAFETY: `stat` is writable for one `libc::statfs` and `sys` keeps the descriptor
+            // open.
             unsafe { libc::fstatfs(sys.as_raw_fd(), stat.as_mut_ptr()) } == 0
+                // SAFETY: fstatfs returned 0, so it initialized `stat`.
                 && unsafe { stat.assume_init() }.f_type == 0x62656572,
             "actual DM control kernel sysfs required",
         )?;
@@ -396,6 +407,8 @@ impl<'s> Original<'s> {
         )?;
         let mut version = Header::empty();
         require(
+            // SAFETY: The request is a complete 312-byte repr(C) dm_ioctl header that the kernel
+            // updates in place, and the control file stays open.
             unsafe { libc::ioctl(file.as_raw_fd(), VERSION, &mut version) } == 0
                 && version.version[0] == 4,
             "native DM control version unavailable",
@@ -410,6 +423,8 @@ impl<'s> Original<'s> {
         )?;
         let mut status = Header::by_device(device);
         require(
+            // SAFETY: The request is a complete 312-byte repr(C) dm_ioctl header that the kernel
+            // updates in place, and the control file stays open.
             unsafe { libc::ioctl(file.as_raw_fd(), libc::c_ulong::from(STATUS), &mut status) } == 0,
             "actual created mapper DM status unavailable",
         )?;
@@ -456,6 +471,8 @@ impl<'s> Original<'s> {
         )?;
         let mut status = Header::by_device(self.device);
         require(
+            // SAFETY: The request is a complete 312-byte repr(C) dm_ioctl header that the kernel
+            // updates in place, and the control file stays open.
             unsafe {
                 libc::ioctl(
                     self.file.as_raw_fd(),
@@ -578,6 +595,8 @@ fn kernel_absent(control: &Original<'_>) -> Result<()> {
         by_uuid(&control.uuid)?,
         name,
     ] {
+        // SAFETY: The request is a complete 312-byte repr(C) dm_ioctl header that the kernel
+        // updates in place, and the control file stays open.
         let result = unsafe {
             libc::ioctl(
                 control.file.as_raw_fd(),
@@ -606,6 +625,8 @@ impl<'s, 'm> DescriptionClosed<'s, 'm> {
         } = original;
         let mut request = by_uuid(&control.uuid)?;
         require(
+            // SAFETY: The request is a complete 312-byte repr(C) dm_ioctl header that the kernel
+            // updates in place, and the control file stays open.
             unsafe {
                 libc::ioctl(
                     control.file.as_raw_fd(),
@@ -638,6 +659,8 @@ impl<'s, 'm> DescriptionClosed<'s, 'm> {
         let control = &self.original.control;
         let mut status = Header::by_device(control.device);
         require(
+            // SAFETY: The request is a complete 312-byte repr(C) dm_ioctl header that the kernel
+            // updates in place, and the control file stays open.
             unsafe {
                 libc::ioctl(
                     control.file.as_raw_fd(),

@@ -66,6 +66,8 @@ fn retire_finished(directory: &File) -> Result<()> {
         let c_name = std::ffi::CString::new(name)
             .map_err(|_| enzimos_platform::Error("apply registry encoding".into()))?;
         require(
+            // SAFETY: `c_name` is a NUL-terminated C string and `directory` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(directory.as_raw_fd(), c_name.as_ptr(), 0) } == 0,
             "finished apply record retirement failed",
         )?;
@@ -193,6 +195,7 @@ impl<'a> Store<'a> {
             "original apply operation lock replaced",
         )?;
         enzimos_platform::flock_identity::exclusive(lock.as_file())?;
+        // SAFETY: flock takes no pointers and `named` keeps the descriptor open.
         let result = unsafe { libc::flock(named.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
         require(
             result < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EWOULDBLOCK),

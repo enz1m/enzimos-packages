@@ -175,6 +175,7 @@ impl Object {
                 && self.mount == guard.root_mount_id()
                 && files::identity(&self.file.metadata()?) == self.epoch
                 && files::identity(&named.metadata()?) == self.epoch
+                // SAFETY: F_GETFL takes no pointers and `self.file` keeps the descriptor open.
                 && unsafe {
                     libc::fcntl(std::os::fd::AsRawFd::as_raw_fd(&self.file), libc::F_GETFL)
                 } == self.flags
@@ -541,6 +542,8 @@ impl RemovedObject {
                 && shape(&named)? == self.original.shape
                 && shape(&self.original.parent)? == self.original.shape
                 && mount_identity::id(named.as_fd(), true)? == self.original.mount
+                // SAFETY: F_GETFL takes no pointers and `self.original.file` keeps the descriptor
+                // open.
                 && unsafe {
                     libc::fcntl(
                         std::os::fd::AsRawFd::as_raw_fd(&self.original.file),
@@ -599,6 +602,7 @@ impl Object {
         self.recheck(guard)?;
         entry.recheck()?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),

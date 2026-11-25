@@ -41,6 +41,7 @@ fn ignored(path: &Path) -> bool {
 fn open(parent: &File, name: &OsStr, flags: i32) -> Result<File> {
     let name = CString::new(name.as_bytes())
         .map_err(|_| Error("complete system member encoding".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -49,11 +50,14 @@ fn open(parent: &File, name: &OsStr, flags: i32) -> Result<File> {
         )
     };
     require(fd >= 0, "original complete system member unavailable")?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(fd) })
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (readlinkat).")]
 fn symlink(file: &File) -> Result<Vec<u8>> {
     let mut bytes = vec![0u8; 4097];
+    // SAFETY: The empty path is NUL-terminated, the buffer pointer and length describe `bytes`, and
+    // `file` stays open.
     let size = unsafe {
         libc::readlinkat(
             file.as_raw_fd(),
@@ -105,6 +109,7 @@ fn hash(file: &mut File, authorize: &mut dyn FnMut() -> Result<()>) -> Result<[u
 fn attributes(file: &File) -> Result<std::collections::BTreeMap<Vec<u8>, Vec<u8>>> {
     let mut names = vec![0u8; 65536];
     let length =
+        // SAFETY: The buffer pointer and length describe `names`, and `file` stays open.
         unsafe { libc::flistxattr(file.as_raw_fd(), names.as_mut_ptr().cast(), names.len()) };
     require(
         length >= 0 && (length as usize) <= names.len(),
@@ -117,6 +122,8 @@ fn attributes(file: &File) -> Result<std::collections::BTreeMap<Vec<u8>, Vec<u8>
         let key =
             CString::new(name).map_err(|_| Error("complete attribute name encoding".into()))?;
         let mut bytes = vec![0u8; 1024 * 1024];
+        // SAFETY: The name is NUL-terminated, the buffer pointer and length describe `bytes`, and
+        // `file` stays open.
         let length = unsafe {
             libc::fgetxattr(
                 file.as_raw_fd(),

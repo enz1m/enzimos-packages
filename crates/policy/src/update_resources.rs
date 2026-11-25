@@ -58,6 +58,7 @@ pub(crate) fn available(directory: &File) -> Result<u64> {
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `info` is a writable `libc::statvfs` and `directory` keeps the descriptor open.
         unsafe { libc::fstatvfs(directory.as_raw_fd(), &mut info) } == 0,
         "update filesystem space unavailable",
     )?;

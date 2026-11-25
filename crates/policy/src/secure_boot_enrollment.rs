@@ -78,9 +78,12 @@ fn append_packet(esl: &[u8], time: &libc::tm) -> Result<Vec<u8>> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (gmtime_r, time).")]
 fn now() -> Result<libc::tm> {
+    // SAFETY: A null pointer is allowed by time.
     let time = unsafe { libc::time(std::ptr::null_mut()) };
+    // SAFETY: `libc::tm` is a plain C struct, for which all-zero bytes are a valid value.
     let mut utc = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `time` and `utc` are valid for reading and writing respectively.
         time >= 0 && !unsafe { libc::gmtime_r(&time, &mut utc) }.is_null(),
         "EFI timestamp unavailable",
     )?;
@@ -95,6 +98,7 @@ fn flags(file: &File) -> Result<i32> {
 fn inode_flags(file: &File) -> Result<libc::c_long> {
     let mut value: libc::c_long = 0;
     require(
+        // SAFETY: FS_IOC_GETFLAGS writes one long into `value`, and `file` stays open.
         unsafe { libc::ioctl(file.as_raw_fd(), 0x80086601u64 as libc::c_ulong, &mut value) } == 0,
         "EFI inode flags unavailable",
     )?;
@@ -104,6 +108,7 @@ fn inode_flags(file: &File) -> Result<libc::c_long> {
 fn set_inode_flags(file: &File, before: libc::c_long, after: libc::c_long) -> Result<()> {
     require(inode_flags(file)? == before, "EFI inode flags changed")?;
     require(
+        // SAFETY: FS_IOC_SETFLAGS reads one long from `after`, and `file` stays open.
         unsafe { libc::ioctl(file.as_raw_fd(), 0x40086602u64 as libc::c_ulong, &after) } == 0,
         "EFI inode flag update refused",
     )?;
@@ -121,6 +126,7 @@ impl Member {
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     fn open(parent: &File, name: &str, mount: u64) -> Result<Self> {
         let leaf = CString::new(name).map_err(|_| Error("EFI member basename".into()))?;
+        // SAFETY: `leaf` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -129,6 +135,7 @@ impl Member {
             )
         };
         require(fd >= 0, "original EFI member unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(fd) };
         let m = file.metadata()?;
         require(
@@ -215,6 +222,7 @@ impl Firmware {
         // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `fs` is a writable `libc::statfs` and `directory` keeps the descriptor open.
             unsafe { libc::fstatfs(directory.as_raw_fd(), &mut fs) } == 0
                 && fs.f_type == 0xde5e81e4,
             "actual efivarfs required",
@@ -339,6 +347,8 @@ impl Firmware {
         }
         let target = CString::new(format!("/proc/self/fd/{}", self.directory.as_raw_fd())).unwrap();
         require(
+            // SAFETY: `target` is a NUL-terminated CString and the other pointers may be null for a
+            // remount.
             unsafe {
                 libc::mount(
                     std::ptr::null(),
@@ -487,6 +497,8 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
             } else {
                 0
             };
+        // SAFETY: `leaf` is a NUL-terminated C string and `firmware.directory` keeps the descriptor
+        // open.
         let fd = unsafe {
             libc::openat(
                 firmware.directory.as_raw_fd(),
@@ -496,6 +508,7 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
             )
         };
         require(fd >= 0, "original EFI db append descriptor unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let writer = unsafe { File::from_raw_fd(fd) };
         if let Some(original) = &original {
             require(
@@ -532,6 +545,8 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
         receipt.recheck()?;
         // A single kernel write; EINTR, partial or failed writes are uncertain.
         let written =
+            // SAFETY: The buffer pointer and length describe `packet`, and `writer` keeps the
+            // descriptor open.
             unsafe { libc::write(writer.as_raw_fd(), packet.as_ptr().cast(), packet.len()) };
         drop(writer);
         after = Some(Member::open(

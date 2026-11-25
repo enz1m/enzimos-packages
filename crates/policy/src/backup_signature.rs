@@ -46,6 +46,7 @@ fn offset(fd: BorrowedFd<'_>) -> Result<i64> {
         enzimos_platform::files::status_flags(&fd) & libc::O_ACCMODE == libc::O_RDONLY,
         "read-only backup signature descriptor required",
     )?;
+    // SAFETY: lseek takes no pointers and `fd` keeps the descriptor open.
     let position = unsafe { libc::lseek(fd.as_raw_fd(), 0, libc::SEEK_CUR) };
     require(
         position >= 0,

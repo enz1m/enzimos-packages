@@ -24,6 +24,7 @@ pub(crate) struct Live;
 impl Kernel for Live {
     #[allow(unsafe_code, reason = "Linux syscall ABI (open).")]
     fn top(&self, target: &CStr) -> Result<Option<u64>> {
+        // SAFETY: `target` is NUL-terminated.
         let raw = unsafe {
             libc::open(
                 target.as_ptr(),
@@ -33,6 +34,7 @@ impl Kernel for Live {
         if raw < 0 {
             return Ok(None);
         }
+        // SAFETY: `raw` was just returned by open and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw) };
         Ok(Some(mount_identity::id(file.as_fd(), true)?))
     }
@@ -44,6 +46,7 @@ impl Kernel for Live {
     #[allow(unsafe_code, reason = "Linux syscall ABI (umount2).")]
     fn umount(&self, target: &CStr, lazy: bool) -> std::io::Result<()> {
         let flags = if lazy { libc::MNT_DETACH } else { 0 };
+        // SAFETY: `target` is NUL-terminated.
         if unsafe { libc::umount2(target.as_ptr(), flags) } == 0 {
             Ok(())
         } else {

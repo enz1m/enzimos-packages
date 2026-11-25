@@ -108,6 +108,8 @@ impl Owned {
 impl Drop for Owned {
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
     fn drop(&mut self) {
+        // SAFETY: `pointer` is non-null, owned by this guard, and freed exactly once with its
+        // matching function.
         unsafe { (self.free)(self.pointer) }
     }
 }
@@ -120,6 +122,7 @@ struct Sink {
 #[allow(unsafe_code, reason = "Linux syscall ABI (pwrite).")]
 unsafe extern "C" fn write(closure: *mut c_void, bytes: *const u8, length: u32) -> c_int {
     // No Rust allocation, panic or secret-bearing error crosses the C boundary.
+    // SAFETY: Cairo passes back the `Sink` registered with this stream, which outlives the surface.
     let sink = unsafe { &mut *closure.cast::<Sink>() };
     if sink.failed
         || sink
@@ -133,6 +136,8 @@ unsafe extern "C" fn write(closure: *mut c_void, bytes: *const u8, length: u32) 
     let mut done = 0usize;
     let mut interrupted = 0;
     while done < length as usize {
+        // SAFETY: Cairo guarantees `bytes` holds `length` readable bytes, and `sink.file` stays
+        // open.
         let count = unsafe {
             libc::pwrite(
                 sink.file.as_raw_fd(),
@@ -177,6 +182,7 @@ fn printable(text: &str) -> Result<()> {
 }
 #[allow(unsafe_code, reason = "Cairo/Pango rendering ABI.")]
 unsafe fn header(context: *mut c_void) {
+    // SAFETY: The caller passes a live Cairo context; the strings are NUL-terminated literals.
     unsafe {
         cairo_set_font_size(context, 19.0);
         cairo_move_to(context, 48.0, 55.0);
@@ -198,6 +204,7 @@ unsafe fn header(context: *mut c_void) {
 fn footer(context: *mut c_void, page: u32) -> Result<()> {
     let text = CString::new(format!("Recovery password - page {page}"))
         .map_err(|_| Error("recovery footer encoding".into()))?;
+    // SAFETY: `context` is the caller's live Cairo context and `text` is a NUL-terminated CString.
     unsafe {
         cairo_set_font_size(context, 10.0);
         cairo_move_to(context, 48.0, 808.0);
@@ -212,7 +219,9 @@ pub fn render(input: File, output: File) -> Result<Value> {
         rlim_max: 0,
     };
     require(
+        // SAFETY: `core` is a valid rlimit that outlives the call.
         unsafe { libc::setrlimit(libc::RLIMIT_CORE, &core) } == 0
+            // SAFETY: This prctl option takes no pointers.
             && unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "private recovery renderer required",
     )?;
@@ -234,11 +243,13 @@ pub fn render(input: File, output: File) -> Result<Value> {
             && target.len() == 0,
         "distinct bounded source and empty document required",
     )?;
+    // SAFETY: F_GET_SEALS takes no pointers and `input` keeps the descriptor open.
     let seals = unsafe { libc::fcntl(input.as_raw_fd(), libc::F_GET_SEALS) };
     let flags = enzimos_platform::files::status_flags(&output);
     require(
         seals >= 0
             && seals & SEALS == SEALS
+            // SAFETY: F_GET_SEALS takes no pointers and `output` keeps the descriptor open.
             && unsafe { libc::fcntl(output.as_raw_fd(), libc::F_GET_SEALS) } == 0
             && flags >= 0
             && flags & libc::O_ACCMODE == libc::O_RDWR
@@ -257,6 +268,7 @@ pub fn render(input: File, output: File) -> Result<Value> {
     });
     let pages = {
         let surface = Owned::new(
+            // SAFETY: `write` matches Cairo's stream callback ABI and `sink` outlives the surface.
             unsafe {
                 cairo_pdf_surface_create_for_stream(
                     write,
@@ -268,28 +280,42 @@ pub fn render(input: File, output: File) -> Result<Value> {
             cairo_surface_destroy,
         )?;
         require(
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             unsafe { cairo_surface_status(surface.pointer) } == 0,
             "recovery PDF surface refused",
         )?;
+        // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+        // scope.
         let context = Owned::new(unsafe { cairo_create(surface.pointer) }, cairo_destroy)?;
         require(
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             unsafe { cairo_status(context.pointer) } == 0,
             "recovery PDF context refused",
         )?;
         let layout = Owned::new(
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             unsafe { pango_cairo_create_layout(context.pointer) },
             g_object_unref,
         )?;
         let font = Owned::new(
+            // SAFETY: The font description is a NUL-terminated literal.
             unsafe { pango_font_description_from_string(c"monospace 13".as_ptr()) },
             pango_font_description_free,
         )?;
+        // SAFETY: pango_attr_list_new takes no arguments.
         let attrs = Owned::new(unsafe { pango_attr_list_new() }, pango_attr_list_unref)?;
+        // SAFETY: pango_attr_insert_hyphens_new takes no pointers.
         let attribute = unsafe { pango_attr_insert_hyphens_new(0) };
         require(
             !attribute.is_null(),
             "recovery wrapping attributes unavailable",
         )?;
+        // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+        // scope. The text pointer and length describe `bytes`, and the list takes ownership of
+        // `attribute`.
         unsafe {
             pango_layout_set_font_description(layout.pointer, font.pointer);
             pango_layout_set_width(layout.pointer, 499 * 1024);
@@ -299,22 +325,31 @@ pub fn render(input: File, output: File) -> Result<Value> {
             pango_layout_set_attributes(layout.pointer, attrs.pointer);
         }
         require(
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             unsafe { pango_layout_get_unknown_glyphs_count(layout.pointer) } == 0,
             "recovery font has unknown glyphs",
         )?;
         let iter = Owned::new(
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             unsafe { pango_layout_get_iter(layout.pointer) },
             pango_layout_iter_free,
         )?;
         let mut page = 1;
         let mut y = 119.0;
         let mut lines = 0;
+        // SAFETY: `context.pointer` is a live Cairo context.
         unsafe { header(context.pointer) };
         loop {
             lines += 1;
             require(lines <= 4096, "recovery line bound")?;
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             let line = unsafe { pango_layout_iter_get_line_readonly(iter.pointer) };
             require(!line.is_null(), "recovery line unavailable")?;
+            // SAFETY: `line` is non-null, and PangoLayoutLine starts with the fields of
+            // `LinePrefix`.
             let prefix = unsafe { &*line.cast::<LinePrefix>() };
             require(
                 prefix.start >= 0 && prefix.length > 0,
@@ -333,6 +368,8 @@ pub fn render(input: File, output: File) -> Result<Value> {
                 "recovery wrap would lose whitespace",
             )?;
             let mut logical = Rectangle::default();
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope. The ink rectangle may be null and `logical` is writable.
             unsafe {
                 pango_layout_iter_get_line_extents(
                     iter.pointer,
@@ -341,6 +378,8 @@ pub fn render(input: File, output: File) -> Result<Value> {
                 );
             };
             let height = f64::from(logical.height) / 1024.0;
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             let baseline = (i64::from(unsafe { pango_layout_iter_get_baseline(iter.pointer) })
                 - i64::from(logical.y)) as f64
                 / 1024.0;
@@ -350,28 +389,41 @@ pub fn render(input: File, output: File) -> Result<Value> {
             )?;
             if y + height > 780.0 {
                 footer(context.pointer, page)?;
+                // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for
+                // this scope.
                 unsafe { cairo_show_page(context.pointer) };
                 page += 1;
                 require(page <= 8, "recovery document page bound")?;
                 y = 119.0;
+                // SAFETY: `context.pointer` is a live Cairo context.
                 unsafe { header(context.pointer) };
             }
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope. `line` is the iterator's current line.
             unsafe {
                 cairo_move_to(context.pointer, 48.0, y + baseline);
                 pango_cairo_show_layout_line(context.pointer, line);
             };
             y += height;
             require(
+                // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for
+                // this scope.
                 !sink.failed && unsafe { cairo_status(context.pointer) } == 0,
                 "recovery PDF output failed",
             )?;
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             if unsafe { pango_layout_iter_next_line(iter.pointer) } == 0 {
                 break;
             }
         }
         footer(context.pointer, page)?;
+        // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+        // scope.
         unsafe { cairo_surface_finish(surface.pointer) };
         require(
+            // SAFETY: Every pointer argument is a non-null object held by an `Owned` guard for this
+            // scope.
             !sink.failed && unsafe { cairo_surface_status(surface.pointer) } == 0,
             "recovery PDF finalization failed",
         )?;
@@ -393,7 +445,9 @@ pub fn render(input: File, output: File) -> Result<Value> {
         "original recovery document changed",
     )?;
     require(
+        // SAFETY: F_ADD_SEALS takes no pointers and `sink.file` keeps the descriptor open.
         unsafe { libc::fcntl(sink.file.as_raw_fd(), libc::F_ADD_SEALS, SEALS) } == 0
+            // SAFETY: F_GET_SEALS takes no pointers and `sink.file` keeps the descriptor open.
             && unsafe { libc::fcntl(sink.file.as_raw_fd(), libc::F_GET_SEALS) } == SEALS,
         "recovery document sealing failed",
     )?;

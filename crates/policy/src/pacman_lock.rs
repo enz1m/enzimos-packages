@@ -28,6 +28,7 @@ impl PacmanLock {
             "package lock owner mismatch",
         )?;
         let parent = files::directory(path, Some(owner))?;
+        // SAFETY: The name is a NUL-terminated literal and `parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -40,8 +41,10 @@ impl PacmanLock {
             raw >= 0,
             "pacman already running or its lock cannot be created",
         )?;
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw) };
         require(
+            // SAFETY: fchmod takes no pointers and `file` keeps the descriptor open.
             unsafe { libc::fchmod(file.as_raw_fd(), 0o600) } == 0,
             "package lock mode uncertain",
         )?;
@@ -90,6 +93,8 @@ impl PacmanLock {
         }
         self.recheck()?;
         require(
+            // SAFETY: The name is a NUL-terminated literal and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), c"db.lck".as_ptr(), 0) } == 0,
             "owned package lock removal failed",
         )?;

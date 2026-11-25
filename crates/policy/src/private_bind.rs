@@ -39,6 +39,8 @@ impl Detached {
         )?;
         let identity = files::identity(&metadata);
         let parent_mount = mount_identity::id(original.as_fd(), true)?;
+        // SAFETY: The empty path is a NUL-terminated literal and `original` keeps the descriptor
+        // open.
         let raw = unsafe {
             libc::syscall(
                 libc::SYS_open_tree,
@@ -51,6 +53,7 @@ impl Detached {
             raw >= 0,
             "detached private-area clone failed; intent retained",
         )?;
+        // SAFETY: `raw` was just returned by open_tree and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw as i32) };
         let unique = mount_identity::id(file.as_fd(), true)?;
         let this = Self {
@@ -68,6 +71,8 @@ impl Detached {
             user_namespace: 0,
         };
         require(
+            // SAFETY: The empty path is a NUL-terminated literal, `attributes` is a complete
+            // mount_attr passed with its size, and the descriptor stays open.
             unsafe {
                 libc::syscall(
                     libc::SYS_mount_setattr,
@@ -123,6 +128,7 @@ impl Detached {
         checkpoint()?;
         self.recheck(original)?;
         require(
+            // SAFETY: The empty paths are NUL-terminated literals and both descriptors stay open.
             unsafe {
                 libc::syscall(
                     libc::SYS_move_mount,
@@ -185,6 +191,8 @@ impl Attachment {
             user_namespace: 0,
         };
         require(
+            // SAFETY: The empty path is a NUL-terminated literal, `attributes` is a complete
+            // mount_attr passed with its size, and the descriptor stays open.
             unsafe {
                 libc::syscall(
                     libc::SYS_mount_setattr,
@@ -207,6 +215,8 @@ impl Attachment {
             // SAFETY: the descriptor and attribute buffer are live; empty-path
             // scope addresses only the mount retained by this Attachment.
             require(
+                // SAFETY: The empty path is a NUL-terminated literal, `attributes` is a complete
+                // mount_attr passed with its size, and the descriptor stays open.
                 unsafe {
                     libc::syscall(
                         libc::SYS_mount_setattr,
@@ -272,9 +282,10 @@ pub(crate) fn private_destination(file: &File) -> Result<()> {
         propagation: libc::MS_PRIVATE,
         user_namespace: 0,
     };
-    // SAFETY: the live descriptor and bounded attribute buffer address this
-    // original mount only, not a freshly resolved path or its parent.
+    // The live descriptor addresses this original mount, not a freshly resolved path.
     require(
+        // SAFETY: The empty path is a NUL-terminated literal, `attributes` is a complete mount_attr
+        // passed with its size, and the descriptor stays open.
         unsafe {
             libc::syscall(
                 libc::SYS_mount_setattr,

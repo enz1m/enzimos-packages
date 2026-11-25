@@ -399,6 +399,7 @@ impl<'a> Area<'a> {
         let original = core.original;
         drop(core.file);
         require(
+            // SAFETY: The path is a NUL-terminated literal.
             unsafe { libc::umount2(c"/backup-repository".as_ptr(), 0) } == 0,
             "normal private backup area close failed; journal retained",
         )?;

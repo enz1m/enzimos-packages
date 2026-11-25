@@ -210,6 +210,7 @@ impl Device {
                 .as_encoded_bytes(),
         )
         .unwrap();
+        // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -221,6 +222,7 @@ impl Device {
             raw >= 0,
             "original answer volume block description unavailable",
         )?;
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw) };
         let block = block::observe(file.as_fd())?;
         let device = number(&row["maj:min"])?;
@@ -268,6 +270,7 @@ impl Device {
                 .as_encoded_bytes(),
         )
         .unwrap();
+        // SAFETY: `name` is a NUL-terminated C string and `self.parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 self.parent.as_raw_fd(),
@@ -276,6 +279,7 @@ impl Device {
             )
         };
         require(raw >= 0, "original answer device name disappeared")?;
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         let named = unsafe { File::from_raw_fd(raw) };
         let parent = files::directory(Path::new("/dev"), Some(0))?;
         require(
@@ -323,6 +327,7 @@ impl Device {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (lseek).")]
 fn query(vendor: &Command, file: &File, row: &Value) -> Result<Value> {
+    // SAFETY: lseek takes no pointers and `file` keeps the descriptor open.
     let position = unsafe { libc::lseek(file.as_raw_fd(), 0, libc::SEEK_CUR) };
     require(position >= 0, "answer block description offset unavailable")?;
     let before = block::observe(file.as_fd())?;
@@ -349,6 +354,7 @@ fn query(vendor: &Command, file: &File, row: &Value) -> Result<Value> {
     require(
         aliases.len() == 1
             && block::observe(file.as_fd())? == before
+            // SAFETY: lseek takes no pointers and `file` keeps the descriptor open.
             && unsafe { libc::lseek(file.as_raw_fd(), 0, libc::SEEK_CUR) } == position,
         "answer signature changed original block or offset",
     )?;

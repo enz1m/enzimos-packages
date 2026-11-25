@@ -25,6 +25,7 @@ pub(crate) fn open(parent: &File, name: &str, owner: u32) -> Result<File> {
     )?;
     let c = std::ffi::CString::new(name)
         .map_err(|_| enzimos_platform::Error("boot member NUL".into()))?;
+    // SAFETY: `c` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -33,6 +34,7 @@ pub(crate) fn open(parent: &File, name: &str, owner: u32) -> Result<File> {
         )
     };
     require(raw >= 0, "original boot member open failed")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw) };
     let m = file.metadata()?;
     require(

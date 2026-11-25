@@ -23,9 +23,11 @@ const PF_KTHREAD: u64 = 0x0020_0000;
 fn kind(file: &File) -> Result<i64> {
     let mut data = std::mem::MaybeUninit::<libc::statfs>::uninit();
     require(
+        // SAFETY: `data` is writable for one `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), data.as_mut_ptr()) } == 0,
         "offline scope filesystem observation",
     )?;
+    // SAFETY: fstatfs returned 0, so it initialized `data`.
     Ok(unsafe { data.assume_init() }.f_type)
 }
 fn read(file: &File, limit: usize) -> Result<String> {

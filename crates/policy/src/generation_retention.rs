@@ -375,6 +375,7 @@ fn cleanup_transient(
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn open_directory(parent: &File, name: &CString) -> Result<File> {
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -383,11 +384,13 @@ fn open_directory(parent: &File, name: &CString) -> Result<File> {
         )
     };
     require(raw >= 0, "transient member directory open failed")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw) })
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
 fn unlink(parent: &File, name: &CString, directory: bool) -> Result<()> {
     require(
+        // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         unsafe {
             libc::unlinkat(
                 parent.as_raw_fd(),
@@ -455,6 +458,8 @@ fn empty(
         // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::stat = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: The name is NUL-terminated, the stat buffer is writable, and `directory`
+            // stays open.
             unsafe {
                 libc::fstatat(
                     directory.as_raw_fd(),

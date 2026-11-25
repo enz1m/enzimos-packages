@@ -34,9 +34,11 @@ impl Parent {
                 && sender.pid == request.supervisor_pid,
             "delivery Root sender is not original parent",
         )?;
+        // SAFETY: pidfd_open takes no pointers.
         let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, sender.pid, 0) as i32 };
         require(fd >= 0, "original delivery parent pidfd unavailable")?;
         let this = Self {
+            // SAFETY: `fd` was just returned by pidfd_open and is owned by nothing else.
             file: unsafe { File::from_raw_fd(fd) },
             pid: sender.pid,
             start: request.supervisor_start,
@@ -52,6 +54,7 @@ impl Parent {
             revents: 0,
         };
         require(
+            // SAFETY: `poll` is one writable pollfd and the count is 1.
             unsafe { libc::poll(&mut poll, 1, 0) } == 0
                 && process_identity::pidfd_target(self.file.as_fd())? == self.pid
                 && enzimos_platform::process_identity::parent_pid() as u32 == self.pid,
@@ -95,13 +98,16 @@ fn privileges(uid: u32, gid: u32) -> Result<()> {
     let mut effective = 0;
     let mut saved = 0;
     require(
+        // SAFETY: The three outputs are writable uid_t values.
         unsafe { libc::getresuid(&mut real, &mut effective, &mut saved) } == 0
             && [real, effective, saved] == [uid; 3],
         "delivery worker UID drop differs",
     )?;
     require(
+        // SAFETY: The three outputs are writable gid_t values.
         unsafe { libc::getresgid(&mut real, &mut effective, &mut saved) } == 0
             && [real, effective, saved] == [gid; 3]
+            // SAFETY: A zero size with a null list only counts supplementary groups.
             && unsafe { libc::getgroups(0, std::ptr::null_mut()) } == 0,
         "delivery worker GID/groups drop differs",
     )?;
@@ -127,15 +133,19 @@ fn privileges(uid: u32, gid: u32) -> Result<()> {
         inheritable: 0,
     }; 2];
     require(
+        // SAFETY: `header` and the two-element `data` array match the kernel capability ABI
+        // version.
         unsafe { libc::syscall(libc::SYS_capget, &mut header, data.as_mut_ptr()) } == 0
             && data
                 .iter()
                 .all(|d| d.effective == 0 && d.permitted == 0 && d.inheritable == 0)
+            // SAFETY: This prctl option takes no pointers.
             && unsafe { libc::prctl(libc::PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) } == 1,
         "delivery worker residual privilege refused",
     )?;
     let mut death = 0;
     require(
+        // SAFETY: PR_GET_PDEATHSIG writes one int into `death`.
         unsafe { libc::prctl(libc::PR_GET_PDEATHSIG, &mut death, 0, 0, 0) } == 0
             && death == libc::SIGKILL,
         "delivery parent-death guard differs",
@@ -176,6 +186,7 @@ pub fn entry(channel: Packet) -> Result<()> {
         enzimos_platform::process_identity::effective_gid(),
     )?;
     require(
+        // SAFETY: This prctl option takes no pointers.
         unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "delivery worker dump protection unavailable",
     )?;

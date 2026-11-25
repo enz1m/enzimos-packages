@@ -39,8 +39,10 @@ impl Console {
         } else {
             c"/dev/console"
         };
+        // SAFETY: `path` is a NUL-terminated CString.
         let fd = unsafe { libc::open(path.as_ptr(), libc::O_RDWR) };
         require(fd >= 0, "rescue console unavailable")?;
+        // SAFETY: getsid, getpid, setsid, dup2 and TIOCSCTTY take only integers, and `fd` is open.
         unsafe {
             if libc::getsid(0) != libc::getpid() {
                 libc::setsid();
@@ -53,6 +55,7 @@ impl Console {
                 )?;
             }
         }
+        // SAFETY: `fd` was just returned by open and is owned by nothing else.
         let display = unsafe { File::from_raw_fd(fd) };
         let input = std::io::BufReader::new(display.try_clone()?);
         let serial = std::fs::OpenOptions::new()
@@ -98,17 +101,20 @@ impl Console {
         // SAFETY: `libc::termios` is a plain C struct, for which all-zero bytes are a valid value.
         let mut saved: libc::termios = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `saved` is a writable termios and `fd` is the open console.
             unsafe { libc::tcgetattr(fd, &mut saved) } == 0,
             "rescue terminal required",
         )?;
         let mut quiet = saved;
         quiet.c_lflag &= !(libc::ECHO | libc::ECHONL);
         require(
+            // SAFETY: `quiet` is a fully initialized termios and `fd` is the open console.
             unsafe { libc::tcsetattr(fd, libc::TCSANOW, &quiet) } == 0,
             "rescue echo suppression failed",
         )?;
         let mut line = Zeroizing::new(Vec::with_capacity(1024));
         let read = self.input.by_ref().take(1024).read_until(b'\n', &mut line);
+        // SAFETY: `saved` is the termios read from `fd` above.
         unsafe { libc::tcsetattr(fd, libc::TCSANOW, &saved) };
         let _ = self.display.write_all(b"\n");
         require(read? > 0, "rescue console closed")?;
@@ -248,6 +254,7 @@ struct Owned {
 impl Drop for Owned {
     #[allow(unsafe_code, reason = "Linux syscall ABI (sync).")]
     fn drop(&mut self) {
+        // SAFETY: sync takes no arguments and cannot fail.
         unsafe { libc::sync() };
         for target in self.mounts.drain(..).rev() {
             let _ = process::run(
@@ -328,6 +335,7 @@ fn authenticate(console: &mut Console, root: &Path) -> Result<()> {
 
 #[allow(unsafe_code, reason = "Linux syscall ABI (waitpid).")]
 fn reap_orphans() {
+    // SAFETY: A null status pointer is allowed by waitpid.
     while unsafe { libc::waitpid(-1, std::ptr::null_mut(), libc::WNOHANG) } > 0 {}
 }
 
@@ -514,6 +522,7 @@ pub fn main() -> ! {
     }
     let _ = recovery_bootstrap::reboot(false);
     loop {
+        // SAFETY: pause takes no arguments.
         unsafe { libc::pause() };
     }
 }

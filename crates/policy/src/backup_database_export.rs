@@ -47,6 +47,7 @@ fn configure(c: &Connection, deadline: Instant, readonly: bool) -> Result<()> {
     sql(c.set_db_config(DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false))?;
     sql(c.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true))?;
     require(
+        // SAFETY: `c.handle()` is the live SQLite connection owned by `c`.
         unsafe { rusqlite::ffi::sqlite3_enable_load_extension(c.handle(), 0) } == 0,
         "SQLite extension loading could not be disabled",
     )?;
@@ -77,10 +78,14 @@ fn new_descriptor(
         .ok_or_else(|| Error("SQLite descriptor bound".into()))?
         .max(64);
     for fd in descriptors {
+        // SAFETY: F_GETFL takes no pointers; it only reads the flags of a retained descriptor
+        // number.
         let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
         if flags < 0 || flags & libc::O_ACCMODE != access {
             continue;
         }
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and only duplicates a descriptor of this
+        // process.
         let raw = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, duplicate_from) };
         if raw < 0 {
             let error = std::io::Error::last_os_error();
@@ -89,6 +94,7 @@ fn new_descriptor(
             }
             return Err(error.into());
         }
+        // SAFETY: `raw` is a fresh F_DUPFD_CLOEXEC duplicate owned by nothing else.
         let actual = unsafe { File::from_raw_fd(raw) };
         if !before.existed(fd, &actual, access)?
             && enzimos_platform::files::status_flags(&actual) & libc::O_ACCMODE == access
@@ -198,6 +204,7 @@ fn create(parent: &File, name: &str, owner: u32) -> Result<File> {
     shape(parent, owner)?;
     let name = std::ffi::CString::new(name)
         .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -209,6 +216,7 @@ fn create(parent: &File, name: &str, owner: u32) -> Result<File> {
     if raw < 0 {
         return Err(std::io::Error::last_os_error().into());
     }
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw) };
     let m = file.metadata()?;
     require(
@@ -392,8 +400,10 @@ pub fn export<'a, 'g>(
     boundary()?;
     let file = create(&parent, &name, 0)?;
     let input_raw =
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `source` keeps the descriptor open.
         unsafe { libc::fcntl(source.descriptor()?.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
     require(input_raw >= 0, "original SQLite input duplication refused")?;
+    // SAFETY: `input_raw` is a fresh duplicate owned by nothing else.
     let input = unsafe { File::from_raw_fd(input_raw) };
     copy(source.path(), &input, &file, &mut boundary)?;
     boundary()?;

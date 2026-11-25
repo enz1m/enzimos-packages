@@ -222,6 +222,8 @@ impl<'a> Status<'a> {
         require(
             m.gid() == 0
                 && m.mode() & 0o7777 == 0o700
+                // SAFETY: `fs` is a writable `libc::statfs` and `scratch` keeps the descriptor
+                // open.
                 && unsafe { libc::fstatfs(scratch.as_raw_fd(), &mut fs) } == 0
                 && fs.f_type == 0x01021994,
             "backup points existing protected tmpfs required",

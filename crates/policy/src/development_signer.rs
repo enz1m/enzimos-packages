@@ -230,6 +230,7 @@ impl Signer {
                 .as_encoded_bytes(),
         )
         .map_err(|_| Error("signature filename encoding".into()))?;
+        // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -239,6 +240,7 @@ impl Signer {
             )
         };
         require(fd >= 0, "exclusive local signature creation failed")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let output = unsafe { File::from_raw_fd(fd) };
         let result = process::run_with_fds(
             "/usr/bin/gpg",

@@ -128,12 +128,16 @@ fn descriptor(raw: libc::c_long) -> Result<File> {
             "exclusive writable filesystem operation refused".into(),
         ));
     }
+    // SAFETY: Callers pass a descriptor-returning syscall result; nonnegative values are fresh and
+    // owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw as i32) })
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
 fn configure(file: &File, command: u32, key: Option<&CStr>, val: Option<&CStr>) -> Result<()> {
     let null = std::ptr::null::<libc::c_char>();
     require(
+        // SAFETY: The key and value are NUL-terminated or null as fsconfig allows, and `file` stays
+        // open.
         unsafe {
             libc::syscall(
                 libc::SYS_fsconfig,
@@ -180,6 +184,7 @@ impl Owned {
         let device = selection.descriptor_area(&core)?;
         let selected = selection.evidence_area(&core)?;
         let context =
+            // SAFETY: The filesystem name is a NUL-terminated literal.
             descriptor(unsafe { libc::syscall(libc::SYS_fsopen, c"btrfs".as_ptr(), 1u32) })?;
         let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd())).unwrap();
         configure(&context, 1, Some(c"source"), Some(&source))?;
@@ -188,10 +193,12 @@ impl Owned {
         preflight()?;
         configure(&context, 8, None, None)?;
         preflight()?;
+        // SAFETY: fsmount takes no pointers and `context` keeps the descriptor open.
         let mount = descriptor(unsafe {
             libc::syscall(libc::SYS_fsmount, context.as_raw_fd(), 1u32, 2u32 | 4 | 8)
         })?;
         drop(context);
+        // SAFETY: The name is a NUL-terminated literal and `mount` keeps the descriptor open.
         let root = descriptor(libc::c_long::from(unsafe {
             libc::openat(
                 mount.as_raw_fd(),
@@ -208,6 +215,8 @@ impl Owned {
         )?;
         let mut info = [0u64; 63];
         require(
+            // SAFETY: `info` is 504 bytes, the size encoded in the Btrfs ioctl number, and `root`
+            // stays open.
             unsafe {
                 libc::ioctl(
                     root.as_raw_fd(),
@@ -226,6 +235,7 @@ impl Owned {
         // Empty-path flags bind both sides to retained descriptors, never a new
         // lookup of a caller pathname. Attachment is tracked before body entry.
         require(
+            // SAFETY: The empty paths are NUL-terminated literals and both descriptors stay open.
             unsafe {
                 libc::syscall(
                     libc::SYS_move_mount,
@@ -331,6 +341,7 @@ impl Owned {
         // Root-protected fixed target; original kernel identity checked immediately
         // before closing our references. Never force/lazy-detach/busy-retry.
         require(
+            // SAFETY: The path is a NUL-terminated literal.
             unsafe { libc::umount2(c"/backup-repository".as_ptr(), 0) } == 0,
             "normal owned setup unmount failed; journal retained",
         )?;

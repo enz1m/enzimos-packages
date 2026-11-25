@@ -467,6 +467,7 @@ pub fn stage_auto_locked(
     // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `status` is a writable `libc::statfs` and `root` keeps the descriptor open.
         unsafe { libc::fstatfs(root.as_raw_fd(), &mut status) } == 0,
         "actual restore root type unavailable",
     )?;

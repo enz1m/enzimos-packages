@@ -87,7 +87,9 @@ pub fn install() -> Result<()> {
         filter: rows.as_mut_ptr(),
     };
     require(
+        // SAFETY: This prctl option takes no pointers.
         unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } == 0
+            // SAFETY: `filter` is a sock_fprog pointing at instructions that outlive the call.
             && unsafe { libc::prctl(libc::PR_SET_SECCOMP, libc::SECCOMP_MODE_FILTER, &filter) }
                 == 0,
         "coordinator filter unavailable",

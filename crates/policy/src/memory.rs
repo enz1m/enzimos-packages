@@ -574,6 +574,8 @@ pub fn launch(action: &str) -> Result<Value> {
             && enzimos_platform::mount_identity::id(executable.as_fd(), true)? == mount,
         "original earlyoom identity changed",
     )?;
+    // SAFETY: The empty path is NUL-terminated, `argv` and `env` are null-terminated arrays of live
+    // CString pointers, and `executable` stays open.
     unsafe {
         libc::syscall(
             libc::SYS_execveat,

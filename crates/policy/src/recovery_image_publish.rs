@@ -120,6 +120,7 @@ impl Input {
         let new = CString::new(name.as_str())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     parent.as_raw_fd(),
@@ -162,6 +163,8 @@ fn space(volume: &Volume, needed: u64) -> Result<()> {
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `info` is a writable `libc::statvfs` and `volume.directory` keeps the descriptor
+        // open.
         unsafe { libc::fstatvfs(volume.directory.as_raw_fd(), &mut info) } == 0
             && (info.f_bavail as u64)
                 .checked_mul(info.f_frsize as u64)

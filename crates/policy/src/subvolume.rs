@@ -46,11 +46,14 @@ pub(crate) fn decode_info(bytes: &[u8], path: &str) -> Result<(Value, bool)> {
 pub fn observe(fd: BorrowedFd<'_>, path: &str) -> Result<(Value, bool)> {
     let mut buffer = [0u64; 63];
     require(
+        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
+        // open.
         unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
         "Btrfs subvolume identity unavailable",
     )?;
     // The aligned buffer has the exact UAPI size; decoding does not borrow beyond it.
     decode_info(
+        // SAFETY: `buffer` is 504 initialized bytes.
         unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), 504) },
         path,
     )
@@ -61,9 +64,12 @@ pub fn observe(fd: BorrowedFd<'_>, path: &str) -> Result<(Value, bool)> {
 pub(crate) fn containing_identity(fd: BorrowedFd<'_>) -> Result<Value> {
     let mut buffer = [0u64; 63];
     require(
+        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
+        // open.
         unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
         "Btrfs containing root identity unavailable",
     )?;
+    // SAFETY: `buffer` is 504 initialized bytes.
     decode_containing_info(unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), 504) })
 }
 pub(crate) fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
@@ -92,6 +98,8 @@ pub(crate) fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
 pub fn creation_time(fd: BorrowedFd<'_>) -> Result<i64> {
     let mut buffer = [0u64; 63];
     require(
+        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
+        // open.
         unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
         "Btrfs creation time unavailable",
     )?;
@@ -123,9 +131,12 @@ fn create(
     let mut buffer = [0u64; 512];
     buffer[0] = source.map_or(-1i64, |fd| i64::from(fd.as_raw_fd())) as u64;
     buffer[2] = if readonly { 2 } else { 0 };
+    // SAFETY: `buffer` is 4096 initialized bytes, uniquely borrowed here.
     let bytes = unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u8>(), 4096) };
     bytes[56..56 + name.len()].copy_from_slice(name.as_bytes());
     let request = if source.is_some() { SNAPSHOT } else { CREATE };
+    // SAFETY: `buffer` is the 4096-byte btrfs_ioctl_vol_args_v2 the request expects, and `parent`
+    // stays open.
     if unsafe { libc::ioctl(parent.as_raw_fd(), request, buffer.as_mut_ptr()) } != 0 {
         return Err(Error(
             "new Btrfs subvolume creation refused; retain transaction for review".into(),
@@ -136,6 +147,7 @@ fn create(
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn sync(fd: BorrowedFd<'_>) -> Result<()> {
     require(
+        // SAFETY: BTRFS_IOC_SYNC takes no argument, and `fd` stays open.
         unsafe { libc::ioctl(fd.as_raw_fd(), 0x9408 as libc::c_ulong) } == 0,
         "Btrfs filesystem durability uncertain",
     )
@@ -190,6 +202,8 @@ pub(crate) fn destroy_readonly_original(
     )?;
     let mut arguments = destruction_arguments(enzimos_platform::json::unsigned(&actual["id"])?)?;
     require(
+        // SAFETY: `arguments` is the btrfs_ioctl_vol_args_v2 buffer the request expects, and
+        // `parent` stays open.
         unsafe {
             libc::ioctl(
                 parent.as_raw_fd(),

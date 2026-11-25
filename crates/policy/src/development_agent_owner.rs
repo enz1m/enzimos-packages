@@ -36,8 +36,10 @@ impl Owner {
                     .starts_with(b"\x7fELF"),
             "development agent fixed native image required",
         )?;
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `image` keeps the descriptor open.
         let alias = unsafe { libc::fcntl(image.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(alias >= 0, "development agent image duplication failed")?;
+        // SAFETY: `alias` is a fresh duplicate owned by nothing else.
         let alias = unsafe { OwnedFd::from_raw_fd(alias) };
         let mut command = Command::new(format!("/proc/self/fd/{}", alias.as_raw_fd()));
         command
@@ -63,6 +65,8 @@ impl Owner {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let caller = std::process::id() as libc::pid_t;
+        // SAFETY: The pre_exec closure only calls prctl, getppid and setsid, which are
+        // async-signal-safe.
         unsafe {
             command.pre_exec(move || {
                 if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0
@@ -77,6 +81,7 @@ impl Owner {
             });
         }
         let mut child = command.spawn()?;
+        // SAFETY: pidfd_open takes no pointers.
         let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, child.id(), 0) as i32 };
         if raw < 0 {
             let _ = child.kill();
@@ -88,6 +93,7 @@ impl Owner {
         let this = Self {
             child,
             pidfd: None,
+            // SAFETY: `raw` was just returned by pidfd_open and is owned by nothing else.
             leader: unsafe { File::from_raw_fd(raw) },
             image,
             owner,
@@ -103,11 +109,14 @@ impl Owner {
         require(
             self.pidfd.is_none()
                 && pid > 1
+                // SAFETY: getpgid takes no pointers.
                 && unsafe { libc::getpgid(pid as i32) } == self.child.id() as i32,
             "development daemon must belong to original launcher's private process group",
         )?;
+        // SAFETY: pidfd_open takes no pointers.
         let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) as i32 };
         require(raw >= 0, "development daemon pidfd unavailable")?;
+        // SAFETY: `raw` was just returned by pidfd_open and is owned by nothing else.
         self.pidfd = Some(unsafe { File::from_raw_fd(raw) });
         self.task = pid;
         if self.owner == 0 {
@@ -169,6 +178,7 @@ impl Owner {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let result = unsafe { libc::poll(&mut poll, 1, 0) };
         require(
             result >= 0 && poll.revents & (libc::POLLERR | libc::POLLNVAL) == 0,
@@ -184,6 +194,7 @@ impl Owner {
         )?;
         if self.pidfd.is_some() {
             require(
+                // SAFETY: getpgid takes no pointers.
                 unsafe { libc::getpgid(self.task as i32) } == self.child.id() as i32,
                 "development daemon left original private process group",
             )?;
@@ -198,6 +209,7 @@ impl Owner {
     pub(crate) fn terminate(&self) -> Result<()> {
         self.recheck()?;
         require(
+            // SAFETY: The siginfo pointer is null and the pidfd stays open.
             unsafe {
                 libc::syscall(
                     libc::SYS_pidfd_send_signal,
@@ -224,6 +236,7 @@ impl Drop for Owner {
         }
         // The child is kept unreaped; the pidfd identifies the original task.
         if let Some(fd) = &self.pidfd {
+            // SAFETY: The siginfo pointer is null and `fd` keeps the pidfd open.
             unsafe {
                 libc::syscall(
                     libc::SYS_pidfd_send_signal,
@@ -237,6 +250,8 @@ impl Drop for Owner {
         // Its original launcher is kept unreaped, reserving this private group
         // identifier until all owned descendants have been stopped.
         let _keep_leader = &self.leader;
+        // SAFETY: kill takes no pointers; the child called setsid, so the negative ID names only
+        // its own group.
         unsafe {
             libc::kill(-(self.child.id() as i32), libc::SIGKILL);
         }

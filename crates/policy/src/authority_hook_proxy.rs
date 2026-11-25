@@ -72,8 +72,10 @@ pub fn request() -> Result<Value> {
     let id =
         std::env::var(ID_ENV).map_err(|_| Error("authority hook generation missing".into()))?;
     identity::safe_id(&id)?;
+    // SAFETY: F_DUPFD_CLOEXEC takes no pointers and only duplicates an inherited descriptor number.
     let raw = unsafe { libc::fcntl(descriptor as i32, libc::F_DUPFD_CLOEXEC, 64) };
     require(raw >= 0, "authority hook inherited channel unavailable")?;
+    // SAFETY: `raw` is a fresh F_DUPFD_CLOEXEC duplicate owned by nothing else.
     let channel = Packet::from_file(unsafe { File::from_raw_fd(raw) })?;
     let token = files::random_hex(16)?;
     let body = value!({"schema":1,"action":"authority","generation":id,"token":token});

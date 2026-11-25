@@ -282,6 +282,7 @@ impl Authority {
         let target = CString::new(path.as_os_str().as_encoded_bytes())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: All non-null pointers are NUL-terminated CStrings that outlive the call.
             unsafe {
                 libc::mount(
                     source.as_ptr(),
@@ -381,6 +382,7 @@ impl Authority {
         let target = CString::new(self.path.as_os_str().as_encoded_bytes())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         drop(self.file.take());
+        // SAFETY: `target` is a NUL-terminated CString.
         let code = unsafe { libc::umount2(target.as_ptr(), 0) };
         if code != 0 {
             self.file = Some(files::directory(&self.path, Some(0))?);
@@ -409,6 +411,8 @@ fn set_root_readonly(
     target.recheck(guard)?;
     let mut flags = 0u64;
     require(
+        // SAFETY: BTRFS_IOC_SUBVOL_GETFLAGS writes one u64 into the passed buffer, and the
+        // directory stays open.
         unsafe {
             libc::ioctl(
                 target.directory.as_raw_fd(),
@@ -421,6 +425,8 @@ fn set_root_readonly(
     )?;
     let next = if readonly { 2u64 } else { 0u64 };
     require(
+        // SAFETY: BTRFS_IOC_SUBVOL_SETFLAGS reads one u64 from the passed buffer, and the directory
+        // stays open.
         unsafe {
             libc::ioctl(
                 target.directory.as_raw_fd(),

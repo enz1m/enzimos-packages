@@ -83,6 +83,7 @@ fn remove_owned(volume: &Volume, entry: &Text) -> Result<()> {
     entry.artifact.recheck()?;
     let before = files::identity(&entry.artifact.file.metadata()?);
     require(
+        // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
         unsafe {
             libc::renameat2(
                 parent.as_raw_fd(),
@@ -116,6 +117,7 @@ fn remove_owned(volume: &Volume, entry: &Text) -> Result<()> {
     )?;
     directory_unchanged(volume, &parent, "loader/entries")?;
     require(
+        // SAFETY: `new` is a NUL-terminated CString and `parent` keeps the descriptor open.
         unsafe { libc::unlinkat(parent.as_raw_fd(), new.as_ptr(), 0) } == 0,
         "owned run entry unlink failed",
     )?;

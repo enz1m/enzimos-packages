@@ -12,6 +12,7 @@ fn command_line() -> Result<String> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (pause, umask).")]
 fn main() {
+    // SAFETY: umask takes no pointers and cannot fail.
     unsafe { libc::umask(0o077) };
     if let Err(error) = bootstrap::initialize() {
         eprintln!("ENZIMOS_RECOVERY_RUN_BOOTSTRAP_REFUSED {error}");
@@ -61,6 +62,7 @@ fn main() {
         eprintln!("{error}");
     }
     loop {
+        // SAFETY: pause takes no arguments.
         unsafe { libc::pause() };
     }
 }

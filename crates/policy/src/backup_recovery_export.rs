@@ -132,6 +132,7 @@ fn write(name: &str, value: &Value) -> Result<()> {
 pub fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
     let length = File::from(source.try_clone_to_owned()?).metadata()?.len();
     require((1..=4096).contains(&length), "recovery credential bound")?;
+    // SAFETY: The name is a NUL-terminated literal.
     let fd = unsafe {
         libc::memfd_create(
             c"enzimos-backup-recovery".as_ptr(),
@@ -139,14 +140,17 @@ pub fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
         )
     };
     require(fd >= 0, "recovery copy creation failed")?;
+    // SAFETY: `fd` was just returned by memfd_create and is owned by nothing else.
     let output = unsafe { File::from_raw_fd(fd) };
     require(
+        // SAFETY: fchmod takes no pointers and `fd` is the open memfd.
         unsafe { libc::fchmod(fd, 0o600) } == 0,
         "recovery copy permissions",
     )?;
     let mut offset: libc::off_t = 0;
     let mut interrupted = 0;
     while (offset as u64) < length {
+        // SAFETY: `offset` is a writable off_t and both descriptors stay open.
         let count = unsafe {
             libc::sendfile(
                 fd,
@@ -168,8 +172,11 @@ pub fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
         )?;
     }
     require(
+        // SAFETY: fchown takes no pointers and `fd` is the open memfd.
         unsafe { libc::fchown(fd, uid, u32::MAX) } == 0
+            // SAFETY: F_ADD_SEALS takes no pointers and `fd` is the open memfd.
             && unsafe { libc::fcntl(fd, libc::F_ADD_SEALS, SEALS) } == 0
+            // SAFETY: lseek takes no pointers and `fd` is the open memfd.
             && unsafe { libc::lseek(fd, 0, libc::SEEK_SET) } == 0,
         "recovery copy ownership/sealing failed",
     )?;
@@ -179,6 +186,7 @@ pub fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
             && m.mode() & 0o7777 == 0o600
             && m.nlink() == 0
             && m.len() == length
+            // SAFETY: F_GET_SEALS takes no pointers and `fd` is the open memfd.
             && unsafe { libc::fcntl(fd, libc::F_GET_SEALS) } & SEALS == SEALS,
         "recovery copy shape",
     )?;

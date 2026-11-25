@@ -164,6 +164,7 @@ impl Block {
                 .as_encoded_bytes(),
         )
         .map_err(|_| Error("block device filename".into()))?;
+        // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -172,6 +173,7 @@ impl Block {
             )
         };
         require(fd >= 0, "recovery block descriptor unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(fd) };
         let m = file.metadata()?;
         require(

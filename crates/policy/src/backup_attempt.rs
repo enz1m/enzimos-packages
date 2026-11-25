@@ -383,6 +383,8 @@ impl<'g> Store<'g> {
             let c_name = std::ffi::CString::new(name.as_bytes())
                 .map_err(|_| enzimos_platform::Error("backup attempt filename encoding".into()))?;
             require(
+                // SAFETY: The name is NUL-terminated and `self.directory` keeps the descriptor
+                // open.
                 unsafe {
                     libc::unlinkat(
                         std::os::fd::AsRawFd::as_raw_fd(&self.directory),

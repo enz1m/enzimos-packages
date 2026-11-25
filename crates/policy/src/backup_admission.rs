@@ -60,6 +60,7 @@ impl Document {
         let destination = std::ffi::CString::new(retired.as_str())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),
@@ -107,6 +108,7 @@ impl Document {
         let destination = std::ffi::CString::new(retired.as_str())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),

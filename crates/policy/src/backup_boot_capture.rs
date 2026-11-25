@@ -382,6 +382,8 @@ fn create_directory(parent: &File, name: &str) -> Result<File> {
         !name.is_empty()
             && !name.contains('/')
             && !matches!(name, "." | "..")
+            // SAFETY: `component` is a NUL-terminated C string and `parent` keeps the descriptor
+            // open.
             && unsafe { libc::mkdirat(parent.as_raw_fd(), component.as_ptr(), 0o700) } == 0,
         "exclusive boot directory creation failed; intent retained",
     )?;
@@ -405,6 +407,7 @@ fn preserve_mtime(file: &File, epoch: &files::FileIdentity) -> Result<()> {
         },
     ];
     require(
+        // SAFETY: `times` holds the two timespecs futimens reads, and `file` stays open.
         unsafe { libc::futimens(file.as_raw_fd(), times.as_ptr()) } == 0,
         "boot copy modification time preservation failed",
     )
@@ -431,6 +434,7 @@ fn copy_file(
             && before.7 & 0o7022 == 0,
         "original boot file copy authority",
     )?;
+    // SAFETY: `c` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -443,6 +447,7 @@ fn copy_file(
         raw >= 0,
         "exclusive boot file creation failed; intent retained",
     )?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let mut output = unsafe { File::from_raw_fd(raw) };
     let mut hash = Sha256::new();
     let mut offset = 0;
@@ -481,6 +486,7 @@ fn copy_file(
     )?;
     checkpoint()?;
     require(
+        // SAFETY: fchmod takes no pointers and `output` keeps the descriptor open.
         unsafe { libc::fchmod(output.as_raw_fd(), before.7 & 0o777) } == 0,
         "boot output permission preservation failed",
     )?;
@@ -558,6 +564,7 @@ fn copy_tree(
         };
         checkpoint()?;
         require(
+            // SAFETY: fchmod takes no pointers and `directory` keeps the descriptor open.
             unsafe { libc::fchmod(directory.as_raw_fd(), node.epoch.7 & 0o777) } == 0,
             "boot directory permission preservation failed",
         )?;

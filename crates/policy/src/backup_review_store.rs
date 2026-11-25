@@ -206,6 +206,7 @@ impl<'g> Store<'g> {
             self.unlink(&name)?;
         }
         require(
+            // SAFETY: fsync takes no pointers and `self.directory` keeps the descriptor open.
             unsafe { libc::fsync(self.directory.as_raw_fd()) } == 0,
             "runtime receipt retirement durability unknown",
         )?;
@@ -226,6 +227,8 @@ impl<'g> Store<'g> {
         let c = std::ffi::CString::new(name)
             .map_err(|_| enzimos_platform::Error("receipt name encoding".into()))?;
         require(
+            // SAFETY: `c` is a NUL-terminated C string and `self.directory` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.directory.as_raw_fd(), c.as_ptr(), 0) } == 0,
             "runtime receipt retirement refused",
         )?;
@@ -252,6 +255,7 @@ impl<'g> Store<'g> {
         )?;
         self.unlink(&name)?;
         require(
+            // SAFETY: fsync takes no pointers and `self.directory` keeps the descriptor open.
             unsafe { libc::fsync(self.directory.as_raw_fd()) } == 0,
             "runtime receipt retirement durability unknown",
         )?;

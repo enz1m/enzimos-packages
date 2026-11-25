@@ -29,8 +29,10 @@ fn flags(file: &File) -> Result<i32> {
 fn ram(file: &File) -> Result<()> {
     let mut data = std::mem::MaybeUninit::<libc::statfs>::uninit();
     require(
+        // SAFETY: `data` is writable for one `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), data.as_mut_ptr()) } == 0
             && matches!(
+                // SAFETY: fstatfs returned 0, so it initialized `data`.
                 unsafe { data.assume_init() }.f_type as u64,
                 0x858458f6 | 0x01021994
             ),
@@ -141,6 +143,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
         let before_mount = exclusive.release()?;
         before_mount.require_original_mapping(mapping)?;
         require(
+            // SAFETY: All non-null pointers are NUL-terminated C strings that outlive the call.
             unsafe {
                 libc::mount(
                     source.as_ptr(),
@@ -257,6 +260,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
         self.recheck()?;
         drop(self.top.take());
         require(
+            // SAFETY: The path is a NUL-terminated literal.
             unsafe { libc::umount2(c"/run/enzimos/root-retirement-top".as_ptr(), 0) } == 0,
             "normal owned offline unmount refused; retain mapping/mount for manual review",
         )?;

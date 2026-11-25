@@ -24,11 +24,13 @@ impl Drop for Scratch {
     fn drop(&mut self) {
         if !self.pointer.is_null() {
             if self.size > 0 {
+                // SAFETY: crypt_ra allocated `size` bytes at `pointer`, owned by this guard.
                 unsafe {
                     std::slice::from_raw_parts_mut(self.pointer.cast::<u8>(), self.size as usize)
                 }
                 .zeroize();
             }
+            // SAFETY: `pointer` came from crypt_ra's malloc and is freed exactly once.
             unsafe { libc::free(self.pointer) };
         }
     }
@@ -53,6 +55,8 @@ pub fn verify(bytes: &[u8]) -> Result<()> {
         pointer: std::ptr::null_mut(),
         size: 0,
     };
+    // SAFETY: Both strings are NUL-terminated within `bytes`, and the scratch pointers are
+    // writable.
     let result = unsafe {
         crypt_ra(
             bytes.as_ptr().cast(),
@@ -71,6 +75,8 @@ pub fn verify(bytes: &[u8]) -> Result<()> {
         offset.is_some_and(|n| n <= scratch.size as usize - 384),
         "password verifier output bounds",
     )?;
+    // SAFETY: `result` lies within the scratch buffer with at least 384 bytes after it, as checked
+    // above.
     let output = unsafe { std::slice::from_raw_parts(result.cast::<u8>(), 384) };
     let end = output
         .iter()
@@ -97,23 +103,30 @@ pub fn constrain() -> Result<()> {
             rlim_max: value,
         };
         require(
+            // SAFETY: `limit` is a valid rlimit that outlives the call.
             unsafe { libc::setrlimit(kind, &limit) } == 0,
             "password verifier limits unavailable",
         )?;
     }
     if enzimos_platform::process_identity::effective_uid() == 0 {
         require(
+            // SAFETY: setgroups with a zero count accepts a null list.
             unsafe { libc::setgroups(0, std::ptr::null()) } == 0
+                // SAFETY: setresgid takes no pointers.
                 && unsafe { libc::setresgid(65534, 65534, 65534) } == 0
+                // SAFETY: setresuid takes no pointers.
                 && unsafe { libc::setresuid(65534, 65534, 65534) } == 0,
             "password verifier privilege drop unavailable",
         )?;
     }
     require(
         parent > 0
+            // SAFETY: This prctl option takes no pointers.
             && unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) } == 0
             && enzimos_platform::process_identity::parent_pid() == parent
+            // SAFETY: This prctl option takes no pointers.
             && unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } == 0
+            // SAFETY: This prctl option takes no pointers.
             && unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "password verifier confinement unavailable",
     )

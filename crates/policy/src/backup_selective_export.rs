@@ -39,6 +39,7 @@ fn space(guard: &Guard) -> Result<()> {
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `status` is a writable `libc::statvfs` and the control directory stays open.
         unsafe { libc::fstatvfs(guard.control().as_raw_fd(), &mut status) } == 0
             && u128::from(status.f_bavail) * u128::from(status.f_frsize)
                 >= u128::from(crate::backup_selective_result::MAX_FILE + 32 * 1024 * 1024),

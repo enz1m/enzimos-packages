@@ -16,6 +16,7 @@ fn free(destination: &Destination<'_>, minimum: u64) -> Result<()> {
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `status` is a writable `libc::statvfs` and `fd` keeps the descriptor open.
         unsafe { libc::fstatvfs(fd.as_raw_fd(), &mut status) } == 0,
         "original backup destination space observation failed",
     )?;

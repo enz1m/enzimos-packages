@@ -18,6 +18,7 @@ impl Metadata {
     fn observe(parent: &File, name: &str) -> Result<Self> {
         let leaf =
             CString::new(name).map_err(|_| enzimos_platform::Error("EFI basename".into()))?;
+        // SAFETY: `leaf` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -26,6 +27,7 @@ impl Metadata {
             )
         };
         require(fd >= 0, "original EFI metadata descriptor unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(fd) };
         let epoch = files::identity(&file.metadata()?);
         let flags = enzimos_platform::files::status_flags(&file);
@@ -235,6 +237,8 @@ impl<'a> Original<'a> {
         )?;
         let leaf_c = CString::new(leaf.as_str())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        // SAFETY: `leaf_c` is a NUL-terminated C string and `self.directory` keeps the descriptor
+        // open.
         let fd = unsafe {
             libc::openat(
                 self.directory.as_raw_fd(),
@@ -243,6 +247,7 @@ impl<'a> Original<'a> {
             )
         };
         require(fd >= 0, "actual owned EFI writer unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let writer = unsafe { File::from_raw_fd(fd) };
         let writer_flags = enzimos_platform::files::status_flags(&writer);
         require(
@@ -263,6 +268,8 @@ impl<'a> Original<'a> {
         }
         inventory.require_deleted_record(&self.receipt, authorize)?;
         let attributes = 7u32.to_le_bytes();
+        // SAFETY: The buffer pointer and length describe `attributes`, and `writer` keeps the
+        // descriptor open.
         let written = unsafe {
             libc::write(
                 writer.as_raw_fd(),

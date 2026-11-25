@@ -172,6 +172,8 @@ impl<'a> Destination<'a> {
         let mut usage: libc::statvfs = unsafe { std::mem::zeroed() };
         use std::os::fd::AsRawFd;
         require(
+            // SAFETY: `usage` is a writable `libc::statvfs` and `self.root` keeps the descriptor
+            // open.
             unsafe { libc::fstatvfs(self.root.as_raw_fd(), &mut usage) } == 0,
             "backup status original filesystem space unavailable",
         )?;
@@ -317,6 +319,8 @@ impl<'a> Destination<'a> {
         // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `status` is a writable `libc::statvfs` and `self.repository` keeps the
+            // descriptor open.
             unsafe { libc::fstatvfs(self.repository.as_raw_fd(), &mut status) } == 0,
             "original transfer repository space unavailable",
         )?;

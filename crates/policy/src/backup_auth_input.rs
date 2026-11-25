@@ -75,6 +75,7 @@ impl<'i> Temporary<'i> {
         // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `fs` is a writable `libc::statfs` and `parent` keeps the descriptor open.
             unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,
             "authentication input requires original tmpfs",
         )?;
@@ -91,6 +92,8 @@ impl<'i> Temporary<'i> {
         input.recheck()?;
         preflight()?;
         require(
+            // SAFETY: `raw_name` is a NUL-terminated C string and `parent` keeps the descriptor
+            // open.
             unsafe { libc::mkdirat(parent.as_raw_fd(), raw_name.as_ptr(), 0o700) } == 0,
             "new authentication folder refused",
         )?;
@@ -100,6 +103,7 @@ impl<'i> Temporary<'i> {
             mount_identity::id(folder.as_fd(), true)? == mount,
             "authentication folder left original tmpfs",
         )?;
+        // SAFETY: The name is a NUL-terminated literal and `folder` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 folder.as_raw_fd(),
@@ -109,6 +113,7 @@ impl<'i> Temporary<'i> {
             )
         };
         require(raw >= 0, "new authentication password refused")?;
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         let output = unsafe { File::from_raw_fd(raw) };
         let created = files::identity(&output.metadata()?);
         let named_folder = files::directory_relative(&parent, Path::new(&name), Some(0))?;
@@ -205,6 +210,8 @@ impl<'i> Temporary<'i> {
         let evidence = self.evidence()?;
         closed.recheck()?;
         require(
+            // SAFETY: The name is a NUL-terminated literal and `self.folder` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.folder.as_raw_fd(), c"password".as_ptr(), 0) } == 0,
             "authentication input retirement unknown",
         )?;
@@ -224,8 +231,11 @@ impl<'i> Temporary<'i> {
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         closed.recheck()?;
         require(
+            // SAFETY: `name` is a NUL-terminated C string and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
                 == 0
+                // SAFETY: fsync takes no pointers and `self.parent` keeps the descriptor open.
                 && unsafe { libc::fsync(self.parent.as_raw_fd()) } == 0,
             "authentication folder retirement unknown",
         )?;
@@ -309,6 +319,7 @@ pub(crate) fn borrowed(v: &serde_json::Value, id: &str, length: u64, file: &File
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     let flags = enzimos_platform::files::status_flags(&file);
     require(
+        // SAFETY: `fs` is a writable `libc::statfs` and `parent` keeps the descriptor open.
         unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x01021994
             && flags >= 0

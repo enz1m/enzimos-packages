@@ -58,6 +58,7 @@ pub fn copy_named(
     let mut effective = 0;
     let mut saved = 0;
     require(
+        // SAFETY: The three outputs are writable uid_t values.
         unsafe { libc::getresuid(&mut real, &mut effective, &mut saved) } == 0
             && real == uid
             && effective == uid
@@ -87,6 +88,7 @@ pub fn copy_named(
             && files::identity(&source.metadata()?) == original,
         "original delivery inputs changed",
     )?;
+    // SAFETY: `c` is a NUL-terminated C string and `home` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             home.as_raw_fd(),
@@ -98,10 +100,12 @@ pub fn copy_named(
     if fd < 0 {
         return Err(std::io::Error::last_os_error().into());
     }
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     let output = unsafe { File::from_raw_fd(fd) };
     // The final name remains on every failure. Never unlink a partial or replay.
     let acl = CString::new("system.posix_acl_access")
         .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    // SAFETY: `acl` is a NUL-terminated CString and `output` keeps the descriptor open.
     if unsafe { libc::fremovexattr(output.as_raw_fd(), acl.as_ptr()) } != 0 {
         let error = std::io::Error::last_os_error();
         require(
@@ -110,6 +114,7 @@ pub fn copy_named(
         )?;
     }
     require(
+        // SAFETY: fchmod takes no pointers and `output` keeps the descriptor open.
         unsafe { libc::fchmod(output.as_raw_fd(), 0o600) } == 0,
         "delivery protection refused; output retained",
     )?;
@@ -192,6 +197,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
+            // SAFETY: lseek takes no pointers and `source` keeps the descriptor open.
             unsafe { libc::lseek(source.as_raw_fd(), 7, libc::SEEK_SET) },
             7
         );
@@ -202,6 +208,7 @@ mod tests {
             b"private recovered bytes"
         );
         assert_eq!(
+            // SAFETY: lseek takes no pointers and `source` keeps the descriptor open.
             unsafe { libc::lseek(source.as_raw_fd(), 0, libc::SEEK_CUR) },
             7
         );

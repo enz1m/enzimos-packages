@@ -304,6 +304,7 @@ fn persist_inner(
     for name in ["backup.password", ".backup-password-input", "backup.json"] {
         absent(&parent, name)?;
     }
+    // SAFETY: The name is a NUL-terminated literal and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -313,6 +314,7 @@ fn persist_inner(
         )
     };
     require(raw >= 0, "exclusive credential output refused")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let output = unsafe { File::from_raw_fd(raw) };
     require(
         output.metadata()?.gid() == 0
@@ -337,6 +339,7 @@ fn persist_inner(
     }
     // Atomic no-overwrite publication; only this exact already-copied inode.
     require(
+        // SAFETY: Both names are NUL-terminated literals and `parent` keeps the descriptor open.
         unsafe {
             libc::linkat(
                 parent.as_raw_fd(),
@@ -367,7 +370,9 @@ fn persist_inner(
         "credential hardlink publication identity changed",
     )?;
     require(
+        // SAFETY: The name is a NUL-terminated literal and `parent` keeps the descriptor open.
         unsafe { libc::unlinkat(parent.as_raw_fd(), c".backup-password-input".as_ptr(), 0) } == 0
+            // SAFETY: fsync takes no pointers and `parent` keeps the descriptor open.
             && unsafe { libc::fsync(parent.as_raw_fd()) } == 0,
         "credential publication durability unknown; receipt retained",
     )?;

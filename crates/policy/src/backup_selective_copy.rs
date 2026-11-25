@@ -47,6 +47,7 @@ pub(crate) fn write(
         shape(parent)? == original,
         "original export parent changed before create",
     )?;
+    // SAFETY: The name is a NUL-terminated literal and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -59,9 +60,12 @@ pub(crate) fn write(
         fd >= 0,
         "exclusive export content creation failed; no adoption",
     )?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     let output = unsafe { File::from_raw_fd(fd) };
     // Remove inherited ACLs before publishing Root-private bytes. Never restore
     // historical permissions, attributes or ownership.
+    // SAFETY: The attribute name is a NUL-terminated literal and `fd` is an open descriptor of the
+    // caller's file.
     if unsafe { libc::fremovexattr(fd, c"system.posix_acl_access".as_ptr()) } != 0 {
         let error = std::io::Error::last_os_error();
         require(
@@ -70,6 +74,7 @@ pub(crate) fn write(
         )?;
     }
     require(
+        // SAFETY: fchmod takes no pointers and `fd` is an open descriptor of the caller's file.
         unsafe { libc::fchmod(fd, 0o600) } == 0,
         "export content mode publication failed",
     )?;

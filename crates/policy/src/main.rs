@@ -41,9 +41,12 @@ fn run(args: &[String]) -> Result<Value> {
     if args == ["delivery-copy-worker", "--fd3"] {
         use std::os::fd::FromRawFd;
         require(
+            // SAFETY: F_GETFD takes no pointers; it only checks that descriptor 3 is open.
             unsafe { libc::fcntl(3, libc::F_GETFD) } >= 0,
             "delivery worker channel unavailable",
         )?;
+        // SAFETY: The parent passed descriptor 3 to this worker alone, checked open above, and it
+        // is adopted once.
         let file = unsafe { std::fs::File::from_raw_fd(3) };
         enzimos_policy::delivery_copy_worker::entry(
             enzimos_platform::fd_packet::Packet::from_file(file)?,
@@ -143,6 +146,7 @@ fn run(args: &[String]) -> Result<Value> {
                 .parse::<i32>()
                 .map_err(|_| Error("recovery descriptor required".into()))?;
             require(
+                // SAFETY: F_GETFD takes no pointers; it only checks that the number is open.
                 fd >= 3 && fd.to_string() == s && unsafe { libc::fcntl(fd, libc::F_GETFD) } >= 0,
                 "canonical inherited recovery descriptor required",
             )?;
@@ -153,11 +157,17 @@ fn run(args: &[String]) -> Result<Value> {
             let output = descriptor(&options["document-fd"])?;
             require(input != output, "distinct recovery descriptors required")?;
             return enzimos_policy::backup_recovery_print::render(
+                // SAFETY: The caller passed this canonical inherited descriptor, checked open
+                // above, and it is adopted once.
                 unsafe { std::fs::File::from_raw_fd(input) },
+                // SAFETY: The caller passed this canonical inherited descriptor, checked open
+                // above, and it is adopted once. It differs from `input`.
                 unsafe { std::fs::File::from_raw_fd(output) },
             );
         }
         return enzimos_policy::backup_recovery_save::save(
+            // SAFETY: The caller passed this canonical inherited descriptor, checked open above,
+            // and it is adopted once.
             unsafe { std::fs::File::from_raw_fd(input) },
             std::path::Path::new(&options["directory"]),
             &options["name"],
@@ -796,6 +806,7 @@ fn main() {
             rlim_cur: 0,
             rlim_max: 0,
         };
+        // SAFETY: `caller` is a writable rlimit.
         if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut caller) } == 0 {
             let _ = enzimos_policy::desktop_gaming_check::CALLER_NOFILE
                 .set((caller.rlim_cur, caller.rlim_max));
@@ -805,7 +816,9 @@ fn main() {
             rlim_max: 0,
         };
         require(
+            // SAFETY: `core` is a valid rlimit that outlives the call.
             unsafe { libc::setrlimit(libc::RLIMIT_CORE, &core) } == 0
+                // SAFETY: This prctl option takes no pointers.
                 && unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
             "native policy process protection unavailable",
         )?;
@@ -814,6 +827,7 @@ fn main() {
             rlim_max: 4096,
         };
         require(
+            // SAFETY: `descriptors` is a valid rlimit that outlives the call.
             unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &descriptors) } == 0,
             "native policy retained descriptor budget unavailable",
         )?;

@@ -577,6 +577,7 @@ impl KeyringSocket {
             };
             parent = next;
         }
+        // SAFETY: The name is a NUL-terminated literal and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -591,6 +592,7 @@ impl KeyringSocket {
             }
             return Err(error.into());
         }
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let original = unsafe { File::from_raw_fd(fd) };
         let before = original.metadata()?;
         require(
@@ -599,6 +601,8 @@ impl KeyringSocket {
             "administrator keyring activation requires review",
         )?;
         let mut link = [0u8; 4096];
+        // SAFETY: The empty path is NUL-terminated, the buffer pointer and length describe `link`,
+        // and `original` stays open.
         let n = unsafe {
             libc::readlinkat(
                 original.as_raw_fd(),
@@ -636,6 +640,7 @@ impl KeyringSocket {
             &self.parent,
         )?;
         use std::os::fd::{AsRawFd, FromRawFd};
+        // SAFETY: The name is a NUL-terminated literal and `self.parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 self.parent.as_raw_fd(),
@@ -644,6 +649,7 @@ impl KeyringSocket {
             )
         };
         require(fd >= 0, "keyring activation disappeared")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let named = unsafe { File::from_raw_fd(fd) };
         require(
             files::identity(&named.metadata()?) == files::identity(&self.before)
@@ -656,6 +662,7 @@ impl KeyringSocket {
         ))
         .unwrap();
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),
@@ -667,6 +674,7 @@ impl KeyringSocket {
             } == 0,
             "keyring quarantine refused",
         )?;
+        // SAFETY: `leaf` is a NUL-terminated C string and `self.parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 self.parent.as_raw_fd(),
@@ -675,6 +683,7 @@ impl KeyringSocket {
             )
         };
         require(fd >= 0, "keyring quarantine unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let moved = unsafe { File::from_raw_fd(fd) };
         let m = moved.metadata()?;
         let held = self.original.metadata()?;
@@ -690,6 +699,8 @@ impl KeyringSocket {
             "keyring quarantine identity changed; retained for review",
         )?;
         require(
+            // SAFETY: `leaf` is a NUL-terminated CString and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), leaf.as_ptr(), 0) } == 0,
             "keyring quarantine retirement refused",
         )?;

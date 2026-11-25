@@ -213,6 +213,7 @@ pub(crate) fn normalize(target: &Path, name: &str, config: &Value, root: &File) 
     drop(current);
     drop(history);
     require(
+        // SAFETY: The name is a NUL-terminated literal and `root` keeps the descriptor open.
         unsafe { libc::unlinkat(root.as_raw_fd(), c".snapshots".as_ptr(), libc::AT_REMOVEDIR) }
             == 0,
         "fallback placeholder removal refused",
@@ -220,6 +221,7 @@ pub(crate) fn normalize(target: &Path, name: &str, config: &Value, root: &File) 
     subvolume::new(root.as_fd(), ".snapshots")?;
     let directory = files::directory(&history_path, Some(0))?;
     require(
+        // SAFETY: fchmod takes no pointers and `directory` keeps the descriptor open.
         unsafe { libc::fchmod(directory.as_raw_fd(), 0o750) } == 0,
         "fallback history permissions refused",
     )?;

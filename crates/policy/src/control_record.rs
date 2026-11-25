@@ -366,6 +366,7 @@ impl Retained {
             .map_err(|_| enzimos_platform::Error("archive destination encoding".into()))?;
         self.recheck()?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),

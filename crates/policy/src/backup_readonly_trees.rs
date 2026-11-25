@@ -52,6 +52,8 @@ impl<'a> Tree<'a> {
         checkpoint()?;
         let epoch = files::identity(&source.metadata()?);
         let source_mount = mount_identity::id(source.as_fd(), true)?;
+        // SAFETY: The empty path is a NUL-terminated literal and `source` keeps the descriptor
+        // open.
         let raw = unsafe {
             libc::syscall(
                 libc::SYS_open_tree,
@@ -64,6 +66,7 @@ impl<'a> Tree<'a> {
             raw >= 0,
             "detached readonly source clone failed; original intent retained",
         )?;
+        // SAFETY: `raw` was just returned by open_tree and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw as i32) };
         let unique = mount_identity::id(file.as_fd(), true)?;
         require(
@@ -78,6 +81,8 @@ impl<'a> Tree<'a> {
             user_namespace: 0,
         };
         require(
+            // SAFETY: The empty path is NUL-terminated, the attributes are a complete mount_attr
+            // passed with its size, and the descriptor stays open.
             unsafe {
                 libc::syscall(
                     libc::SYS_mount_setattr,
@@ -112,6 +117,8 @@ impl<'a> Tree<'a> {
                 && mount_identity::id(self.source.as_fd(), true)? == self.source_mount
                 && mount_identity::id(self.file.as_fd(), true)? == self.unique
                 && self.unique != self.source_mount
+                // SAFETY: `status` is a writable `libc::statvfs` and `self.file` keeps the
+                // descriptor open.
                 && unsafe { libc::fstatvfs(self.file.as_raw_fd(), &mut status) } == 0
                 && status.f_flag & required == required,
             "original detached source or readonly protections changed",

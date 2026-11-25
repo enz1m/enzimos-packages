@@ -49,6 +49,7 @@ impl Mounts {
         } else {
             libc::MS_BIND
         };
+        // SAFETY: All non-null pointers are NUL-terminated C strings that outlive the call.
         let result = unsafe {
             libc::mount(
                 source.as_ptr(),
@@ -147,6 +148,7 @@ impl Mounts {
             let named = CString::new(mount.path.as_os_str().as_encoded_bytes())
                 .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             drop(mount.file.take());
+            // SAFETY: `named` is a NUL-terminated CString.
             let result = unsafe { libc::umount2(named.as_ptr(), 0) };
             if result != 0 {
                 // Keep tracking a still-mounted target. No force, lazy detach, or

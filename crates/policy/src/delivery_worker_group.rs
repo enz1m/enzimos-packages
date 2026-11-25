@@ -25,6 +25,7 @@ fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
             && m.uid() == 0
             && m.gid() == 0
             && m.mode() & 0o022 == 0
+            // SAFETY: `fs` is a writable `libc::statfs` and `file` keeps the descriptor open.
             && unsafe { libc::fstatfs(file.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x63677270,
         "original Root cgroup v2 directory required",
@@ -110,11 +111,13 @@ impl Group {
         let c = CString::new(name.as_bytes())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: `c` is a NUL-terminated C string and `parent` keeps the descriptor open.
             unsafe { libc::mkdirat(parent.as_raw_fd(), c.as_ptr(), 0o700) } == 0,
             "fresh delivery cgroup required",
         )?;
         let directory = files::directory_relative(&parent, Path::new(&name), Some(0))?;
         require(
+            // SAFETY: fchmod takes no pointers and `directory` keeps the descriptor open.
             unsafe { libc::fchmod(directory.as_raw_fd(), 0o700) } == 0,
             "private delivery cgroup protection refused",
         )?;
@@ -193,6 +196,7 @@ impl Group {
         self.recheck()?;
         let c = CString::new("cgroup.procs")
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        // SAFETY: `c` is a NUL-terminated C string and `self.directory` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 self.directory.as_raw_fd(),
@@ -203,6 +207,7 @@ impl Group {
         if fd < 0 {
             return Err(std::io::Error::last_os_error().into());
         }
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(fd) };
         let m = file.metadata()?;
         require(
@@ -246,6 +251,8 @@ impl Group {
         let name = CString::new(self.name.as_bytes())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
+            // SAFETY: `name` is a NUL-terminated C string and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
                 == 0,
             "empty original delivery cgroup retirement refused",

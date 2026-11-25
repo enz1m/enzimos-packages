@@ -321,6 +321,8 @@ fn directory_path(top: &File, parent: u64, directory: u64) -> Result<String> {
     buffer[0] = parent;
     buffer[1] = directory;
     require(
+        // SAFETY: `buffer` is the 4096-byte btrfs_ioctl_ino_lookup_args LOOKUP expects, and `top`
+        // stays open.
         unsafe { libc::ioctl(top.as_raw_fd(), LOOKUP, buffer.as_mut_ptr()) } == 0,
         "actual Btrfs parent directory lookup unavailable",
     )?;
@@ -328,6 +330,8 @@ fn directory_path(top: &File, parent: u64, directory: u64) -> Result<String> {
         buffer[0] == parent && buffer[1] == directory,
         "actual Btrfs lookup identity changed",
     )?;
+    // SAFETY: `buffer` holds 4096 initialized bytes, so the 4080 bytes after its 16-byte header are
+    // readable.
     let bytes = unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>().add(16), 4080) };
     let end = bytes
         .iter()
@@ -418,6 +422,7 @@ pub(crate) fn query(top: &File) -> Result<Records> {
             buffer: [0; PAGE / 8],
         });
         require(
+            // SAFETY: `page` is the search_args_v2 buffer SEARCH expects, and `top` stays open.
             unsafe { libc::ioctl(top.as_raw_fd(), SEARCH, &mut *page) } == 0,
             "direct Btrfs search unavailable/truncated; no tool fallback",
         )?;
@@ -431,6 +436,7 @@ pub(crate) fn query(top: &File) -> Result<Records> {
             count <= MAX_ITEMS && bytes_seen <= MAX_BYTES,
             "complete Btrfs inventory bound exceeded",
         )?;
+        // SAFETY: `page.buffer` holds `PAGE` initialized bytes.
         let bytes = unsafe { std::slice::from_raw_parts(page.buffer.as_ptr().cast::<u8>(), PAGE) };
         let Some(next) = tree.page(bytes, page.key.count, minimum)? else {
             break;

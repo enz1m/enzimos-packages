@@ -40,6 +40,7 @@ impl<'a, 's> Held<'a, 's> {
         let (original, path) = mapping.original_mapper_node()?;
         let path = CString::new(path.as_os_str().as_encoded_bytes())
             .map_err(|_| enzimos_platform::Error("original mapper node encoding".into()))?;
+        // SAFETY: `path` is a NUL-terminated CString.
         let descriptor = unsafe {
             libc::open(
                 path.as_ptr(),
@@ -54,6 +55,7 @@ impl<'a, 's> Held<'a, 's> {
             descriptor >= 0,
             "actual mapper kernel exclusive claim unavailable; no retry or fallback",
         )?;
+        // SAFETY: `descriptor` was just returned by open and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(descriptor) };
         let metadata = file.metadata()?;
         require(
@@ -106,10 +108,12 @@ impl<'a, 's> Held<'a, 's> {
         } = self;
         let descriptor = file.into_raw_fd();
         require(
+            // SAFETY: `descriptor` was opened by this claim and is closed exactly once.
             unsafe { libc::close(descriptor) } == 0,
             "kernel mapper claim release uncertain; no mount or retry",
         )?;
         require(
+            // SAFETY: F_GETFD takes no pointers; it only probes the just-closed number.
             unsafe { libc::fcntl(descriptor, libc::F_GETFD) } == -1
                 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF),
             "original claim description still open after release",

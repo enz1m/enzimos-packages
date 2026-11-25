@@ -19,6 +19,7 @@ fn wait(fd: i32, events: i16, end: Instant) -> Result<()> {
             events,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let result = unsafe { libc::poll(&mut poll, 1, remaining.as_millis().max(1) as i32) };
         if result < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
             continue;
@@ -42,6 +43,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
         bytes.len() < 108 && !bytes.contains(&0),
         "development agent socket address bound",
     )?;
+    // SAFETY: socket takes no pointers.
     let raw = unsafe {
         libc::socket(
             libc::AF_UNIX,
@@ -50,11 +52,13 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
         )
     };
     require(raw >= 0, "development agent socket creation failed")?;
+    // SAFETY: `raw` was just returned by socket and is owned by nothing else.
     let socket = unsafe { OwnedFd::from_raw_fd(raw) };
     let yes: libc::c_int = 1;
     // Enable before connecting: credentials must stamp data queued by the
     // daemon, rather than the PID that originally created its listening socket.
     require(
+        // SAFETY: The option value points at `yes` with its 4-byte size, and `raw` is open.
         unsafe {
             libc::setsockopt(
                 raw,
@@ -72,6 +76,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
     for (destination, source) in address.sun_path.iter_mut().zip(bytes) {
         *destination = *source as libc::c_char;
     }
+    // SAFETY: `address` is initialized up to the passed length, which includes the path terminator.
     let result = unsafe {
         libc::connect(
             raw,
@@ -92,6 +97,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
     let mut error: libc::c_int = 0;
     let mut size = 4u32;
     require(
+        // SAFETY: The option buffer is `error` with its size in `size`, and `raw` is open.
         unsafe {
             libc::getsockopt(
                 raw,
@@ -120,6 +126,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
         message.msg_iovlen = 1;
         message.msg_control = ancillary.as_mut_ptr().cast();
         message.msg_controllen = std::mem::size_of_val(&ancillary);
+        // SAFETY: `message` points at buffers that outlive the call, and `socket` stays open.
         let count = unsafe {
             libc::recvmsg(
                 socket.as_raw_fd(),
@@ -130,6 +137,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
         require(count > 0, "development agent greeting unavailable")?;
         let mut credential = None;
         let mut valid = true;
+        // SAFETY: The CMSG macros walk only headers recvmsg wrote inside `ancillary`.
         unsafe {
             let mut header = libc::CMSG_FIRSTHDR(&message);
             while !header.is_null() {

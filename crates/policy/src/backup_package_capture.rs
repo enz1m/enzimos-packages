@@ -81,9 +81,11 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
     // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `fs` is a writable `libc::statfs` and `directory` keeps the descriptor open.
         unsafe { libc::fstatfs(directory.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x9fa0,
         "actual procfs descriptor inventory required",
     )?;
+    // SAFETY: The name is a NUL-terminated literal and `directory` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             directory.as_raw_fd(),
@@ -94,14 +96,17 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
     if raw < 0 {
         return Err(std::io::Error::last_os_error().into());
     }
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let cursor = unsafe { File::from_raw_fd(raw) };
     require(
         shape_proc(&cursor)? == expected,
         "procfs descriptor inventory changed",
     )?;
     let raw = cursor.into_raw_fd();
+    // SAFETY: `raw` came from `into_raw_fd`, so ownership passes to the DIR stream on success.
     let pointer = unsafe { libc::fdopendir(raw) };
     if pointer.is_null() {
+        // SAFETY: fdopendir failed, so `raw` is still owned here and closed exactly once.
         unsafe { libc::close(raw) };
         return Err(std::io::Error::last_os_error().into());
     }
@@ -109,6 +114,7 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
     impl Drop for Cursor {
         #[allow(unsafe_code, reason = "Linux syscall ABI (closedir).")]
         fn drop(&mut self) {
+            // SAFETY: The pointer came from a successful fdopendir and is closed only by this drop.
             unsafe { libc::closedir(self.0) };
         }
     }
@@ -116,16 +122,21 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
     let mut names = Vec::new();
     let mut complete = false;
     for _ in 0..4099 {
+        // SAFETY: errno is thread-local and always writable.
         unsafe { *libc::__errno_location() = 0 };
+        // SAFETY: `cursor.0` is a live DIR stream owned by `cursor`.
         let entry = unsafe { libc::readdir(cursor.0) };
         if entry.is_null() {
             require(
+                // SAFETY: errno is thread-local and always readable.
                 unsafe { *libc::__errno_location() } == 0,
                 "procfs descriptor enumeration failed",
             )?;
             complete = true;
             break;
         }
+        // SAFETY: readdir returned a non-null entry whose `d_name` is NUL-terminated and valid
+        // until the next readdir.
         let name = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
         if name == b"." || name == b".." {
             continue;
@@ -149,6 +160,7 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
     drop(cursor);
     Ok(names
         .into_iter()
+        // SAFETY: F_GETFL takes no pointers; it only probes whether the number is open.
         .filter(|fd| unsafe { libc::fcntl(*fd, libc::F_GETFL) } >= 0)
         .collect())
 }
@@ -159,6 +171,8 @@ impl DescriptorSnapshot {
     pub(crate) fn capture(directory: &File) -> Result<Self> {
         let mut entries = BTreeMap::new();
         for fd in descriptors(directory)? {
+            // SAFETY: F_DUPFD_CLOEXEC takes no pointers and only duplicates a descriptor of this
+            // process.
             let raw = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 64) };
             if raw < 0 {
                 let error = std::io::Error::last_os_error();
@@ -167,6 +181,7 @@ impl DescriptorSnapshot {
                 }
                 return Err(error.into());
             }
+            // SAFETY: `raw` is a fresh F_DUPFD_CLOEXEC duplicate owned by nothing else.
             let held = unsafe { File::from_raw_fd(raw) };
             let metadata = held.metadata()?;
             let flags = enzimos_platform::files::status_flags(&held);
@@ -198,10 +213,13 @@ fn original_lock(
     require(epoch.2 == 0, "native ALPM lock must be empty")?;
     let mut found = None;
     for fd in descriptors(process_fds)? {
+        // SAFETY: F_GETFL takes no pointers; it only probes whether the number is open.
         let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
         if flags < 0 || flags & libc::O_ACCMODE != libc::O_WRONLY {
             continue;
         }
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and only duplicates a descriptor of this
+        // process.
         let raw = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 64) };
         if raw < 0 {
             let error = std::io::Error::last_os_error();
@@ -210,6 +228,7 @@ fn original_lock(
             }
             return Err(error.into());
         }
+        // SAFETY: `raw` is a fresh F_DUPFD_CLOEXEC duplicate owned by nothing else.
         let original = unsafe { File::from_raw_fd(raw) };
         if !before.existed(fd, &original, libc::O_WRONLY)?
             && enzimos_platform::files::status_flags(&original) & libc::O_ACCMODE == libc::O_WRONLY
@@ -289,6 +308,7 @@ impl Library {
         )?;
         let (_, sha) = stream_copy::hash_borrowed(&file, 32 * 1024 * 1024, Some(0))?;
         let alias = CString::new(format!("/proc/self/fd/{}", file.as_raw_fd())).unwrap();
+        // SAFETY: `alias` is a NUL-terminated CString naming the retained, verified library file.
         let handle = unsafe {
             libc::dlmopen(
                 libc::LM_ID_NEWLM,
@@ -316,10 +336,14 @@ impl Library {
         };
         this.recheck()?;
         let version_fn: unsafe extern "C" fn() -> *const libc::c_char =
+            // SAFETY: `alpm_version` has the declared signature in the pinned ALPM ABI.
             unsafe { this.symbol(c"alpm_version")? };
+        // SAFETY: `alpm_version` takes no arguments and returns a static string.
         let actual = unsafe { version_fn() };
         require(
             !actual.is_null()
+                // SAFETY: `actual` is the non-null static NUL-terminated version string of the
+                // loaded library.
                 && unsafe { CStr::from_ptr(actual) }.to_bytes() == this.version.as_bytes(),
             "ALPM loaded version differs from original image",
         )?;
@@ -327,6 +351,7 @@ impl Library {
     }
     #[allow(unsafe_code, reason = "Native dynamic-loader ABI.")]
     unsafe fn symbol<T: Copy>(&self, name: &CStr) -> Result<T> {
+        // SAFETY: `self.handle` is the live dlmopen handle and `name` is NUL-terminated.
         let pointer = unsafe { libc::dlsym(self.handle, name.as_ptr()) };
         require(
             !pointer.is_null() && std::mem::size_of::<T>() == std::mem::size_of::<Handle>(),
@@ -335,11 +360,16 @@ impl Library {
         // SAFETY: `libc::Dl_info` is a plain C struct, for which all-zero bytes are a valid value.
         let mut info: libc::Dl_info = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `pointer` is a resolved symbol and `info` is a writable Dl_info.
             unsafe { libc::dladdr(pointer, &mut info) } != 0
                 && !info.dli_fname.is_null()
+                // SAFETY: dladdr succeeded and set a non-null NUL-terminated file name owned by the
+                // loader.
                 && unsafe { CStr::from_ptr(info.dli_fname) } == self.alias.as_c_str(),
             "ALPM symbol does not belong to original isolated image",
         )?;
+        // SAFETY: The caller's `T` is the symbol's function pointer type, and the sizes were
+        // checked equal.
         Ok(unsafe { std::mem::transmute_copy(&pointer) })
     }
     fn recheck(&self) -> Result<()> {
@@ -360,6 +390,7 @@ impl Library {
 impl Drop for Library {
     #[allow(unsafe_code, reason = "Native dynamic-loader ABI.")]
     fn drop(&mut self) {
+        // SAFETY: The handle came from a successful dlmopen and is closed only by this drop.
         unsafe { libc::dlclose(self.handle) };
     }
 }
@@ -372,8 +403,11 @@ struct PackageNode {
 #[allow(unsafe_code, reason = "Linux syscall ABI (strnlen).")]
 fn native_text(pointer: *const libc::c_char, maximum: usize) -> Result<String> {
     require(!pointer.is_null(), "native package text unavailable")?;
+    // SAFETY: Callers pass a NUL-terminated string owned by the live ALPM handle; strnlen reads at
+    // most `maximum + 1` bytes.
     let length = unsafe { libc::strnlen(pointer, maximum + 1) };
     require(length > 0 && length <= maximum, "native package text bound")?;
+    // SAFETY: strnlen found `length` readable bytes before the terminator.
     let bytes = unsafe { std::slice::from_raw_parts(pointer.cast::<u8>(), length) };
     String::from_utf8(bytes.to_vec()).map_err(|_| Error("native package text encoding".into()))
 }
@@ -410,6 +444,8 @@ struct Api {
 impl Api {
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
     unsafe fn load(l: &Library) -> Result<(Initialize, Self)> {
+        // SAFETY: Each symbol name is paired with its function pointer type from the pinned ALPM
+        // ABI.
         unsafe {
             Ok((
                 l.symbol(c"alpm_initialize")?,
@@ -468,6 +504,7 @@ impl<'a, 'g> Capture<'a, 'g> {
             "package transaction busy; no stale lock removal",
         )?;
         let library = Library::open()?;
+        // SAFETY: `Api::load` resolves symbols from the just-opened, verified `library`.
         let (initialize, api) = unsafe { Api::load(&library)? };
         authorize()?;
         attempt.evidence()?;
@@ -479,6 +516,7 @@ impl<'a, 'g> Capture<'a, 'g> {
             "package database changed before native transaction entry",
         )?;
         let mut error = 0;
+        // SAFETY: Both paths are NUL-terminated literals and `error` is a writable int.
         let handle = unsafe { initialize(c"/".as_ptr(), c"/var/lib/pacman".as_ptr(), &mut error) };
         require(!handle.is_null(), "ALPM capture handle unavailable")?;
         // A failed entry is not adopted or retried. No transaction preparation,
@@ -490,6 +528,8 @@ impl<'a, 'g> Capture<'a, 'g> {
         )?;
         let before = DescriptorSnapshot::capture(&process_fds)?;
         require(
+            // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from
+            // the isolated library with its ABI signature.
             unsafe { (api.begin)(handle, 0) } == 0,
             "native package transaction capture entry failed or busy; no replay",
         )?;
@@ -560,15 +600,24 @@ impl<'a, 'g> Capture<'a, 'g> {
             (self.api.db, c"/var/lib/pacman/"),
             (self.api.lock, c"/var/lib/pacman/db.lck"),
         ] {
+            // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from
+            // the isolated library with its ABI signature.
             let pointer = unsafe { getter(self.handle) };
             require(
+                // SAFETY: The getter returned a non-null NUL-terminated path owned by the handle.
                 !pointer.is_null() && unsafe { CStr::from_ptr(pointer) } == expected,
                 "native ALPM handle paths changed",
             )?;
         }
         require(
+            // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from
+            // the isolated library with its ABI signature.
             unsafe { (self.api.flags)(self.handle) } == 0
+                // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved
+                // from the isolated library with its ABI signature.
                 && unsafe { (self.api.added)(self.handle) }.is_null()
+                // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved
+                // from the isolated library with its ABI signature.
                 && unsafe { (self.api.removed)(self.handle) }.is_null(),
             "capture must contain no package transaction work",
         )
@@ -578,13 +627,18 @@ impl<'a, 'g> Capture<'a, 'g> {
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
     pub fn installed_packages(&self) -> Result<BTreeMap<String, String>> {
         self.recheck()?;
+        // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from the
+        // isolated library with its ABI signature.
         let database = unsafe { (self.api.local_database)(self.handle) };
         require(
             !database.is_null(),
             "native local package database unavailable",
         )?;
+        // SAFETY: `database` is the non-null local database of the live handle.
         let mut node = unsafe { (self.api.package_cache)(database) } as *const PackageNode;
         require(
+            // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from
+            // the isolated library with its ABI signature.
             unsafe { (self.api.errno)(self.handle) } == 0,
             "native installed package cache failed",
         )?;
@@ -597,9 +651,12 @@ impl<'a, 'g> Capture<'a, 'g> {
                 "native installed package list bound or cycle",
             )?;
             // alpm_list_t layout is pinned to the reviewed public ALPM16 ABI.
+            // SAFETY: `node` is a non-null, unvisited alpm_list_t node owned by the live handle.
             let row = unsafe { &*node };
             require(!row.data.is_null(), "native installed package missing")?;
+            // SAFETY: `row.data` is a non-null package of the live handle.
             let name = native_text(unsafe { (self.api.package_name)(row.data) }, 128)?;
+            // SAFETY: `row.data` is a non-null package of the live handle.
             let version = native_text(unsafe { (self.api.package_version)(row.data) }, 256)?;
             package_row(&name, &version)?;
             bytes += name.len() + version.len() + 2;
@@ -627,10 +684,14 @@ impl<'a, 'g> Capture<'a, 'g> {
     pub fn close(mut self) -> Result<()> {
         self.recheck()?;
         require(
+            // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from
+            // the isolated library with its ABI signature.
             unsafe { (self.api.end)(self.handle) } == 0,
             "native package capture release failed; explicit review required",
         )?;
         require(
+            // SAFETY: `handle` is the live ALPM handle and the function pointer was resolved from
+            // the isolated library with its ABI signature.
             unsafe { (self.api.release)(self.handle) } == 0,
             "native package handle release failed",
         )?;

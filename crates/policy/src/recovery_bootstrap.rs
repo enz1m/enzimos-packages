@@ -13,6 +13,7 @@ pub(crate) fn direct_ram_pid1() -> Result<()> {
         std::process::id() == 1 && enzimos_platform::process_identity::effective_uid() == 0,
         "independent recovery requires direct Root PID1",
     )?;
+    // SAFETY: The path is a NUL-terminated literal.
     let root = unsafe {
         libc::open(
             c"/".as_ptr(),
@@ -20,15 +21,19 @@ pub(crate) fn direct_ram_pid1() -> Result<()> {
         )
     };
     require(root >= 0, "RAM root unavailable")?;
+    // SAFETY: `root` was just returned by open and is owned by nothing else.
     let root = unsafe { std::fs::File::from_raw_fd(root) };
     // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
     let mut metadata: libc::stat = unsafe { std::mem::zeroed() };
     // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut filesystem: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `metadata` is a writable `libc::stat` and `root` keeps the descriptor open.
         unsafe { libc::fstat(root.as_raw_fd(), &mut metadata) } == 0
             && metadata.st_uid == 0
             && metadata.st_mode & libc::S_IFMT == libc::S_IFDIR
+            // SAFETY: `filesystem` is a writable `libc::statfs` and `root` keeps the descriptor
+            // open.
             && unsafe { libc::fstatfs(root.as_raw_fd(), &mut filesystem) } == 0
             && matches!(filesystem.f_type as u64, 0x01021994 | 0x858458f6),
         "independent RAM root required",
@@ -68,6 +73,7 @@ fn mount(
     let kind_c = CString::new(kind).unwrap();
     let data = data.map(|s| CString::new(s).unwrap());
     require(
+        // SAFETY: All non-null pointers are NUL-terminated CStrings that outlive the call.
         unsafe {
             libc::mount(
                 source.as_ptr(),
@@ -86,6 +92,7 @@ pub fn initialize() -> Result<()> {
     direct_ram_pid1()?;
     // Kernel-created rootfs can initially be writable by everyone. Normalize
     // only the proven direct Root PID1 RAM root before guarded path traversal.
+    // SAFETY: The path is a NUL-terminated literal.
     let root = unsafe {
         libc::open(
             c"/".as_ptr(),
@@ -93,8 +100,10 @@ pub fn initialize() -> Result<()> {
         )
     };
     require(root >= 0, "independent RAM root unavailable")?;
+    // SAFETY: `root` was just returned by open and is owned by nothing else.
     let root = unsafe { std::fs::File::from_raw_fd(root) };
     require(
+        // SAFETY: fchmod takes no pointers and `root` keeps the descriptor open.
         unsafe { libc::fchmod(root.as_raw_fd(), 0o755) } == 0,
         "independent RAM root permissions refused",
     )?;
@@ -124,11 +133,14 @@ pub fn initialize() -> Result<()> {
         std::fs::read_dir("/proc/self/task")?.count() == 1,
         "single-task independent PID1 required",
     )?;
+    // SAFETY: The path is a NUL-terminated literal.
     let console = unsafe { libc::open(c"/dev/console".as_ptr(), libc::O_RDWR | libc::O_CLOEXEC) };
     require(console >= 0, "recovery console unavailable")?;
+    // SAFETY: `console` was just returned by open and is owned by nothing else.
     let console = unsafe { std::fs::File::from_raw_fd(console) };
     for fd in [0, 1, 2] {
         require(
+            // SAFETY: dup2 takes no pointers and `console` keeps the source open.
             unsafe { libc::dup2(console.as_raw_fd(), fd) } == fd,
             "recovery console setup failed",
         )?;
@@ -156,8 +168,10 @@ pub fn power_off() -> Result<()> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (reboot, sync).")]
 pub fn handoff_reboot() -> Result<()> {
     quiet()?;
+    // SAFETY: sync takes no arguments and cannot fail.
     unsafe { libc::sync() };
     require(
+        // SAFETY: reboot with RB_KEXEC takes no pointers.
         unsafe { libc::reboot(libc::RB_KEXEC) } == 0,
         "kernel declined loaded recovery handoff",
     )
@@ -166,7 +180,9 @@ pub fn handoff_reboot() -> Result<()> {
 pub fn reboot(poweroff: bool) -> Result<()> {
     direct_ram_pid1()?;
     namespaces::initial()?;
+    // SAFETY: sync takes no arguments and cannot fail.
     unsafe { libc::sync() };
+    // SAFETY: reboot takes no pointers.
     let result = unsafe {
         libc::reboot(if poweroff {
             libc::RB_POWER_OFF

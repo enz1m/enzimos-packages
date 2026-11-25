@@ -227,6 +227,7 @@ pub fn stage_locked<F: FnMut(&str, &Value) -> Result<()>>(
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut space: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `space` is a writable `libc::statvfs` and the guarded top stays open.
         unsafe { libc::fstatvfs(context.guard.top().as_raw_fd(), &mut space) } == 0
             && space
                 .f_bavail

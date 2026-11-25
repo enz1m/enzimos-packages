@@ -12,6 +12,7 @@ pub fn label(fd: BorrowedFd<'_>) -> Result<Option<String>> {
     let before = observe(fd)?;
     let mut bytes = [0u8; 256];
     require(
+        // SAFETY: `bytes` is the 256-byte label buffer GET_LABEL writes, and `fd` stays open.
         unsafe { libc::ioctl(fd.as_raw_fd(), GET_LABEL, bytes.as_mut_ptr()) } == 0,
         "original Btrfs filesystem label unavailable",
     )?;
@@ -40,6 +41,8 @@ fn label_bytes(bytes: &[u8; 256]) -> Result<Option<String>> {
 pub fn observe(fd: BorrowedFd<'_>) -> Result<Value> {
     let mut buffer = [0u64; 128];
     require(
+        // SAFETY: `buffer` is the btrfs_ioctl_fs_info_args FILESYSTEM_INFO writes, and `fd` stays
+        // open.
         unsafe { libc::ioctl(fd.as_raw_fd(), FILESYSTEM_INFO, buffer.as_mut_ptr()) } == 0,
         "Btrfs filesystem identity unavailable",
     )?;
@@ -47,6 +50,7 @@ pub fn observe(fd: BorrowedFd<'_>) -> Result<Value> {
         buffer[0] > 0 && buffer[1] > 0,
         "Btrfs filesystem members unavailable",
     )?;
+    // SAFETY: `buffer` is initialized and holds the 16-byte UUID at offset 16.
     let bytes = unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>().add(16), 16) };
     let uuid = bytes
         .iter()

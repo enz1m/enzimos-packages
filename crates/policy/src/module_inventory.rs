@@ -18,6 +18,7 @@ const MAX_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn open(parent: &File, name: &str, flags: i32) -> Result<File> {
     let name = CString::new(name).map_err(|_| Error("module filename refused".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -26,6 +27,7 @@ fn open(parent: &File, name: &str, flags: i32) -> Result<File> {
         )
     };
     require(raw >= 0, "retained module tree member unavailable")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw) })
 }
 fn authority(m: &std::fs::Metadata, owner: u32) -> Result<()> {
@@ -122,6 +124,8 @@ impl Scan {
                 let cname = CString::new(name.as_str())
                     .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
                 let mut body = [0u8; 4097];
+                // SAFETY: The name is NUL-terminated, the buffer pointer and length describe
+                // `body`, and `parent` stays open.
                 let length = unsafe {
                     libc::readlinkat(
                         parent.as_raw_fd(),

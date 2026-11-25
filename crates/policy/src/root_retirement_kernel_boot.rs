@@ -72,10 +72,12 @@ impl<'a> Original<'a> {
         )?;
         let mut stat = std::mem::MaybeUninit::<libc::statfs>::uninit();
         require(
+            // SAFETY: `stat` is writable for one `libc::statfs` and `descriptor` stays open.
             unsafe { libc::fstatfs(descriptor.as_raw_fd(), stat.as_mut_ptr()) } == 0,
             "actual kernel command line filesystem observation",
         )?;
         require(
+            // SAFETY: fstatfs returned 0, so it initialized `stat`.
             unsafe { stat.assume_init() }.f_type == 0x9fa0,
             "actual proc command line required",
         )?;

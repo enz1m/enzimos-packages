@@ -176,6 +176,7 @@ fn remove(parent: &File, name: &str, removed: &mut Vec<String>, label: &str) -> 
     drop(file);
     let c = CString::new(name).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
+        // SAFETY: `c` is a NUL-terminated C string and `parent` keeps the descriptor open.
         unsafe { libc::unlinkat(parent.as_raw_fd(), c.as_ptr(), 0) } == 0,
         "setup publication removal refused",
     )?;
@@ -185,6 +186,7 @@ fn remove(parent: &File, name: &str, removed: &mut Vec<String>, label: &str) -> 
 #[allow(unsafe_code, reason = "Linux syscall ABI (fsync).")]
 fn sync(parent: &File) -> Result<()> {
     require(
+        // SAFETY: fsync takes no pointers and `parent` keeps the descriptor open.
         unsafe { libc::fsync(parent.as_raw_fd()) } == 0,
         "setup reset durability unknown",
     )
@@ -226,6 +228,7 @@ fn detach_mounts(destinations: &[String]) -> Result<Vec<String>> {
             Mount::AreaBind | Mount::Destination => {
                 let target: &CStr = c"/backup-repository";
                 require(
+                    // SAFETY: `target` is a NUL-terminated CString.
                     unsafe { libc::umount2(target.as_ptr(), 0) } == 0,
                     "/backup-repository is busy; stop its users and run again",
                 )?;
@@ -317,13 +320,17 @@ fn probe(uuid: &str, source_uuid: &str) -> Result<Repository> {
         device.metadata()?.file_type().is_block_device(),
         "destination link is not a block device",
     )?;
+    // SAFETY: The filesystem name is a NUL-terminated literal.
     let raw = unsafe { libc::syscall(libc::SYS_fsopen, c"btrfs".as_ptr(), 1u32) };
     require(raw >= 0, "read-only destination probe refused")?;
+    // SAFETY: `raw` was just returned by fsopen and is owned by nothing else.
     let context = unsafe { File::from_raw_fd(raw as i32) };
     let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd())).unwrap();
     let configure = |command: u32, key: Option<&CStr>, val: Option<&CStr>| {
         let null = std::ptr::null::<libc::c_char>();
         require(
+            // SAFETY: The key and value are NUL-terminated or null as fsconfig allows, and
+            // `context` stays open.
             unsafe {
                 libc::syscall(
                     libc::SYS_fsconfig,
@@ -344,6 +351,7 @@ fn probe(uuid: &str, source_uuid: &str) -> Result<Repository> {
     // CREATE_EXCL: refuse to share a superblock that is still in use elsewhere.
     configure(8, None, None)?;
     // Detached: never attached to any path; released when the fd closes.
+    // SAFETY: fsmount takes no pointers and `context` keeps the descriptor open.
     let raw = unsafe {
         libc::syscall(
             libc::SYS_fsmount,
@@ -353,6 +361,7 @@ fn probe(uuid: &str, source_uuid: &str) -> Result<Repository> {
         )
     };
     require(raw >= 0, "read-only destination probe mount refused")?;
+    // SAFETY: `raw` was just returned by fsmount and is owned by nothing else.
     let mount = unsafe { File::from_raw_fd(raw as i32) };
     require(
         filesystem::observe(mount.as_fd())?["filesystem_uuid"] == uuid,

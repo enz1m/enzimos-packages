@@ -51,6 +51,7 @@ impl HeldLock {
             std::mem::size_of::<libc::flock>() == 32,
             "qualified x86-64 OFD ABI required",
         )?;
+        // SAFETY: The name is NUL-terminated and `parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -66,6 +67,7 @@ impl HeldLock {
         if raw < 0 {
             return Err(std::io::Error::last_os_error().into());
         }
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw) };
         let m = file.metadata()?;
         require(
@@ -82,6 +84,8 @@ impl HeldLock {
         lock.l_type = libc::F_WRLCK as _;
         lock.l_whence = libc::SEEK_SET as _;
         require(
+            // SAFETY: `lock` is a complete flock struct that outlives the call, and `file` stays
+            // open.
             unsafe { libc::fcntl(file.as_raw_fd(), libc::F_OFD_SETLK, &lock) } == 0,
             "Flatpak capture lock busy or refused; no stale lock removal",
         )?;

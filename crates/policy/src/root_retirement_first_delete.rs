@@ -78,6 +78,7 @@ pub struct Next<'j, 'a, 's> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (close, openat).")]
 pub(crate) fn absent(parent: &File, name: &str) -> Result<()> {
     let name = CString::new(name).map_err(|_| Error("original removed target name".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -86,6 +87,7 @@ pub(crate) fn absent(parent: &File, name: &str) -> Result<()> {
         )
     };
     if raw >= 0 {
+        // SAFETY: `raw` was just returned by openat and is closed exactly once.
         unsafe {
             libc::close(raw);
         }
@@ -116,6 +118,8 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
         self.entered.mark_first_attempt()?;
         let mut args = self.args;
         require(
+            // SAFETY: BTRFS_IOC_SNAP_DESTROY_V2 reads the vol_args_v2 buffer the request expects,
+            // and the descriptor stays open.
             unsafe {
                 libc::ioctl(
                     self.top_descriptor,
@@ -140,6 +144,7 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
         // Commit the actual successful unlink before interpreting the complete
         // Root Tree. An uncertain sync still leaves the original in-flight row.
         require(
+            // SAFETY: BTRFS_IOC_SYNC takes no argument.
             unsafe { libc::ioctl(self.top_descriptor, 0x9408 as libc::c_ulong) } == 0,
             "original first deletion filesystem durability uncertain; no progress",
         )?;

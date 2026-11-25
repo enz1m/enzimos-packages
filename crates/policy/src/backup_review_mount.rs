@@ -26,12 +26,16 @@ fn descriptor(raw: libc::c_long) -> Result<File> {
             "exclusive read-only filesystem operation refused".into(),
         ));
     }
+    // SAFETY: Callers pass a descriptor-returning syscall result; nonnegative values are fresh and
+    // owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw as i32) })
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
 fn configure(file: &File, command: u32, key: Option<&CStr>, value: Option<&CStr>) -> Result<()> {
     let null = std::ptr::null::<libc::c_char>();
     require(
+        // SAFETY: The key and value are NUL-terminated or null as fsconfig allows, and `file` stays
+        // open.
         unsafe {
             libc::syscall(
                 libc::SYS_fsconfig,
@@ -143,6 +147,7 @@ impl Mount {
             "existing filesystem instance requires review",
         )?;
         let context =
+            // SAFETY: The filesystem name is a NUL-terminated literal.
             descriptor(unsafe { libc::syscall(libc::SYS_fsopen, c"btrfs".as_ptr(), 1u32) })?;
         let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd())).unwrap();
         configure(&context, 1, Some(c"source"), Some(&source))?;
@@ -154,12 +159,14 @@ impl Mount {
         preflight()?;
         configure(&context, 8, None, None)?;
         preflight()?;
+        // SAFETY: fsmount takes no pointers and `context` keeps the descriptor open.
         let mount = descriptor(unsafe {
             libc::syscall(libc::SYS_fsmount, context.as_raw_fd(), 1u32, ATTRIBUTES)
         })?;
         // fsmount leaves a reconfiguration context referencing the instance.
         // Retaining it would prevent proven closure and expose remount authority.
         drop(context);
+        // SAFETY: The name is a NUL-terminated literal and `mount` keeps the descriptor open.
         let root = descriptor(libc::c_long::from(unsafe {
             libc::openat(
                 mount.as_raw_fd(),
@@ -194,7 +201,10 @@ impl Mount {
         let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
         let mut info = [0u64; 63];
         require(
+            // SAFETY: `status` is a writable `libc::statvfs` and `root` keeps the descriptor open.
             unsafe { libc::fstatvfs(root.as_raw_fd(), &mut status) } == 0
+                // SAFETY: `info` is 504 bytes, the size encoded in GET_SUBVOL_INFO, and `root`
+                // stays open.
                 && unsafe { libc::ioctl(root.as_raw_fd(), GET_SUBVOL_INFO, info.as_mut_ptr()) }
                     == 0,
             "review filesystem protection unavailable",

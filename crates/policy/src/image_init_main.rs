@@ -15,6 +15,7 @@ fn main() {
         std::process::exit(2);
     }
     loop {
+        // SAFETY: pause takes no arguments.
         unsafe { libc::pause() };
     }
 }

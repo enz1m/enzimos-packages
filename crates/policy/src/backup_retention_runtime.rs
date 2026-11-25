@@ -268,6 +268,8 @@ impl Registry {
                 let c_name = std::ffi::CString::new(format!("{name}.json"))
                     .map_err(|_| Error("retention registry encoding".into()))?;
                 require(
+                    // SAFETY: `c_name` is a NUL-terminated C string and `directory` keeps the
+                    // descriptor open.
                     unsafe { libc::unlinkat(directory.as_raw_fd(), c_name.as_ptr(), 0) } == 0,
                     "completed retention record retirement failed",
                 )?;

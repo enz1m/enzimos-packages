@@ -210,6 +210,7 @@ fn create_kind<F: FnMut() -> Result<()>>(
         let c =
             std::ffi::CString::new(name).map_err(|_| Error("home history receipt name".into()))?;
         require(
+            // SAFETY: `c` is a NUL-terminated C string and `directory` keeps the descriptor open.
             unsafe { libc::unlinkat(directory.as_raw_fd(), c.as_ptr(), 0) } == 0,
             "home history receipt retirement failed",
         )?;

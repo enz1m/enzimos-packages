@@ -182,6 +182,7 @@ fn row_fn(f: &File) -> Result<mountinfo::Row> {
 fn source(file: &File) -> Result<files::FileIdentity> {
     let m = file.metadata()?;
     let flags = enzimos_platform::files::status_flags(&file);
+    // SAFETY: F_GET_SEALS takes no pointers and `file` keeps the descriptor open.
     let seals = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GET_SEALS) };
     require(
         m.is_file()
@@ -204,6 +205,7 @@ pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Res
     let epoch = source(&input)?;
     let destination = Destination::open(directory, backup_uuid)?;
     let name = CString::new(name).map_err(|_| Error("recovery filename encoding".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `destination.file` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             destination.file.as_raw_fd(),
@@ -215,6 +217,7 @@ pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Res
     if raw < 0 {
         return Err(std::io::Error::last_os_error().into());
     }
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let output = unsafe { File::from_raw_fd(raw) };
     let created = files::identity(&output.metadata()?);
     let attempt = (|| {
@@ -234,6 +237,7 @@ pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Res
         while (offset as u64) < length {
             require(source(&input)? == epoch, "sealed recovery input changed")?;
             destination.recheck(directory, backup_uuid)?;
+            // SAFETY: A null offset uses the file position, and both descriptors stay open.
             let count = unsafe {
                 libc::sendfile(
                     output.as_raw_fd(),

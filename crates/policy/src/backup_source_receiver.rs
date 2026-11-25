@@ -57,6 +57,7 @@ fn mount_protections(file: &File) -> Result<()> {
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     let required = libc::ST_RDONLY | libc::ST_NOSUID | libc::ST_NODEV | libc::ST_NOEXEC;
     require(
+        // SAFETY: `status` is a writable `libc::statvfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatvfs(file.as_raw_fd(), &mut status) } == 0
             && status.f_flag & required == required,
         "actual original source readonly mount protections differ",

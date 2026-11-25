@@ -275,6 +275,7 @@ fn remove_export(parent: &File, id: &str, observed: &ExportDirectory) -> Result<
         )?;
         let c = CString::new(name).map_err(|_| Error("export member name".into()))?;
         require(
+            // SAFETY: `c` is a NUL-terminated C string and `directory` keeps the descriptor open.
             unsafe { libc::unlinkat(directory.as_raw_fd(), c.as_ptr(), 0) } == 0,
             "export member removal failed",
         )?;
@@ -286,6 +287,7 @@ fn remove_export(parent: &File, id: &str, observed: &ExportDirectory) -> Result<
     directory.sync_all()?;
     let c = CString::new(id).map_err(|_| Error("export name".into()))?;
     require(
+        // SAFETY: `c` is a NUL-terminated C string and `parent` keeps the descriptor open.
         unsafe { libc::unlinkat(parent.as_raw_fd(), c.as_ptr(), libc::AT_REMOVEDIR) } == 0,
         "export directory removal failed",
     )?;

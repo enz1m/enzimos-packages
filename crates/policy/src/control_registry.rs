@@ -242,6 +242,7 @@ impl Folder {
         let name = std::ffi::CString::new(format!("{id}.json"))
             .map_err(|_| Error("control record filename encoding".into()))?;
         require(
+            // SAFETY: The name is NUL-terminated and `self.directory` keeps the descriptor open.
             unsafe {
                 libc::unlinkat(
                     std::os::fd::AsRawFd::as_raw_fd(&self.directory),

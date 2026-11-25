@@ -31,16 +31,21 @@ fn flags(file: &File) -> Result<i32> {
 fn filesystem(file: &File) -> Result<()> {
     let mut stat = std::mem::MaybeUninit::<libc::statfs>::uninit();
     require(
+        // SAFETY: `stat` is writable for one `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), stat.as_mut_ptr()) } == 0,
         "original firmware filesystem unavailable",
     )?;
+    // SAFETY: fstatfs returned 0, so it initialized `stat`.
     let stat = unsafe { stat.assume_init() };
     require(stat.f_type == EFIVARFS, "actual efivarfs required")?;
     let mut options = std::mem::MaybeUninit::<libc::statvfs>::uninit();
     require(
+        // SAFETY: `options` is writable for one `libc::statvfs` and `file` keeps the descriptor
+        // open.
         unsafe { libc::fstatvfs(file.as_raw_fd(), options.as_mut_ptr()) } == 0,
         "original firmware mount options unavailable",
     )?;
+    // SAFETY: fstatvfs returned 0, so it initialized `options`.
     let options = unsafe { options.assume_init() };
     require(
         options.f_flag & libc::ST_RDONLY == 0,
@@ -130,6 +135,7 @@ impl Variable {
 fn metadata_member(parent: &File, leaf: &str) -> Result<File> {
     let name = std::ffi::CString::new(leaf)
         .map_err(|_| enzimos_platform::Error("firmware member basename encoding".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -138,6 +144,7 @@ fn metadata_member(parent: &File, leaf: &str) -> Result<File> {
         )
     };
     require(fd >= 0, "original firmware metadata member unavailable")?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(fd) })
 }
 struct Member {
@@ -412,6 +419,7 @@ impl Created {
         let mount = mount_identity::id(parent.as_fd(), true)?;
         let name = std::ffi::CString::new(leaf)
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -424,6 +432,7 @@ impl Created {
             fd >= 0,
             "firmware exclusive creation refused; no adoption or replay",
         )?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let writer = unsafe { File::from_raw_fd(fd) };
         let writer_flags = status(&writer)?;
         let before = files::identity(&writer.metadata()?);
@@ -491,6 +500,8 @@ impl Created {
         )?;
         self.recheck()?;
         let count =
+            // SAFETY: The buffer pointer and length describe `bytes`, and `self.writer` keeps the
+            // descriptor open.
             unsafe { libc::write(self.writer.as_raw_fd(), bytes.as_ptr().cast(), bytes.len()) };
         require(
             count == bytes.len() as isize,

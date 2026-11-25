@@ -42,6 +42,7 @@ pub(super) fn write(
     // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `fs` is a writable `libc::statfs` and `parent` keeps the descriptor open.
         unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x4d44,
         "actual FAT publication filesystem required",
     )?;
@@ -66,6 +67,7 @@ pub(super) fn write(
     let temporary = format!(".enzimos-boot-{}", files::random_hex(16)?);
     let tmp = CString::new(temporary.as_str())
         .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    // SAFETY: `tmp` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -75,6 +77,7 @@ pub(super) fn write(
         )
     };
     require(raw >= 0, "exclusive FAT publication writer required")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let mut writer = unsafe { File::from_raw_fd(raw) };
     writer.write_all(bytes)?;
     writer.sync_all()?;
@@ -102,6 +105,7 @@ pub(super) fn write(
         )?;
     }
     require(
+        // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
         unsafe {
             libc::renameat2(
                 parent.as_raw_fd(),

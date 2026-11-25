@@ -118,6 +118,8 @@ impl Layout {
                 // value.
                 let mut stat: libc::stat = unsafe { std::mem::zeroed() };
                 require(
+                    // SAFETY: The name is NUL-terminated, the stat buffer is writable, and
+                    // `directory` stays open.
                     unsafe {
                         libc::fstatat(
                             directory.as_raw_fd(),
@@ -270,6 +272,8 @@ impl Layout {
                 "original removal epoch changed at syscall boundary",
             )?;
             require(
+                // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor
+                // open.
                 unsafe {
                     libc::unlinkat(
                         parent.as_raw_fd(),

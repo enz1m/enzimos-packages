@@ -259,6 +259,7 @@ impl Handoff {
             "original transfer lock mount changed",
         )?;
         enzimos_platform::flock_identity::exclusive(&self.files[9])?;
+        // SAFETY: flock takes no pointers and `lock` keeps the descriptor open.
         let rival = unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
         let error = std::io::Error::last_os_error();
         require(

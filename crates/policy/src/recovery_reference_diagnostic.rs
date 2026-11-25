@@ -317,6 +317,7 @@ pub(crate) fn candidates(config: &str, uefi: &Rows, variables: &Rows) -> Result<
         let name_c = std::ffi::CString::new(name.as_str())
             .map_err(|_| Error("UEFI entry encoding".into()))?;
         let result =
+            // SAFETY: Both strings are NUL-terminated CStrings.
             unsafe { libc::fnmatch(pattern.as_ptr(), name_c.as_ptr(), libc::FNM_NOESCAPE) };
         require(
             result == 0 || result == libc::FNM_NOMATCH,

@@ -497,6 +497,8 @@ impl<'a> Targets<'a> {
         authorize()?;
         self.recheck(authorize)?;
         require(
+            // SAFETY: BTRFS_IOC_SNAP_DESTROY_V2 reads the vol_args_v2 buffer the request expects,
+            // and `top` stays open.
             unsafe {
                 libc::ioctl(
                     top.as_raw_fd(),
@@ -514,6 +516,7 @@ impl<'a> Targets<'a> {
         )?;
         crate::root_retirement_first_delete::absent(&object.parent, &name)?;
         require(
+            // SAFETY: BTRFS_IOC_SYNC takes no argument.
             unsafe { libc::ioctl(top.as_raw_fd(), 0x9408 as libc::c_ulong) } == 0,
             "online Root target deletion durability uncertain; in-flight receipt retained",
         )?;

@@ -239,6 +239,7 @@ mod tests {
             )
         };
         assert!(raw >= 0);
+        // SAFETY: `raw` was just returned by memfd_create and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(raw) };
         let uid = file.metadata().unwrap().uid();
         assert!(input(&file, uid).is_err());
@@ -246,6 +247,7 @@ mod tests {
             libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL;
         // SAFETY: fchmod and fcntl affect only this fixture's anonymous file.
         assert_eq!(unsafe { libc::fchmod(raw, 0o600) }, 0);
+        // SAFETY: F_ADD_SEALS takes no pointers and `file` owns `raw`.
         assert_eq!(unsafe { libc::fcntl(raw, libc::F_ADD_SEALS, seals) }, 0);
         assert!(input(&file, uid).unwrap().is_empty());
         assert!(input(&file, uid + 1).is_err());

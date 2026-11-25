@@ -153,6 +153,8 @@ impl FirstBootClaim<'_> {
             "first-boot pending flag changed; attempt retained",
         )?;
         require(
+            // SAFETY: The name is a NUL-terminated literal and `self.parent` keeps the descriptor
+            // open.
             unsafe {
                 libc::unlinkat(
                     self.parent.as_raw_fd(),
@@ -258,6 +260,7 @@ pub fn build_locked(release: &str, options: &str, lock: &files::Lock) -> Result<
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `info` is a writable `libc::statvfs` and `parent` keeps the descriptor open.
         unsafe { libc::fstatvfs(parent.as_raw_fd(), &mut info) } == 0
             && (info.f_bavail as u64)
                 .checked_mul(info.f_frsize as u64)

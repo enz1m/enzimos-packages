@@ -593,6 +593,7 @@ impl Runtime {
         // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `fs` is a writable `libc::statfs` and `run` keeps the descriptor open.
             unsafe { libc::fstatfs(run.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,
             "native backup runtime must start on original tmpfs",
         )?;
@@ -651,6 +652,7 @@ impl Runtime {
         // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `fs` is a writable `libc::statfs` and `scratch` keeps the descriptor open.
             unsafe { libc::fstatfs(scratch.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,
             "backup scratch must be original tmpfs",
         )?;

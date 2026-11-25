@@ -152,6 +152,8 @@ impl<'a, 's> Installed<'a, 's> {
             (0..1_048_576).contains(&descriptor),
             "bounded original native top descriptor",
         )?;
+        // SAFETY: F_GETFL takes no pointers; it only reads the flags of a retained descriptor
+        // number.
         let descriptor_flags = unsafe { libc::fcntl(descriptor, libc::F_GETFL) };
         require(
             descriptor_flags >= 0 && descriptor_flags & libc::O_ACCMODE == libc::O_RDONLY,
@@ -162,6 +164,8 @@ impl<'a, 's> Installed<'a, 's> {
             (0..1_048_576).contains(&owner_descriptor),
             "bounded original owned top descriptor",
         )?;
+        // SAFETY: F_GETFL takes no pointers; it only reads the flags of a retained descriptor
+        // number.
         let owner_flags = unsafe { libc::fcntl(owner_descriptor, libc::F_GETFL) };
         require(
             owner_flags >= 0 && owner_flags & libc::O_ACCMODE == libc::O_RDONLY,
@@ -182,7 +186,9 @@ impl<'a, 's> Installed<'a, 's> {
             filter: rows.as_mut_ptr(),
         };
         require(
+            // SAFETY: This prctl option takes no pointers.
             unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } == 0
+                // SAFETY: `filter` is a sock_fprog pointing at instructions that outlive the call.
                 && unsafe { libc::prctl(libc::PR_SET_SECCOMP, libc::SECCOMP_MODE_FILTER, &filter) }
                     == 0,
             "native retirement filter unavailable; no deletion",
@@ -276,11 +282,15 @@ impl<'a, 's> Installed<'a, 's> {
         )?;
         require(
             self.mounts.original_top()?.as_raw_fd() == self.descriptor
+                // SAFETY: F_GETFL takes no pointers; it only reads the flags of a retained
+                // descriptor number.
                 && unsafe { libc::fcntl(self.descriptor, libc::F_GETFL) } == self.descriptor_flags,
             "original sealed top description changed",
         )?;
         require(
             self.owner.original_descriptor()?.as_raw_fd() == self.owner_descriptor
+                // SAFETY: F_GETFL takes no pointers; it only reads the flags of a retained
+                // descriptor number.
                 && unsafe { libc::fcntl(self.owner_descriptor, libc::F_GETFL) } == self.owner_flags,
             "original sealed mount owner description changed",
         )?;

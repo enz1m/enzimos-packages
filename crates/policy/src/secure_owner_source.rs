@@ -74,7 +74,9 @@ impl Owner {
             // value.
             let mut limits: libc::rlimit = unsafe { std::mem::zeroed() };
             require(
+                // SAFETY: This prctl option takes no pointers.
                 unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) } == 0
+                    // SAFETY: `limits` is a writable rlimit.
                     && unsafe { libc::getrlimit(libc::RLIMIT_CORE, &mut limits) } == 0
                     && limits.rlim_cur == 0
                     && limits.rlim_max == 0,

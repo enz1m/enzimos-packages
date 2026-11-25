@@ -280,6 +280,7 @@ pub fn resources(reviewed: &Value) -> Result<()> {
     // SAFETY: `libc::rlimit` is a plain C struct, for which all-zero bytes are a valid value.
     let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `limit` is a writable rlimit.
         unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0,
         "overlay descriptor limit unavailable",
     )?;
@@ -512,6 +513,7 @@ pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
             .as_encoded_bytes(),
     )
     .map_err(|_| Error("overlay capture name encoding".into()))?;
+    // SAFETY: `leaf` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -520,6 +522,7 @@ pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
         )
     };
     require(raw >= 0, "published overlay member absent")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw) };
     let m = file.metadata()?;
     let mount = enzimos_platform::mount_identity::id(file.as_fd(), true)?;
@@ -550,6 +553,7 @@ pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
     } else {
         value!({"path":name,"kind":"file","inode":files::identity(&m),"mount":mount})
     };
+    // SAFETY: The name is NUL-terminated and `parent` keeps the descriptor open.
     let named_raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -561,6 +565,7 @@ pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
         named_raw >= 0,
         "published overlay member disappeared during observation",
     )?;
+    // SAFETY: `named_raw` was just returned by openat and is owned by nothing else.
     let named = unsafe { File::from_raw_fd(named_raw) };
     require(
         files::identity(&file.metadata()?) == files::identity(&m)

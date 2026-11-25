@@ -131,6 +131,7 @@ fn magic(file: &File, role: Role) -> Result<()> {
     // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `stat` is a writable `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) } == 0 && stat.f_type == role.magic(),
         "answer area requires actual live tmpfs",
     )

@@ -18,10 +18,13 @@ pub const KINDS: &[&str] = &["mnt", "pid", "user", "net", "uts", "ipc", "cgroup"
 pub fn kernel_release() -> Result<String> {
     let mut data = std::mem::MaybeUninit::<libc::utsname>::uninit();
     require(
+        // SAFETY: `data` is writable for one utsname.
         unsafe { libc::uname(data.as_mut_ptr()) } == 0,
         "kernel identity unavailable",
     )?;
+    // SAFETY: uname returned 0, so it initialized `data`.
     let data = unsafe { data.assume_init() };
+    // SAFETY: The kernel NUL-terminates every utsname field.
     let bytes = unsafe { std::ffi::CStr::from_ptr(data.release.as_ptr()) }.to_bytes();
     let release =
         std::str::from_utf8(bytes).map_err(|_| Error("kernel release encoding".into()))?;
@@ -179,6 +182,7 @@ fn exited(file: &File) -> Result<bool> {
         events: libc::POLLIN,
         revents: 0,
     };
+    // SAFETY: `poll` is one writable pollfd and the count is 1.
     let result = unsafe { libc::poll(&mut poll, 1, 0) };
     require(
         result >= 0 && poll.revents & (libc::POLLERR | libc::POLLNVAL) == 0,
@@ -209,6 +213,7 @@ fn exited_after_sample(file: &File, failed: bool) -> Result<bool> {
             revents: 0,
         };
         let timeout = remaining.as_millis().clamp(1, 25) as i32;
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let result = unsafe { libc::poll(&mut poll, 1, timeout) };
         if result < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
             continue;
@@ -241,6 +246,7 @@ fn original_thread(tid: u32) -> std::result::Result<OriginalProcess, ScanError> 
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, syscall).")]
 fn original_kind(pid: u32, flags: i32) -> std::result::Result<OriginalProcess, ScanError> {
+    // SAFETY: pidfd_open takes no pointers.
     let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, flags) } as i32;
     if raw < 0 {
         return Err(
@@ -255,8 +261,10 @@ fn original_kind(pid: u32, flags: i32) -> std::result::Result<OriginalProcess, S
             },
         );
     }
+    // SAFETY: `raw` was just returned by pidfd_open and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw) };
     require(
+        // SAFETY: F_GETFD takes no pointers and `file` keeps the descriptor open.
         unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC != 0,
         "namespace process descriptor must be CLOEXEC",
     )?;
@@ -315,10 +323,13 @@ fn namespace_file(pid: u32, expected: (u64, u64)) -> Result<File> {
     let metadata = file.metadata()?;
     let mut filesystem = std::mem::MaybeUninit::<libc::statfs>::uninit();
     require(
+        // SAFETY: `filesystem` is writable for one `libc::statfs` and `file` keeps the descriptor
+        // open.
         unsafe { libc::fstatfs(file.as_raw_fd(), filesystem.as_mut_ptr()) } == 0,
         "namespace descriptor filesystem unavailable",
     )?;
     require(
+        // SAFETY: fstatfs returned 0, so it initialized `filesystem`.
         unsafe { filesystem.assume_init() }.f_type == 0x6e736673
             && (metadata.dev(), metadata.ino()) == expected,
         "namespace descriptor is not the original nsfs object",

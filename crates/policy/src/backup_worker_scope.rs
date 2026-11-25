@@ -70,6 +70,8 @@ pub(crate) fn recheck(
     )?;
     let mut info = [0u64; 63];
     require(
+        // SAFETY: The ioctl argument is the buffer its request number expects, and `root` stays
+        // open.
         unsafe {
             libc::ioctl(
                 root.as_raw_fd(),

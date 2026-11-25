@@ -407,6 +407,7 @@ pub(crate) fn abandon_record(
     )?;
     let leaf = std::ffi::CString::new(name).map_err(|_| Error("owner attempt name".into()))?;
     require(
+        // SAFETY: `leaf` is a NUL-terminated CString and `owner` keeps the descriptor open.
         unsafe { libc::unlinkat(std::os::fd::AsRawFd::as_raw_fd(owner), leaf.as_ptr(), 0) } == 0,
         "owner attempt retirement failed",
     )?;

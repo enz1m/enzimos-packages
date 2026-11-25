@@ -349,6 +349,8 @@ impl<'a, 'g: 'a> Cleanup<'a, 'g> {
                     && Some(files::identity(&named.metadata()?)) == self.retired_directory_epoch
                     && mount_identity::id(directory.file.as_fd(),true)? == self.context.volume.unique
                     && mount_identity::id(named.as_fd(),true)? == self.context.volume.unique
+                    // SAFETY: F_GETFL takes no pointers; it only reads the flags of an open
+                    // descriptor.
                     && self.context.root_loader_directory.is_some_and(|(_,flags)| unsafe {libc::fcntl(directory.file.as_raw_fd(),libc::F_GETFL)} == flags)
                     && names(&directory.file,256)? == expected && names(&named,256)? == expected,
                     "finish removed entry changed original directory/unrelated members")?;

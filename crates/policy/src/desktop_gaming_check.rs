@@ -32,6 +32,7 @@ fn command(program: &str, args: &[&str]) -> Option<String> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (access).")]
 fn access(path: &Path, mode: libc::c_int) -> bool {
     CString::new(path.as_os_str().as_encoded_bytes())
+        // SAFETY: `path` is a NUL-terminated CString.
         .is_ok_and(|path| unsafe { libc::access(path.as_ptr(), mode) } == 0)
 }
 

@@ -132,6 +132,7 @@ impl<'a> Configuration<'a> {
         };
         check()?;
         require(
+            // SAFETY: Both names are NUL-terminated and `parent` keeps the descriptor open.
             unsafe {
                 libc::linkat(
                     parent.as_raw_fd(),
@@ -162,7 +163,9 @@ impl<'a> Configuration<'a> {
             "configuration publication original inode changed",
         )?;
         require(
+            // SAFETY: The name is a NUL-terminated literal and `parent` keeps the descriptor open.
             unsafe { libc::unlinkat(parent.as_raw_fd(), c".backup-setup-config".as_ptr(), 0) } == 0
+                // SAFETY: fsync takes no pointers and `parent` keeps the descriptor open.
                 && unsafe { libc::fsync(parent.as_raw_fd()) } == 0,
             "configuration publication durability unknown",
         )?;

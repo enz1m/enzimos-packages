@@ -32,6 +32,7 @@ fn bind(source: &File, path: &str) -> Result<()> {
     let target =
         CString::new(path).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
+        // SAFETY: All non-null pointers are NUL-terminated C strings that outlive the call.
         unsafe {
             libc::mount(
                 source.as_ptr(),
@@ -49,6 +50,7 @@ fn flags(path: &str, flags: libc::c_ulong) -> Result<()> {
     let target =
         CString::new(path).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
+        // SAFETY: All non-null pointers are NUL-terminated C strings that outlive the call.
         unsafe {
             libc::mount(
                 std::ptr::null(),
@@ -120,6 +122,7 @@ impl Mounted {
         self.file.take();
         let name = CString::new(self.path)
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        // SAFETY: `name` is a NUL-terminated CString.
         if unsafe { libc::umount2(name.as_ptr(), 0) } != 0 {
             self.file = Some(files::directory(Path::new(self.path), Some(0))?);
             return Err(Error(

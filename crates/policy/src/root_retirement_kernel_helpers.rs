@@ -57,7 +57,10 @@ fn protected(file: &File, mount: u64) -> Result<()> {
             && m.gid() == 0
             && m.mode() & 0o022 == 0
             && mount_identity::id(file.as_fd(), true)? == mount
+            // SAFETY: `stat` is writable for one `libc::statfs` and `file` keeps the descriptor
+            // open.
             && unsafe { libc::fstatfs(file.as_raw_fd(), stat.as_mut_ptr()) } == 0
+            // SAFETY: fstatfs returned 0, so it initialized `stat`.
             && unsafe { stat.assume_init() }.f_type == 0x9fa0,
         "actual initial proc kernel helper control required",
     )
@@ -92,6 +95,8 @@ impl<'s> Disabled<'s> {
             let _original = contents(&file)?;
             let literal = CString::new(name)
                 .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+            // SAFETY: `literal` is a NUL-terminated C string and `parent` keeps the descriptor
+            // open.
             let raw = unsafe {
                 libc::openat(
                     parent.as_raw_fd(),
@@ -100,6 +105,7 @@ impl<'s> Disabled<'s> {
                 )
             };
             require(raw >= 0, "original kernel helper writer unavailable")?;
+            // SAFETY: `raw` was just returned by openat and is owned by nothing else.
             let writer = unsafe { File::from_raw_fd(raw) };
             protected(&writer, mount)?;
             require(
@@ -108,6 +114,7 @@ impl<'s> Disabled<'s> {
                 "kernel helper control changed before owned write",
             )?;
             require(
+                // SAFETY: The buffer is a 1-byte literal and `writer` keeps `raw` open.
                 unsafe { libc::write(raw, b"\n".as_ptr().cast(), 1) } == 1,
                 "kernel helper disable write uncertain; review required",
             )?;

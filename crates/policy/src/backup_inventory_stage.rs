@@ -498,6 +498,8 @@ pub fn stage<'c, 's, 'cfg, 'g>(
     let component =
         std::ffi::CString::new(id).map_err(|_| Error("inventory stage component".into()))?;
     require(
+        // SAFETY: `component` is a NUL-terminated C string and `registry` keeps the descriptor
+        // open.
         unsafe { libc::mkdirat(registry.as_raw_fd(), component.as_ptr(), 0o700) } == 0,
         "exclusive inventory stage creation failed; intent retained",
     )?;
@@ -511,6 +513,7 @@ pub fn stage<'c, 's, 'cfg, 'g>(
     authorize()?;
     boundary(&record)?;
     require(
+        // SAFETY: The name is a NUL-terminated literal and `directory` keeps the descriptor open.
         unsafe { libc::mkdirat(directory.as_raw_fd(), c"databases".as_ptr(), 0o700) } == 0,
         "exclusive database export directory creation failed; stage intent retained",
     )?;

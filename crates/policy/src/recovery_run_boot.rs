@@ -204,6 +204,7 @@ pub fn run(p: &Parameters) -> Result<Value> {
         })(),
     );
     drop(secret);
+    // SAFETY: sync takes no arguments and cannot fail.
     unsafe { libc::sync() };
     // Cleanup errors retain uncertain mounts/mapping. Never weaken them to claim
     // success; PID1 reports failure and exits through the guarded kernel reboot.

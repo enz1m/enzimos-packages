@@ -99,6 +99,8 @@ pub(crate) fn load(id: &str, activation: &Value, luks: &str, secret: &[u8]) -> R
     kernel.recheck()?;
     base.recheck()?;
     volume.recheck()?;
+    // SAFETY: The command line is a NUL-terminated CString whose length includes the terminator,
+    // and both memfds stay open.
     let result = unsafe {
         libc::syscall(
             libc::SYS_kexec_file_load,

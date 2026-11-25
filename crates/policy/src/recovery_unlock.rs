@@ -18,6 +18,7 @@ struct Echo {
 impl Drop for Echo {
     #[allow(unsafe_code, reason = "Linux syscall ABI (tcsetattr).")]
     fn drop(&mut self) {
+        // SAFETY: `self.fd` is the open console and `self.saved` is the termios read from it.
         unsafe { libc::tcsetattr(self.fd, libc::TCSANOW, &self.saved) };
     }
 }
@@ -26,6 +27,7 @@ impl Drop for Echo {
     reason = "Linux syscall ABI (open, poll, read, tcgetattr and others)."
 )]
 fn console_password() -> Result<Zeroizing<Vec<u8>>> {
+    // SAFETY: The path is a NUL-terminated literal.
     let fd = unsafe {
         libc::open(
             c"/dev/console".as_ptr(),
@@ -33,16 +35,19 @@ fn console_password() -> Result<Zeroizing<Vec<u8>>> {
         )
     };
     require(fd >= 0, "recovery password console unavailable")?;
+    // SAFETY: `fd` was just returned by open and is owned by nothing else.
     let mut console = unsafe { File::from_raw_fd(fd) };
     // SAFETY: `libc::termios` is a plain C struct, for which all-zero bytes are a valid value.
     let mut saved: libc::termios = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `saved` is a writable termios and `fd` is the open console.
         unsafe { libc::tcgetattr(fd, &mut saved) } == 0,
         "recovery console terminal required",
     )?;
     let mut private = saved;
     private.c_lflag &= !(libc::ECHO | libc::ECHONL);
     require(
+        // SAFETY: `private` is a fully initialized termios and `fd` is the open console.
         unsafe { libc::tcsetattr(fd, libc::TCSANOW, &private) } == 0,
         "recovery console echo suppression failed",
     )?;
@@ -58,6 +63,7 @@ fn console_password() -> Result<Zeroizing<Vec<u8>>> {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let ready = unsafe { libc::poll(&mut poll, 1, 1000) };
         if ready < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
             continue;
@@ -71,6 +77,7 @@ fn console_password() -> Result<Zeroizing<Vec<u8>>> {
             "recovery console closed",
         )?;
         let mut byte = Zeroizing::new([0u8; 1]);
+        // SAFETY: The buffer pointer and length describe `byte`, and `fd` is the open console.
         let count = unsafe { libc::read(fd, byte.as_mut_ptr().cast(), 1) };
         if count < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
             continue;
@@ -344,10 +351,12 @@ impl<'s> CreatedMapping<'s> {
         // Do not retry close after an uncertain syscall result or touch a reused
         // descriptor. A failed result leaves the kernel mapping for review.
         require(
+            // SAFETY: `raw` came from `into_raw_fd` and is closed exactly once.
             unsafe { libc::close(raw) } == 0,
             "original mapper description close uncertain; no retry",
         )?;
         require(
+            // SAFETY: F_GETFD takes no pointers; it only probes the just-closed number.
             unsafe { libc::fcntl(raw, libc::F_GETFD) } == -1
                 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF),
             "original mapper descriptor unexpectedly remains open",
@@ -475,7 +484,9 @@ fn sysfs(file: &File) -> Result<()> {
     use std::os::fd::AsRawFd;
     let mut data = std::mem::MaybeUninit::<libc::statfs>::uninit();
     require(
+        // SAFETY: `data` is writable for one `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), data.as_mut_ptr()) } == 0
+            // SAFETY: fstatfs returned 0, so it initialized `data`.
             && unsafe { data.assume_init() }.f_type as u64 == 0x62656572,
         "actual original kernel sysfs holder directory required",
     )

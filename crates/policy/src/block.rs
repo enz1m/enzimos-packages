@@ -23,6 +23,8 @@ fn values(fd: i32) -> Result<(u64, u64, bool)> {
         (0x125eu64, (&mut read_only as *mut i32).cast()),
     ] {
         require(
+            // SAFETY: Each request is paired with a writable buffer of the size it writes (u64,
+            // u64, int).
             unsafe { libc::ioctl(fd, request as libc::c_ulong, ptr) } == 0,
             "block identity ioctl failed",
         )?;

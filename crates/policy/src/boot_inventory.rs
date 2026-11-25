@@ -65,6 +65,7 @@ impl Process {
             revents: 0,
         };
         require(
+            // SAFETY: `p` is one writable pollfd and the count is 1.
             unsafe { libc::poll(&mut p, 1, 0) } == 0,
             "original process departed during inspection",
         )?;
@@ -87,10 +88,12 @@ impl Process {
         let base = PathBuf::from(format!("/proc/{pid}"));
         let uid = std::fs::metadata(&base)?.uid();
         let before = stat(&text(&base.join("stat"), 8192, uid)?, pid)?;
+        // SAFETY: pidfd_open takes no pointers.
         let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
         if raw < 0 {
             return Err(std::io::Error::last_os_error().into());
         }
+        // SAFETY: `raw` was just returned by pidfd_open and is owned by nothing else.
         let pidfd = unsafe { File::from_raw_fd(raw as i32) };
         let fd_parent = files::directory(&base.join("fd"), None)?;
         let names = files::directory_names(&fd_parent, MAX_HANDLES)?;

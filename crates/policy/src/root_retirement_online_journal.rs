@@ -112,6 +112,7 @@ impl<'a> Journal<'a> {
             guard.control_mount_id(),
         )?;
         let folder_flags = enzimos_platform::files::status_flags(&folder);
+        // SAFETY: F_GETFL takes no pointers and `record` keeps the descriptor open.
         let record_flags = unsafe { libc::fcntl(record.descriptor()?.as_raw_fd(), libc::F_GETFL) };
         require(
             folder_flags >= 0
@@ -185,6 +186,7 @@ impl<'a> Journal<'a> {
         self.record.recheck()?;
         require(
             enzimos_platform::files::status_flags(&self.folder) == self.folder_flags
+                // SAFETY: F_GETFL takes no pointers and `self.record` keeps the descriptor open.
                 && unsafe { libc::fcntl(self.record.descriptor()?.as_raw_fd(), libc::F_GETFL) }
                     == self.record_flags,
             "original online Root receipt description flags changed",
@@ -292,6 +294,7 @@ impl<'a> Journal<'a> {
         )?;
         let predecessor = self.record.replace_with_predecessor(next)?;
         let record_flags =
+            // SAFETY: F_GETFL takes no pointers and `self.record` keeps the descriptor open.
             unsafe { libc::fcntl(self.record.descriptor()?.as_raw_fd(), libc::F_GETFL) };
         require(
             record_flags >= 0 && record_flags & libc::O_ACCMODE == libc::O_RDONLY,

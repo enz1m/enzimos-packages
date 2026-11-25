@@ -157,8 +157,10 @@ impl Child {
         require(group.empty()?, "original delivery group must start empty")?;
         approved.recheck()?;
         let identity = approved.identity;
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `approved.file` keeps the descriptor open.
         let fd = unsafe { libc::fcntl(approved.file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(fd >= 64, "original child image alias unavailable")?;
+        // SAFETY: `fd` is a fresh F_DUPFD_CLOEXEC duplicate owned by nothing else.
         let image = unsafe { File::from_raw_fd(fd) };
         require(
             files::identity(&image.metadata()?) == identity,
@@ -179,14 +181,18 @@ impl Child {
             "actual null character device required",
         )?;
         let socket_alias =
+            // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `channel` keeps the descriptor open.
             unsafe { libc::fcntl(channel.as_fd().as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(
             socket_alias >= 64,
             "original child channel alias unavailable",
         )?;
+        // SAFETY: `socket_alias` is a fresh duplicate owned by nothing else.
         let socket_alias = unsafe { File::from_raw_fd(socket_alias) };
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `null` keeps the descriptor open.
         let null_alias = unsafe { libc::fcntl(null.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(null_alias >= 64, "original null device alias unavailable")?;
+        // SAFETY: `null_alias` is a fresh duplicate owned by nothing else.
         let null_alias = unsafe { File::from_raw_fd(null_alias) };
         let parent = enzimos_platform::process_identity::current_pid();
         let socket = socket_alias.as_raw_fd();
@@ -214,6 +220,8 @@ impl Child {
             cgroup: group.clone_target()?.as_raw_fd() as u64,
             ..Default::default()
         };
+        // SAFETY: `clone` is a complete clone_args of the passed size whose pidfd pointer targets
+        // `pidfd`.
         let result = unsafe {
             libc::syscall(
                 libc::SYS_clone3,
@@ -227,6 +235,8 @@ impl Child {
         if result == 0 {
             // Multithreaded parent: this branch uses only fixed buffers and Linux
             // syscalls, then execveat/_exit. No allocation, locks or Rust destructor.
+            // SAFETY: This is the clone3 child; it uses only prepared buffers and raw syscalls
+            // before execveat or _exit.
             unsafe {
                 if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL, 0, 0, 0) != 0
                     || libc::getppid() != parent
@@ -303,6 +313,7 @@ impl Child {
         )?;
         let this = Self {
             pid: result as u32,
+            // SAFETY: CLONE_PIDFD stored a fresh pidfd in `pidfd`, owned by nothing else.
             pidfd: unsafe { File::from_raw_fd(pidfd) },
             image,
             identity,
@@ -324,6 +335,7 @@ impl Child {
         };
         require(
             !self.closed
+                // SAFETY: `poll` is one writable pollfd and the count is 1.
                 && unsafe { libc::poll(&mut poll, 1, 0) } == 0
                 && process_identity::pidfd_target(self.pidfd.as_fd())? == self.pid
                 && files::identity(&self.image.metadata()?) == self.identity,
@@ -341,6 +353,7 @@ impl Child {
             // SAFETY: `libc::siginfo_t` is a plain C struct, for which all-zero bytes are a valid
             // value.
             let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            // SAFETY: `info` is a writable siginfo_t and `self.pidfd` keeps the pidfd open.
             let rc = unsafe {
                 libc::waitid(
                     libc::P_PIDFD,
@@ -352,10 +365,13 @@ impl Child {
             if rc < 0 {
                 return Err(std::io::Error::last_os_error().into());
             }
+            // SAFETY: `info` was zeroed and then filled by waitid, so its si_pid field is
+            // initialized.
             if unsafe { info.si_pid() } != 0 {
                 self.closed = true;
                 return require(
                     info.si_code == libc::CLD_EXITED
+                        // SAFETY: waitid reported an exited child, so si_status is initialized.
                         && unsafe { info.si_status() } == 0
                         && files::identity(&self.image.metadata()?) == self.identity,
                     "original delivery worker failed; no replay",
@@ -374,6 +390,7 @@ impl Drop for Child {
     fn drop(&mut self) {
         if !self.closed {
             // Only the original kernel pidfd is signalled; never a PID number.
+            // SAFETY: The siginfo pointer is null and `self.pidfd` keeps the pidfd open.
             unsafe {
                 libc::syscall(
                     libc::SYS_pidfd_send_signal,

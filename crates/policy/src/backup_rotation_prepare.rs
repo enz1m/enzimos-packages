@@ -202,6 +202,7 @@ pub fn prepare_locked(
     // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `fs` is a writable `libc::statvfs` and `mount` keeps the descriptor open.
         unsafe { libc::fstatvfs(mount.descriptor()?.as_raw_fd(), &mut fs) } == 0
             && u128::from(fs.f_bavail) * u128::from(fs.f_frsize) >= u128::from(need),
         "insufficient space for complete re-encrypted repository",

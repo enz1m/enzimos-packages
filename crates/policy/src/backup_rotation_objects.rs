@@ -126,6 +126,7 @@ impl Repository {
         entry.recheck()?;
         layout.require_root(&self.file)?;
         require(
+            // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
             unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) } == 0,
             "original repository rmdir refused; no replay",
         )?;
@@ -186,6 +187,7 @@ impl Repository {
         authorize()?;
         self.recheck(mount)?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     parent.as_raw_fd(),
@@ -398,6 +400,8 @@ impl Credential {
         entry.recheck()?;
         self.recheck(guard)?;
         require(
+            // SAFETY: `name` is a NUL-terminated C string and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), 0) } == 0,
             "original credential unlink failed; no replay",
         )?;
@@ -454,6 +458,7 @@ impl Credential {
         authorize()?;
         self.recheck(guard)?;
         require(
+            // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),

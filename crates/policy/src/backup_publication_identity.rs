@@ -36,10 +36,12 @@ pub(crate) fn recheck(
 pub(crate) fn retract(parent: &File, name: &std::ffi::CStr) -> Result<()> {
     use std::os::fd::AsRawFd;
     require(
+        // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), 0) } == 0,
         "setup publication retraction refused",
     )?;
     require(
+        // SAFETY: fsync takes no pointers and `parent` keeps the descriptor open.
         unsafe { libc::fsync(parent.as_raw_fd()) } == 0,
         "setup publication retraction durability unknown",
     )

@@ -119,6 +119,7 @@ impl BootText {
         )?;
         let committed = pending.commit_retained(true)?;
         let replaced = artifact.into_replaced(committed)?;
+        // SAFETY: F_GETFL takes no pointers; it only reads the flags of an open descriptor.
         let current_flags = unsafe { libc::fcntl(replaced.file()?.as_raw_fd(), libc::F_GETFL) };
         require(
             current_flags >= 0 && current_flags & libc::O_ACCMODE == libc::O_RDWR,

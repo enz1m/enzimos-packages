@@ -159,6 +159,7 @@ fn open_device(parent: &File, name: &std::ffi::OsStr) -> Result<File> {
     use std::os::unix::ffi::OsStrExt;
     let name =
         std::ffi::CString::new(name.as_bytes()).map_err(|_| Error("backup device name".into()))?;
+    // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -167,6 +168,7 @@ fn open_device(parent: &File, name: &std::ffi::OsStr) -> Result<File> {
         )
     };
     require(fd >= 0, "backup device unavailable")?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(fd) })
 }
 struct Device {

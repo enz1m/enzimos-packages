@@ -32,6 +32,7 @@ fn save_refuses_installed_filesystem_and_existing_output_before_copying_or_chang
     );
     assert!(!dir.path().join("password.txt").exists());
     assert_eq!(
+        // SAFETY: lseek takes no pointers and `observer` keeps the descriptor open.
         unsafe { libc::lseek(observer.as_raw_fd(), 0, libc::SEEK_CUR) },
         3
     );
