@@ -9,6 +9,7 @@
 //! history) are root-side and serialized by one lock.
 pub mod measure;
 pub mod prune;
+#[cfg(feature = "update-worker")]
 pub mod service;
 pub mod store;
 
