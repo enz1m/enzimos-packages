@@ -3,6 +3,11 @@
 use crate::{Error, Result, require};
 use std::collections::BTreeMap;
 
+/// Parse one `desc`/`files` record into its `%NAME%` sections and their lines.
+///
+/// # Errors
+/// An empty, oversized or non-UTF-8 record, a control byte, or a malformed or
+/// repeated section name.
 pub fn parse(bytes: &[u8]) -> Result<BTreeMap<&str, Vec<&str>>> {
     require(
         !bytes.is_empty() && bytes.len() <= 512 * 1024,
@@ -22,8 +27,10 @@ pub fn parse(bytes: &[u8]) -> Result<BTreeMap<&str, Vec<&str>>> {
                 && name.len() <= 128
                 && name.starts_with('%')
                 && name.ends_with('%')
-                && name[1..name.len() - 1]
+                && name
                     .bytes()
+                    .skip(1)
+                    .take(name.len() - 2)
                     .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
                 && fields.len() < 128
                 && !fields.contains_key(name),

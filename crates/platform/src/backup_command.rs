@@ -3,6 +3,9 @@
 use crate::{Result, require};
 use std::collections::BTreeSet;
 /// Derive every operand from the closed target set, never caller options/globs.
+///
+/// # Errors
+/// A target set that [`validate`] refuses.
 pub fn arguments(targets: &BTreeSet<String>) -> Result<Vec<String>> {
     let mut sources = vec![
         "/backup-source/system".to_owned(),
@@ -48,6 +51,8 @@ pub const SKIPPED: &str = "/backup-source/inventory/skipped.txt";
 pub fn skipped_arguments() -> [String; 2] {
     ["--exclude-file".to_owned(), SKIPPED.to_owned()]
 }
+/// Paths every backup leaves out and every restore skips: runtime trees,
+/// nested snapshots, staging areas and backup credentials.
 pub const EXCLUDES: &[&str] = &[
     "/backup-source/system/dev/**",
     "/backup-source/system/proc/**",
@@ -90,6 +95,10 @@ pub const EXCLUDES: &[&str] = &[
     "/backup-source/system/var/lib/systemd/coredump/**",
 ];
 /// Shape validation only. This never constructs an execution or mount permit.
+///
+/// # Errors
+/// Arguments that differ from the closed prefix, exclusions, skipped-folder
+/// list or source set derived from `targets`.
 pub fn validate(args: &[String], targets: &BTreeSet<String>) -> Result<()> {
     const PREFIX: &[&str] = &[
         "backup",

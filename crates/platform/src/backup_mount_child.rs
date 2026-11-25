@@ -36,7 +36,9 @@ fn relative(target: &str) -> Result<&str> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, fstatvfs).")]
 fn protections(file: &File) -> Result<()> {
     let m = file.metadata()?;
+    // SAFETY: `file` owns an open descriptor.
     let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    // SAFETY: `statvfs` is plain old data; all-zero is a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     let required = libc::ST_RDONLY | libc::ST_NOSUID | libc::ST_NODEV | libc::ST_NOEXEC;
     require(
@@ -46,6 +48,7 @@ fn protections(file: &File) -> Result<()> {
             && m.mode() & 0o7022 == 0
             && flags >= 0
             && flags & libc::O_ACCMODE == libc::O_RDONLY
+            // SAFETY: an open descriptor and a writable `statvfs`.
             && unsafe { libc::fstatvfs(file.as_raw_fd(), &mut status) } == 0
             && status.f_flag & required == required,
         "actual readonly backup source protection",
@@ -57,6 +60,8 @@ struct Tree {
     epoch: files::FileIdentity,
     mount: u64,
 }
+/// Read-only backup sources prepared by a Root parent, attached under
+/// `/backup-source` only in its owned fork children.
 pub struct Prepared {
     creator: u32,
     creator_pidfd: File,
@@ -72,6 +77,9 @@ impl Prepared {
     /// The caller separately retains its actual admitted source/worker actors.
     /// This constructor only duplicates actual readonly descriptions; it accepts
     /// neither inode metadata nor a caller-selected attachment root.
+    ///
+    /// # Errors
+    /// As for [`Self::prepare_reviewed`] with the derived archive arguments.
     pub fn prepare(sources: BTreeMap<&str, &File>) -> Result<Self> {
         let arguments =
             crate::backup_command::arguments(&sources.keys().map(|s| (*s).to_owned()).collect())?;
@@ -79,6 +87,11 @@ impl Prepared {
     }
     /// Preserve the original reviewed dataset order and paired exclusions.
     /// Actual descriptors and Root parent checks remain mandatory.
+    ///
+    /// # Errors
+    /// Arguments that do not match the sources, a non-Root caller, an
+    /// incomplete source set, an unprotected placeholder or source, or two
+    /// sources on one mount.
     #[allow(
         unsafe_code,
         reason = "Linux syscall ABI (getegid, geteuid, getgid, getuid and others)."
@@ -89,10 +102,15 @@ impl Prepared {
             &sources.keys().map(|s| (*s).to_owned()).collect(),
         )?;
         require(
-            unsafe { libc::getuid() } == 0
-                && unsafe { libc::geteuid() } == 0
-                && unsafe { libc::getgid() } == 0
-                && unsafe { libc::getegid() } == 0,
+            // SAFETY: identity queries without arguments.
+            unsafe {
+                (
+                    libc::getuid(),
+                    libc::geteuid(),
+                    libc::getgid(),
+                    libc::getegid(),
+                )
+            } == (0, 0, 0, 0),
             "Root backup child preparation",
         )?;
         require(
@@ -115,9 +133,11 @@ impl Prepared {
             "original protected backup attachment placeholder",
         )?;
         let creator = std::process::id();
+        // SAFETY: pidfd_open of this process with no flags.
         let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, creator, 0) };
         require(raw >= 0, "original backup creator pidfd")?;
         use std::os::fd::FromRawFd;
+        // SAFETY: `raw` is a new descriptor owned by nothing else.
         let creator_pidfd = unsafe { File::from_raw_fd(raw as i32) };
         let namespace = File::open("/proc/self/ns/mnt")?;
         let mut trees = Vec::new();
@@ -156,6 +176,11 @@ impl Prepared {
     pub(crate) fn arguments(&self) -> &[String] {
         &self.arguments
     }
+    /// The creator, its mount namespace, the placeholder and every source are
+    /// still the prepared ones.
+    ///
+    /// # Errors
+    /// Any of them changed, or a source lost its read-only protection.
     pub fn recheck(&self) -> Result<()> {
         require(
             self.creator == std::process::id(),
@@ -195,6 +220,10 @@ impl Prepared {
     /// performed. The caller must close inherited source/outside directory FDs,
     /// isolate networking, drop mount/ptrace/handle-access capabilities and enter
     /// the required backup AppArmor profile before running the fixed consumer.
+    ///
+    /// # Errors
+    /// The child is not the creator's direct owned child, has left the
+    /// creator's namespace, or a source or the placeholder changed.
     #[allow(
         unsafe_code,
         reason = "Linux syscall ABI (close, fstat, fstatfs, geteuid and others)."
@@ -202,9 +231,11 @@ impl Prepared {
     pub unsafe fn enter_child(&self) -> std::io::Result<()> {
         // SAFETY: the caller's contract is this function's own.
         unsafe { self.owned_child(true) }?;
+        // SAFETY: unshare affects only this owned child.
         if unsafe { libc::unshare(libc::CLONE_NEWNS) } != 0 {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: NUL-terminated path; propagation change in the new namespace.
         if unsafe {
             libc::mount(
                 std::ptr::null(),
@@ -250,10 +281,9 @@ impl Prepared {
     )]
     unsafe fn owned_child(&self, original: bool) -> std::io::Result<()> {
         let denied = || std::io::Error::from_raw_os_error(libc::EPERM);
-        if unsafe { libc::getpid() } == self.creator as i32
-            || unsafe { libc::getppid() } != self.creator as i32
-            || unsafe { libc::geteuid() } != 0
-        {
+        // SAFETY: identity queries without arguments.
+        let (pid, parent, euid) = unsafe { (libc::getpid(), libc::getppid(), libc::geteuid()) };
+        if pid == self.creator as i32 || parent != self.creator as i32 || euid != 0 {
             return Err(denied());
         }
         let mut poll = libc::pollfd {
@@ -261,14 +291,18 @@ impl Prepared {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: one valid `pollfd` on the retained creator pidfd.
         if unsafe { libc::poll(&mut poll, 1, 0) } != 0 {
             return Err(denied());
         }
+        // SAFETY: sets this child's own death signal.
         if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) } != 0
+            // SAFETY: an identity query without arguments.
             || unsafe { libc::getppid() } != self.creator as i32
         {
             return Err(denied());
         }
+        // SAFETY: NUL-terminated path; the descriptor is closed below.
         let old = unsafe {
             libc::open(
                 c"/proc/self/ns/mnt".as_ptr(),
@@ -278,13 +312,17 @@ impl Prepared {
         if old < 0 {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: both descriptors are open.
         let same = unsafe { same_inode(old, self.namespace.as_raw_fd()) };
+        // SAFETY: `old` is owned here and not used again.
         unsafe { libc::close(old) };
         if same != original {
             return Err(denied());
         }
         for tree in &self.trees {
+            // SAFETY: each source descriptor stays open for `self`'s lifetime.
             if !unsafe { exact(tree.file.as_raw_fd(), tree.epoch, Some(tree.mount)) }
+                // SAFETY: as above.
                 || !unsafe { readonly(tree.file.as_raw_fd()) }
             {
                 return Err(denied());
@@ -300,6 +338,7 @@ impl Prepared {
     )]
     unsafe fn populate(&self) -> std::io::Result<()> {
         let denied = || std::io::Error::from_raw_os_error(libc::EPERM);
+        // SAFETY: NUL-terminated path; the descriptor is closed below.
         let anchor = unsafe {
             libc::open(
                 c"/backup-source".as_ptr(),
@@ -309,11 +348,15 @@ impl Prepared {
         if anchor < 0 {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: `anchor` is open.
         let valid = unsafe { exact(anchor, self.anchor_epoch, None) };
+        // SAFETY: `anchor` is owned here and not used again.
         unsafe { libc::close(anchor) };
         if !valid {
             return Err(denied());
         }
+        // SAFETY: NUL-terminated strings; the mount exists only in this
+        // child's private namespace.
         if unsafe {
             libc::mount(
                 c"enzimos-backup-source".as_ptr(),
@@ -326,6 +369,7 @@ impl Prepared {
         {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: NUL-terminated path; the descriptor is closed below.
         let root = unsafe {
             libc::open(
                 c"/backup-source".as_ptr(),
@@ -335,19 +379,25 @@ impl Prepared {
         if root < 0 {
             return Err(std::io::Error::last_os_error());
         }
-        let mut filesystem: libc::statfs = unsafe { std::mem::zeroed() };
-        let mut metadata: libc::stat = unsafe { std::mem::zeroed() };
+        // SAFETY: `statfs` and `stat` are plain old data; all-zero is valid.
+        let (mut filesystem, mut metadata): (libc::statfs, libc::stat) =
+            unsafe { (std::mem::zeroed(), std::mem::zeroed()) };
+        // SAFETY: `root` is open and the output structures are writable.
         let valid = unsafe { libc::fstatfs(root, &mut filesystem) } == 0
             && filesystem.f_type == libc::TMPFS_MAGIC
+            // SAFETY: as above.
             && unsafe { libc::fstat(root, &mut metadata) } == 0
             && metadata.st_uid == 0
             && metadata.st_gid == 0
             && metadata.st_mode & 0o7777 == 0o700;
         if !valid {
+            // SAFETY: `root` is owned here and not used again.
             unsafe { libc::close(root) };
             return Err(denied());
         }
+        // SAFETY: `root` is the open private tmpfs root.
         let result = unsafe { self.attach(root) };
+        // SAFETY: `root` is owned here and not used again.
         unsafe { libc::close(root) };
         result
     }
@@ -356,13 +406,16 @@ impl Prepared {
         reason = "Linux syscall ABI (close, mkdirat, openat, syscall)."
     )]
     unsafe fn attach(&self, root: i32) -> std::io::Result<()> {
+        // SAFETY: `root` is open; NUL-terminated name.
         if self.additional && unsafe { libc::mkdirat(root, c"additional".as_ptr(), 0o700) } != 0 {
             return Err(std::io::Error::last_os_error());
         }
         for tree in &self.trees {
+            // SAFETY: `root` is open; `tree.name` is a `CString`.
             if unsafe { libc::mkdirat(root, tree.name.as_ptr(), 0o700) } != 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            // SAFETY: as above; the descriptor is closed below.
             let target = unsafe {
                 libc::openat(
                     root,
@@ -373,6 +426,8 @@ impl Prepared {
             if target < 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            // SAFETY: open source mount and target descriptors with empty
+            // NUL-terminated paths.
             let moved = unsafe {
                 libc::syscall(
                     libc::SYS_move_mount,
@@ -383,10 +438,12 @@ impl Prepared {
                     4u32 | 0x40,
                 )
             };
+            // SAFETY: `target` is owned here and not used again.
             unsafe { libc::close(target) };
             if moved != 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            // SAFETY: `root` is open; the descriptor is closed below.
             let actual = unsafe {
                 libc::openat(
                     root,
@@ -397,7 +454,9 @@ impl Prepared {
             if actual < 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            // SAFETY: `actual` is open.
             let valid = unsafe { exact(actual, tree.epoch, Some(tree.mount)) && readonly(actual) };
+            // SAFETY: `actual` is owned here and not used again.
             unsafe { libc::close(actual) };
             if !valid {
                 return Err(std::io::Error::from_raw_os_error(libc::EPERM));
@@ -408,8 +467,10 @@ impl Prepared {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstat).")]
 pub(crate) unsafe fn same_inode(a: i32, b: i32) -> bool {
-    let mut left: libc::stat = unsafe { std::mem::zeroed() };
-    let mut right: libc::stat = unsafe { std::mem::zeroed() };
+    // SAFETY: `stat` is plain old data; all-zero is a valid value.
+    let (mut left, mut right): (libc::stat, libc::stat) =
+        unsafe { (std::mem::zeroed(), std::mem::zeroed()) };
+    // SAFETY: the caller passes open descriptors; the outputs are writable.
     unsafe {
         libc::fstat(a, &mut left) == 0
             && libc::fstat(b, &mut right) == 0
@@ -418,7 +479,9 @@ pub(crate) unsafe fn same_inode(a: i32, b: i32) -> bool {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstat, statx).")]
 pub(crate) unsafe fn exact(fd: i32, epoch: files::FileIdentity, mount: Option<u64>) -> bool {
+    // SAFETY: `stat` is plain old data; all-zero is a valid value.
     let mut m: libc::stat = unsafe { std::mem::zeroed() };
+    // SAFETY: the caller passes an open descriptor.
     if unsafe { libc::fstat(fd, &mut m) } != 0 {
         return false;
     }
@@ -439,7 +502,10 @@ pub(crate) unsafe fn exact(fd: i32, epoch: files::FileIdentity, mount: Option<u6
         return false;
     }
     if let Some(expected) = mount {
+        // SAFETY: `statx` is plain old data; all-zero is a valid value.
         let mut status: libc::statx = unsafe { std::mem::zeroed() };
+        // SAFETY: an open descriptor, an empty NUL-terminated path and a
+        // writable output.
         if unsafe {
             libc::statx(
                 fd,
@@ -459,7 +525,9 @@ pub(crate) unsafe fn exact(fd: i32, epoch: files::FileIdentity, mount: Option<u6
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 unsafe fn readonly(fd: i32) -> bool {
+    // SAFETY: `statvfs` is plain old data; all-zero is a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     let required = libc::ST_RDONLY | libc::ST_NOSUID | libc::ST_NODEV | libc::ST_NOEXEC;
+    // SAFETY: the caller passes an open descriptor; the output is writable.
     unsafe { libc::fstatvfs(fd, &mut status) == 0 && status.f_flag & required == required }
 }

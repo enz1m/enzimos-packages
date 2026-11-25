@@ -12,10 +12,7 @@ fn effective_remote_preserves_signatures_and_refuses_routing_or_authentication_c
         // The enzimOS remote is admitted only where the installer added it.
         (both.clone(), &[Source::Flathub][..]),
         (CONFIG.into(), &BOTH[..]),
-        (
-            both.replace("enzim.dev", "foreign.invalid"),
-            &BOTH[..],
-        ),
+        (both.replace("enzim.dev", "foreign.invalid"), &BOTH[..]),
         (
             both.replace("org.enzimos.Apps", "org.flathub.Stable"),
             &BOTH[..],
