@@ -5,9 +5,15 @@ use enzimos_platform::{Result, files, mount_identity, require};
 use serde_json::{Value, json};
 use std::{
     fs::File,
-    os::{fd::AsFd, unix::fs::MetadataExt},
+    os::{
+        fd::AsFd,
+        unix::fs::{MetadataExt, OpenOptionsExt},
+    },
     path::{Path, PathBuf},
 };
+// The unit's guard leaves this marker only after it made room for a snapshot;
+// create-auto consumes it, so a run whose guard deferred to a busy lock retries.
+const ROOM_CHECKED: &str = "/run/enzimos/home-history-room-checked";
 struct Gate {
     directory: File,
     path: PathBuf,
@@ -76,12 +82,17 @@ impl Gate {
 pub fn create() -> Result<Value> {
     let gate = Gate::open()?;
     gate.admit(|| {
+        let room_checked = take_room_check()?;
         // A backup or another operation can hold the lock for hours; this run
         // is skipped (exit 75) and the unit retries it, see `busy`.
         let Some(lock) = operation::try_lock()? else {
             eprintln!("enzimos-policy: home history skipped: a backup or another system operation is running");
             return Ok(busy());
         };
+        if !room_checked {
+            eprintln!("enzimos-policy: home history skipped: free space was not checked for this run");
+            return Ok(busy());
+        }
         if gate.disabled()? {
             return Ok(json!({"status":"disabled-no-source-scan"}));
         }
@@ -99,4 +110,28 @@ pub fn create() -> Result<Value> {
 /// unit ever failing.
 fn busy() -> Value {
     json!({"status":"operation-lock-busy","retry":true})
+}
+/// Forgets an earlier space check; the guard calls this before checking.
+pub fn forget_room_check() -> Result<()> {
+    take_room_check().map(drop)
+}
+/// Records that the guard made room for the next automatic snapshot.
+pub fn record_room_check() -> Result<()> {
+    operation::root_only()?;
+    files::ensure_directory(Path::new("/run/enzimos"), 0o700, 0)?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(ROOM_CHECKED)?;
+    Ok(())
+}
+fn take_room_check() -> Result<bool> {
+    operation::root_only()?;
+    match std::fs::remove_file(ROOM_CHECKED) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }

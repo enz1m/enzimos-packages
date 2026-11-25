@@ -6,7 +6,8 @@ ConditionPathExists=!/var/lib/enzimos-control/home-history.disabled
 Type=oneshot
 # Make room first (oldest history goes when free space is below the floor);
 # skip this snapshot when there is still no room. While the operation lock is
-# held the guard removes nothing and the run below retries.
+# held the guard removes nothing and records no room check, so the run below
+# retries even if the lock is released before it starts.
 ExecCondition=/usr/lib/enzimos-native/enzimos-history guard
 ExecStart=/usr/lib/enzimos-native/enzimos-policy home-history create-auto
 # Drop build output, caches and excluded folders from the new snapshot.

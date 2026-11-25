@@ -4,8 +4,9 @@
 //! - no arguments: the D-Bus activated `org.enzimos.History1` service
 //! - `guard`: before a new snapshot, make room by removing the oldest home
 //!   history snapshots; exits 1 (skip the snapshot) when there is still no room.
-//!   While the operation lock is held it removes nothing: the snapshot run then
-//!   retries, and a running backup's own snapshot holds the space anyway
+//!   While the operation lock is held it removes nothing and records no room
+//!   check, so the snapshot run retries; a running backup's own snapshot holds
+//!   the space anyway
 //! - `prune`: drop skipped folders (build output, caches, exclusions) from home
 //!   history snapshots not pruned yet
 //! - `measure`: refresh the space measurement shown in Settings
@@ -56,6 +57,7 @@ fn run(command: &str) -> enzimos_platform::Result<i32> {
     let snapshots = enzimos_platform::fsview::open_directory(Path::new(history::SNAPSHOTS))?;
     match command {
         "guard" => {
+            enzimos_policy::home_history_auto::forget_room_check()?;
             if enzimos_policy::operation::busy()? {
                 return Ok(0);
             }
@@ -64,7 +66,9 @@ fn run(command: &str) -> enzimos_platform::Result<i32> {
             let room = prune::guard(&store, &list, prune::delete_snapshot, || {
                 prune::free_percent(Path::new(history::HOME_ROOT)).map(|f| f.0)
             })?;
-            if !room {
+            if room {
+                enzimos_policy::home_history_auto::record_room_check()?;
+            } else {
                 eprintln!("enzimos-history: the disk is too full for a new home history snapshot");
             }
             Ok(i32::from(!room))
