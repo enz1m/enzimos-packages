@@ -8,7 +8,7 @@ use std::{
     ffi::CString,
     fs::File,
     os::{
-        fd::{AsFd, AsRawFd, FromRawFd, IntoRawFd},
+        fd::{AsFd, FromRawFd, IntoRawFd},
         unix::fs::MetadataExt,
     },
 };

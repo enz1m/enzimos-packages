@@ -201,7 +201,7 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         self.recheck(authorize)?;
         self.context.enrollment_actor(authorize)
     }
-    pub fn kernel_scope(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Scope> {
+    pub(crate) fn kernel_scope(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Scope> {
         self.components(authorize)?;
         Ok(&self.scope)
     }

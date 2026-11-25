@@ -54,7 +54,7 @@ pub fn lock_for_enable_abandon() -> Result<files::Lock> {
         .ok_or_else(|| enzimos_platform::Error(BUSY.into()))
 }
 /// Independent recovery uses its genuine mounted plan guard for pending work.
-pub fn independent_lock(plan: &serde_json::Value) -> Result<files::Lock> {
+pub(crate) fn independent_lock(plan: &serde_json::Value) -> Result<files::Lock> {
     root_only()?;
     crate::recovery_bootstrap::quiet()?;
     let directory = Path::new("/run/enzimos");

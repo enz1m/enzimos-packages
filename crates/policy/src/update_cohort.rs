@@ -10,14 +10,14 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-pub const PATH: &str = "/var/lib/enzimos-update-cohort";
+pub(crate) const PATH: &str = "/var/lib/enzimos-update-cohort";
 pub const CONFIG: &str = "/etc/enzimos/update-pacman.conf";
 pub fn configuration() -> String {
     format!(
         "[options]\nArchitecture = x86_64\nCacheDir = {PATH}/packages\nLogFile = /var/log/pacman-enzimos-api.log\nSigLevel = Required TrustedOnly DatabaseOptional\nLocalFileSigLevel = Required TrustedOnly\nCheckSpace\n[verified]\nServer = file://{PATH}/packages\n"
     )
 }
-pub fn expiry(text: &str, now: i64) -> Result<()> {
+pub(crate) fn expiry(text: &str, now: i64) -> Result<()> {
     require(text.len() <= 64, "cohort expiry bound")?;
     let expiry = chrono::DateTime::parse_from_rfc3339(text)
         .map_err(|_| Error("cohort expiry requires an explicit timezone".into()))?;
@@ -173,7 +173,7 @@ impl Cohort {
     pub fn document(&self) -> &Value {
         &self.document
     }
-    pub fn raw_sha256(&self) -> &str {
+    pub(crate) fn raw_sha256(&self) -> &str {
         &self.raw_sha256
     }
     pub fn packages_metadata(&self) -> &[Value] {
@@ -322,7 +322,7 @@ impl Cohort {
         }
         Ok(())
     }
-    pub fn verify_signatures(&self, home: &Path) -> Result<()> {
+    pub(crate) fn verify_signatures(&self, home: &Path) -> Result<()> {
         self.recheck()?;
         for (name, member) in &self.members {
             if name.ends_with(".pkg.tar.zst") {

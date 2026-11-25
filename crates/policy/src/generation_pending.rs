@@ -7,7 +7,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
-pub fn document(data: &Value, active: Option<&Value>) -> Result<()> {
+pub(crate) fn document(data: &Value, active: Option<&Value>) -> Result<()> {
     catalog::validate(data, data["filesystem_uuid"].as_str().unwrap_or(""))?;
     for (name, row) in data["generations"].as_object().unwrap() {
         if row["state"] == "ready" {

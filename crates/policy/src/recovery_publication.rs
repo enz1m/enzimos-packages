@@ -3,7 +3,7 @@
 use crate::{boot_entries, recovery_image, recovery_records};
 use enzimos_platform::{Result, json, require};
 use serde_json::Value;
-pub fn validate(v: &Value, id: &str) -> Result<()> {
+pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(v, "schema record bios_before default_before journal_sha256")?;
     require(
         v["schema"].as_u64() == Some(1),
@@ -30,7 +30,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
     boot_entries::fields(defaults, false)?;
     recovery_records::digest(v, "journal_sha256")
 }
-pub fn expected_record(journal: &Value, current: &Value) -> Result<()> {
+pub(crate) fn expected_record(journal: &Value, current: &Value) -> Result<()> {
     let id = recovery_records::text(&journal["record"], "id")?;
     validate(journal, id)?;
     recovery_image::validate(current, id)?;
@@ -47,11 +47,11 @@ pub fn expected_record(journal: &Value, current: &Value) -> Result<()> {
     )
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum State {
+pub(crate) enum State {
     Before,
     After,
 }
-pub fn classify(actual: &Value, before: &Value, after: &Value) -> Result<State> {
+pub(crate) fn classify(actual: &Value, before: &Value, after: &Value) -> Result<State> {
     if actual == after {
         return Ok(State::After);
     }

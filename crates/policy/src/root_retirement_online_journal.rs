@@ -134,7 +134,11 @@ impl<'a> Journal<'a> {
     }
     /// Observe the receipt in whatever valid phase it currently has. The phase
     /// is then fixed for this actor exactly as with [`Journal::observe`].
-    pub fn observe_current(guard: &'a Guard, lock: &'a files::Lock, id: &str) -> Result<Self> {
+    pub(crate) fn observe_current(
+        guard: &'a Guard,
+        lock: &'a files::Lock,
+        id: &str,
+    ) -> Result<Self> {
         operation::root_only()?;
         crate::identity::safe_id(id)?;
         guard.recheck()?;
@@ -197,7 +201,7 @@ impl<'a> Journal<'a> {
     /// One durable staging intent publication. This does not install boot entries
     /// or authorize deletion; the consuming caller must retain all other actors.
     /// Any uncertain failure consumes this actor and cannot be retried through it.
-    pub fn publish_staged(
+    pub(crate) fn publish_staged(
         self,
         next: &Value,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -431,7 +435,7 @@ impl Published<'_> {
         )?;
         self.predecessor.recheck()
     }
-    pub fn require_original_observation(&self, original: &Observation) -> Result<()> {
+    pub(crate) fn require_original_observation(&self, original: &Observation) -> Result<()> {
         self.recheck()?;
         self.predecessor.require_original_observation(original)?;
         self.recheck()

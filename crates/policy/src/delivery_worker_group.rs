@@ -18,6 +18,7 @@ const MEMBERSHIP: &str = "0::/system.slice/enzimos-system-backend.service";
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
 fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
     let m = file.metadata()?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         m.is_dir()

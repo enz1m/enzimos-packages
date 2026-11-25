@@ -3,14 +3,14 @@
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
-pub const LIMIT: usize = 512 * 1024;
+pub(crate) const LIMIT: usize = 512 * 1024;
 const REQUIRED: &[&str] = &[
     "/backup-source/system",
     "/backup-source/home",
     "/backup-source/boot",
     "/backup-source/inventory",
 ];
-pub fn scope(row: &Value, identifier: &str) -> Result<()> {
+pub(crate) fn scope(row: &Value, identifier: &str) -> Result<()> {
     crate::identity::sha(identifier)?;
     require(
         row["id"] == identifier
@@ -49,7 +49,7 @@ pub fn scope(row: &Value, identifier: &str) -> Result<()> {
         "backup point omits a required source root",
     )
 }
-pub fn rows(code: Option<i32>, bytes: &[u8]) -> Result<Value> {
+pub(crate) fn rows(code: Option<i32>, bytes: &[u8]) -> Result<Value> {
     require(
         code == Some(0),
         "backup point observation failed; no replay",

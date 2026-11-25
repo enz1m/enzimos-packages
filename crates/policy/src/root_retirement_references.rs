@@ -383,7 +383,7 @@ impl<'a> Observation<'a> {
         self.root_receipt_barrier(authorize)
     }
     /// Original reference families remain retained across one actual staging intent.
-    pub fn verify_staged_root_receipt(
+    pub(crate) fn verify_staged_root_receipt(
         &self,
         published: &crate::root_retirement_online_journal::Published<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -620,7 +620,7 @@ impl<'a> Observation<'a> {
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<std::sync::Arc<Transaction>> {
         self.recheck(authorize)?;
-        Ok(self.catalog.clone())
+        Ok(std::sync::Arc::clone(&self.catalog))
     }
     pub(crate) fn require_original_source(
         &self,

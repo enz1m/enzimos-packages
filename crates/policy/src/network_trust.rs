@@ -4,9 +4,9 @@ use crate::{identity, operation, settings_command::Command, storage_runtime};
 use enzimos_platform::{Error, Result, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
-pub const TRUSTED_ZONE: &str = "enzimos-trusted";
+pub(crate) const TRUSTED_ZONE: &str = "enzimos-trusted";
 const KINDS: [&str; 4] = ["802-11-wireless", "802-3-ethernet", "vpn", "wireguard"];
-pub fn terse(line: &str) -> Result<Vec<String>> {
+pub(crate) fn terse(line: &str) -> Result<Vec<String>> {
     require(
         line.len() <= 8192 && !line.chars().any(char::is_control),
         "network connection row bound",

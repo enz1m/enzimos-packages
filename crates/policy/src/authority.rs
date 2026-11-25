@@ -12,7 +12,7 @@ pub const MASTERS: [&str; 5] = [
 pub const CONFIG: &str =
     "trust-model direct\nno-auto-key-retrieve\nauto-key-locate clear\nno-autostart\n";
 pub const FILES: [&str; 4] = ["pubring.gpg", "trustdb.gpg", "gpg.conf", "approved.trust"];
-pub const MINIMUM_APPROVED: usize = 10;
+pub(crate) const MINIMUM_APPROVED: usize = 10;
 pub fn fingerprint(s: &str) -> Result<&str> {
     require(
         s.len() == 40
@@ -22,7 +22,7 @@ pub fn fingerprint(s: &str) -> Result<&str> {
     )?;
     Ok(s)
 }
-pub fn revoked(body: &str) -> Result<BTreeSet<String>> {
+pub(crate) fn revoked(body: &str) -> Result<BTreeSet<String>> {
     require(
         body.len() <= 8 * 1024 * 1024 && !body.contains('\0'),
         "authority revocation list bound",
@@ -115,7 +115,7 @@ pub fn identities(body: &str) -> Result<BTreeSet<(String, String)>> {
     require(!waiting, "primary fingerprint missing")?;
     Ok(result)
 }
-pub fn masters_usable(body: &str, now: u64) -> Result<()> {
+pub(crate) fn masters_usable(body: &str, now: u64) -> Result<()> {
     let mut keys = BTreeMap::new();
     let mut pending = None;
     for row in rows(body)? {
@@ -179,7 +179,7 @@ pub fn quorum(
         .into_iter()
         .collect())
 }
-pub fn trusted_local(body: &str, arch: &BTreeSet<String>) -> Result<Vec<String>> {
+pub(crate) fn trusted_local(body: &str, arch: &BTreeSet<String>) -> Result<Vec<String>> {
     require(body.len() <= 2 * 1024 * 1024, "local ownertrust bound")?;
     let mut result = BTreeSet::new();
     let mut seen = BTreeSet::new();

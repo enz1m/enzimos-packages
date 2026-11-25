@@ -4,7 +4,7 @@ use crate::{authority, authority_build, authority_mount::Authority, storage_runt
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::{Value, json as value};
 use std::{collections::BTreeSet, path::Path};
-pub fn ownertrust_digest(body: &[u8]) -> Result<String> {
+pub(crate) fn ownertrust_digest(body: &[u8]) -> Result<String> {
     let body =
         std::str::from_utf8(body).map_err(|_| Error("authority ownertrust encoding".into()))?;
     authority::trusted_local(body, &BTreeSet::new())?;
@@ -15,7 +15,7 @@ pub fn ownertrust_digest(body: &[u8]) -> Result<String> {
     rows.sort_unstable();
     Ok(json::sha256(rows.join("\n").as_bytes()))
 }
-pub fn observe(guard: &Guard) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard) -> Result<Value> {
     let mounted = Authority::observe(guard)?;
     let source = mounted.files()?;
     let base = Path::new("/run/enzimos/rebind-authority-views");

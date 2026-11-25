@@ -16,8 +16,8 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-pub const QUERY_CONFIG: &str = "/usr/lib/enzimos-native/recovery-pacman.conf";
-pub struct Context {
+pub(crate) const QUERY_CONFIG: &str = "/usr/lib/enzimos-native/recovery-pacman.conf";
+pub(crate) struct Context {
     pub guard: IndependentGuard,
     pub source: File,
     pub source_path: PathBuf,
@@ -25,7 +25,7 @@ pub struct Context {
     pub conflicts: Value,
     pub volume: Volume,
 }
-pub fn subvolumes(path: &Path) -> Result<Records> {
+pub(crate) fn subvolumes(path: &Path) -> Result<Records> {
     let body = operation::query(
         "/usr/bin/btrfs",
         &[
@@ -45,7 +45,7 @@ pub fn subvolumes(path: &Path) -> Result<Records> {
         std::str::from_utf8(&body).map_err(|_| Error("subvolume inventory encoding".into()))?,
     )
 }
-pub fn private_records<F>(
+pub(crate) fn private_records<F>(
     guard: &IndependentGuard,
     folder: &str,
     maximum: usize,
@@ -296,7 +296,7 @@ fn conflicts(guard: &IndependentGuard, volume: &Volume) -> Result<Value> {
         value!({"update_applies":update_applies,"boot_publications":boot_publications,"update_workers":update_workers,"module_views":module_views,"authority_refresh":authority_refresh,"births":births,"rebinds":rebinds,"catalog":catalog,"images":images.records,"publications":publications.records}),
     )
 }
-pub fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<()> {
+pub(crate) fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<()> {
     let lock = source.join("var/lib/pacman/db.lck");
     require(
         matches!(std::fs::symlink_metadata(lock), Err(e) if e.kind() == std::io::ErrorKind::NotFound),
@@ -389,7 +389,7 @@ pub fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<()> {
     volume.recheck()
 }
 impl Context {
-    pub fn observe(plan: &Value) -> Result<Self> {
+    pub(crate) fn observe(plan: &Value) -> Result<Self> {
         let guard = IndependentGuard::observe(plan)?;
         let inventory = subvolumes(Path::new(IndependentGuard::TOP))?;
         let source_root = recovery_records::text(&plan["source_birth"]["source"], "path")?;
@@ -470,7 +470,7 @@ impl Context {
         context.recheck()?;
         Ok(context)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.volume.recheck()?;
         let target_name = recovery_records::text(&self.plan, "target_name")?;

@@ -39,6 +39,7 @@ pub(super) fn write(
         "original protected FAT publication parent required",
     )?;
     let mount = mount_identity::id(parent.as_fd(), true)?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x4d44,

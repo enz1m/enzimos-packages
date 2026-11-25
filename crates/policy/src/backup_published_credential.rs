@@ -102,7 +102,7 @@ impl Published {
         self.recheck()?;
         Ok(self.file.as_fd())
     }
-    pub fn public_result(&self) -> Result<Value> {
+    pub(crate) fn public_result(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"credential_stored":true,"repository_enrolled":false,"recovery_key_exported":false,"automatic_backup_enabled":false}),
@@ -127,7 +127,7 @@ impl Published {
         )?;
         lock.recheck()
     }
-    pub(crate) fn binding(&self) -> Result<Value> {
+    pub fn binding(&self) -> Result<Value> {
         self.recheck()?;
         crate::backup_secret_persistence::publication(
             &self.file,

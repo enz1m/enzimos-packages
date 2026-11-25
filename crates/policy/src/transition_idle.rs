@@ -331,7 +331,7 @@ impl Snapshot {
     /// receipt. This does not change the original snapshot or adopt other rows.
     /// The receipt is compared with the actual retained descriptor, not JSON
     /// metadata claimed to represent a directory or publication.
-    pub fn recheck_boot_retirement(
+    pub(crate) fn recheck_boot_retirement(
         &self,
         registry: &enzimos_platform::receipt_registry::Registry,
         record: &Value,
@@ -680,7 +680,7 @@ impl Snapshot {
         receipt.require_original_observation(original)?;
         self.guard.recheck()
     }
-    pub fn recheck_staged_root(
+    pub(crate) fn recheck_staged_root(
         &self,
         published: &crate::root_retirement_online_journal::Published<'_>,
     ) -> Result<()> {
@@ -720,7 +720,7 @@ impl Snapshot {
     pub fn recheck(&self) -> Result<()> {
         self.recheck_with_catalog(None)
     }
-    pub(crate) fn recheck_catalog_pending(
+    pub fn recheck_catalog_pending(
         &self,
         pending: &enzimos_platform::publication::Prepared,
     ) -> Result<()> {

@@ -11,10 +11,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
 fn flags(file: &File) -> Result<i32> {

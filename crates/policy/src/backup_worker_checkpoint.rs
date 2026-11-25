@@ -14,7 +14,7 @@ use std::{fs::File, os::fd::AsFd, time::Duration};
 /// can take longer than a packet deadline, so the worker waits while the
 /// caller process is alive (pidfd) and its handoff stays valid, exactly like a
 /// captured backup transfer. A dead caller still ends the wait immediately.
-pub const CALLER_WINDOW: Duration = Duration::from_secs(120);
+pub(crate) const CALLER_WINDOW: Duration = Duration::from_secs(120);
 pub struct Checkpoint {
     channel: Packet,
     sequence: u64,

@@ -364,7 +364,7 @@ impl Signed {
         )?;
         authorize()
     }
-    pub(crate) fn require_replaced_input(
+    pub fn require_replaced_input(
         &self,
         original: &File,
         epoch: files::FileIdentity,
@@ -447,7 +447,7 @@ pub fn sign(path: &Path, output: Option<&Path>) -> Result<Value> {
 pub fn sign_locked(path: &Path, output: Option<&Path>, _operation: &files::Lock) -> Result<Value> {
     sign_authorized(path, output, _operation, &mut || _operation.recheck())
 }
-pub fn sign_authorized(
+pub(crate) fn sign_authorized(
     path: &Path,
     output: Option<&Path>,
     lock: &files::Lock,
@@ -455,7 +455,7 @@ pub fn sign_authorized(
 ) -> Result<Value> {
     sign_retained_authorized(path, output, lock, authorize)?.evidence(authorize)
 }
-pub fn sign_retained_authorized(
+pub(crate) fn sign_retained_authorized(
     path: &Path,
     output: Option<&Path>,
     lock: &files::Lock,
@@ -529,7 +529,7 @@ pub fn build_uki_locked(
         .evidence(&mut || _operation.recheck())
 }
 /// Actual UKI output and original inputs remain retained beyond publication.
-pub struct Uki {
+pub(crate) struct Uki {
     signed: Signed,
     kernel: Source,
     initrd: Source,
@@ -562,17 +562,17 @@ impl Uki {
         )?;
         self.recheck(authorize)
     }
-    pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
+    pub(crate) fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         self.kernel.check()?;
         self.initrd.check()?;
         self.signed.recheck(authorize)
     }
-    pub fn file(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&File> {
+    pub(crate) fn file(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&File> {
         self.recheck(authorize)?;
         self.signed.file(authorize)
     }
-    pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let mut result = self.signed.evidence(authorize)?;
         result["kernel_sha256"] = value!(self.kernel.sha);
@@ -581,7 +581,7 @@ impl Uki {
         Ok(result)
     }
 }
-pub fn build_uki_retained_locked(
+pub(crate) fn build_uki_retained_locked(
     kernel: &Path,
     initrd: &Path,
     options: &str,
@@ -595,7 +595,7 @@ pub fn build_uki_retained_locked(
 /// Fresh caller authorization accompanies preparation, original source copying,
 /// assembly, signing and the retained no-replace publication. Revocation after
 /// assembly preserves prepared evidence and prevents final publication.
-pub fn build_uki_retained_authorized(
+pub(crate) fn build_uki_retained_authorized(
     kernel: &Path,
     initrd: &Path,
     options: &str,

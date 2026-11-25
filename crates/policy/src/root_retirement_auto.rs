@@ -29,9 +29,9 @@ use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
 type Records = std::collections::BTreeMap<String, Value>;
 /// Ready fallback births never offered: the newest, by Root subvolume ID.
-pub const KEEP_NEWEST: usize = 2;
+pub(crate) const KEEP_NEWEST: usize = 2;
 /// A bounded number of Root retirements per run.
-pub const MAX_RETIREMENTS: usize = 4;
+pub(crate) const MAX_RETIREMENTS: usize = 4;
 /// Root receipt registry bound (as read by every transition snapshot).
 const RECEIPTS: usize = 16;
 
@@ -46,7 +46,7 @@ fn names_root(identity: &Value, root: &Value) -> bool {
 }
 /// Retirement candidates `(birth, root UUID)` oldest first, and every ready
 /// birth that is kept with its reason.
-pub fn candidates(
+pub(crate) fn candidates(
     births: &Records,
     generations: &Value,
     live: &Value,
@@ -104,7 +104,7 @@ pub fn candidates(
 }
 /// What a run does with one unfinished receipt.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Disposition {
+pub(crate) enum Disposition {
     Finish,
     Resume,
     Abandon,
@@ -113,7 +113,7 @@ pub enum Disposition {
 /// Terminal receipts need nothing (None). Only unstaged receipts that never
 /// started deleting are abandoned automatically, and only from a previous
 /// boot: one prepared during this boot may still be reviewed or staged.
-pub fn disposition(row: &Value, boot: &str) -> Option<Disposition> {
+pub(crate) fn disposition(row: &Value, boot: &str) -> Option<Disposition> {
     let staged = row.get("coordinator").is_some();
     match (row["phase"].as_str(), staged) {
         (Some("complete" | "abandoned"), _) => None,
@@ -131,7 +131,7 @@ pub fn disposition(row: &Value, boot: &str) -> Option<Disposition> {
     }
 }
 /// Whether a receipt provably never started deleting.
-pub fn unstarted(row: &Value) -> bool {
+pub(crate) fn unstarted(row: &Value) -> bool {
     row.get("coordinator").is_none()
         && (row["phase"] == "prepared"
             || row["phase"] == "executing" && row["next_step"] == 0 && row["inflight"].is_null())
@@ -219,7 +219,7 @@ fn retire_one(
 
 /// Why the read-only Snapper snapshot a retired birth was born from must stay,
 /// or None when it may be removed. `inventory` is the complete subvolume list.
-pub fn snapshot_blocker(
+pub(crate) fn snapshot_blocker(
     id: &str,
     row: &Value,
     live: &Value,

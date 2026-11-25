@@ -3,8 +3,8 @@
 use enzimos_platform::{Result, json, memfile, require};
 use serde_json::{Value, json as value};
 use std::fs::File;
-pub const LIMIT: usize = 16 * 1024 * 1024;
-pub fn identity_data(code: Option<i32>, bytes: &[u8], pin: &Value) -> Result<Value> {
+pub(crate) const LIMIT: usize = 16 * 1024 * 1024;
+pub(crate) fn identity_data(code: Option<i32>, bytes: &[u8], pin: &Value) -> Result<Value> {
     require(
         code == Some(0),
         "remote repository identity query failed; no replay",
@@ -67,7 +67,8 @@ pub(crate) fn measured(body: &Value, request: &Value) -> Result<Value> {
             intent["id"] == ctx["receipt_id"]
                 && intent["phase"] == "copying"
                 && intent["remote_snapshot"] == source
-                && intent["original"] == *selected.get("original").unwrap_or(&selected["id"])
+                && intent["original"]
+                    == *selected.get("original").unwrap_or_else(|| &selected["id"])
                 && intent["remote_repository"] == ctx["remote"]["pin"]
                 && intent["boot_id"] == request["boot_id"],
             "remote observation retrieval intent differs from original copy",

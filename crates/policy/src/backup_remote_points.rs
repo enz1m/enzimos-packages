@@ -4,7 +4,7 @@ use crate::{backup_points, identity};
 use enzimos_platform::{Error, Result, require};
 use serde_json::Value;
 use std::collections::BTreeMap;
-pub const LIMIT: usize = 4 * 1024 * 1024;
+pub(crate) const LIMIT: usize = 4 * 1024 * 1024;
 pub(crate) fn inventory(v: &Value) -> Result<BTreeMap<&str, &Value>> {
     let rows = v
         .as_array()
@@ -25,7 +25,7 @@ pub(crate) fn inventory(v: &Value) -> Result<BTreeMap<&str, &Value>> {
     }
     Ok(result)
 }
-pub fn selected<'a>(v: &'a Value, id: &str) -> Result<&'a Value> {
+pub(crate) fn selected<'a>(v: &'a Value, id: &str) -> Result<&'a Value> {
     identity::sha(id)?;
     let rows = inventory(v)?;
     require(
@@ -40,7 +40,7 @@ pub fn selected<'a>(v: &'a Value, id: &str) -> Result<&'a Value> {
 }
 fn lineage(row: &Value) -> &str {
     row.get("original")
-        .unwrap_or(&row["id"])
+        .unwrap_or_else(|| &row["id"])
         .as_str()
         .unwrap_or("")
 }
@@ -67,7 +67,7 @@ fn equivalent(source: &Value, copied: &Value) -> Result<()> {
 }
 /// Existing copied points are accepted only for replication's idempotent vendor
 /// copy query. Publication still needs the actual original closed worker actor.
-pub fn replicated(source: &Value, id: &str, destination: &Value) -> Result<String> {
+pub(crate) fn replicated(source: &Value, id: &str, destination: &Value) -> Result<String> {
     let source = selected(source, id)?;
     let rows = inventory(destination)?;
     let matches = rows
@@ -80,7 +80,7 @@ pub fn replicated(source: &Value, id: &str, destination: &Value) -> Result<Strin
 }
 /// All original rotation points map bijectively to an exact new inventory.
 /// Index lineage once so the closed10,000-point bound remains linear-logarithmic.
-pub fn rotation_copies(
+pub(crate) fn rotation_copies(
     old: &Value,
     new: &Value,
     copies: &serde_json::Map<String, Value>,
@@ -120,7 +120,7 @@ pub fn rotation_copies(
     }
     Ok(())
 }
-pub fn retrieval_admission(source: &Value, id: &str, before: &Value) -> Result<()> {
+pub(crate) fn retrieval_admission(source: &Value, id: &str, before: &Value) -> Result<()> {
     let source = selected(source, id)?;
     let rows = inventory(before)?;
     require(
@@ -132,7 +132,7 @@ pub fn retrieval_admission(source: &Value, id: &str, before: &Value) -> Result<(
         "point already present; retrieval cannot adopt or replay",
     )
 }
-pub fn retrieved(source: &Value, id: &str, before: &Value, after: &Value) -> Result<String> {
+pub(crate) fn retrieved(source: &Value, id: &str, before: &Value, after: &Value) -> Result<String> {
     retrieval_admission(source, id, before)?;
     let source = selected(source, id)?;
     let old = inventory(before)?;

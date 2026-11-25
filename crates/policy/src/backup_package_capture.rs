@@ -78,6 +78,7 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
         ))
     };
     let expected = shape_proc(directory)?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatfs(directory.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x9fa0,
@@ -327,6 +328,7 @@ impl Library {
             !pointer.is_null() && std::mem::size_of::<T>() == std::mem::size_of::<Handle>(),
             "fixed ALPM API unavailable",
         )?;
+        // SAFETY: `libc::Dl_info` is a plain C struct, for which all-zero bytes are a valid value.
         let mut info: libc::Dl_info = unsafe { std::mem::zeroed() };
         require(
             unsafe { libc::dladdr(pointer, &mut info) } != 0

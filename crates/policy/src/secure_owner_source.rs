@@ -11,7 +11,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
-pub struct Owner {
+pub(crate) struct Owner {
     enabled: bool,
     firmware: Value,
     control: File,
@@ -44,12 +44,12 @@ fn database() -> Result<Option<String>> {
     .map(|body| json::sha256(&body)))
 }
 impl Owner {
-    pub fn observe() -> Result<Self> {
+    pub(crate) fn observe() -> Result<Self> {
         Self::observe_inner(false)
     }
     /// Explicit signing also uses staged credentials before owner-UKI policy
     /// activation, retaining the same inodes rather than rereading a new key.
-    pub fn credentials() -> Result<Self> {
+    pub(crate) fn credentials() -> Result<Self> {
         Self::observe_inner(true)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (getrlimit, prctl).")]
@@ -70,6 +70,8 @@ impl Owner {
             material: None,
         };
         if enabled || required {
+            // SAFETY: `libc::rlimit` is a plain C struct, for which all-zero bytes are a valid
+            // value.
             let mut limits: libc::rlimit = unsafe { std::mem::zeroed() };
             require(
                 unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) } == 0
@@ -119,7 +121,7 @@ impl Owner {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.recheck_credentials()?;
         if self.directory.is_some() {
             require(
@@ -215,13 +217,13 @@ impl Owner {
         self.enabled = true;
         self.recheck()
     }
-    pub fn certificate_hash(&self) -> Option<String> {
+    pub(crate) fn certificate_hash(&self) -> Option<String> {
         self.material.as_ref().map(|m| json::sha256(&m.pem))
     }
-    pub fn material(&self) -> Option<&Material> {
+    pub(crate) fn material(&self) -> Option<&Material> {
         self.material.as_ref()
     }
-    pub fn identity(&self) -> Result<Value> {
+    pub(crate) fn identity(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"control":self.control_shape,"directory":self.directory.as_ref().map(|(_,shape)|shape),

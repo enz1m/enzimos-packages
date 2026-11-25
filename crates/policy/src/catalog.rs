@@ -12,7 +12,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::{Path, PathBuf},
 };
-pub const MAX_CATALOG: usize = 2 * 1024 * 1024;
+pub(crate) const MAX_CATALOG: usize = 2 * 1024 * 1024;
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str> {
     v[key]
         .as_str()
@@ -402,7 +402,7 @@ impl Transaction {
     }
     /// One actual original replacement retains its predecessor and output
     /// through completion, with fresh caller/source checks before publication.
-    pub fn commit_owned_authorized(
+    pub(crate) fn commit_owned_authorized(
         &mut self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<()> {
@@ -453,7 +453,7 @@ impl Transaction {
     }
     /// Exact owned catalog temporary is admitted only by the live writer while
     /// every other transition record is freshly checked by the original snapshot.
-    pub(crate) fn commit_idle_authorized(
+    pub fn commit_idle_authorized(
         &mut self,
         idle: &crate::transition_idle::Snapshot,
         authorize: &mut dyn FnMut() -> Result<()>,

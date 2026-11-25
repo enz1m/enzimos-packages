@@ -9,7 +9,7 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::fs::File;
-pub(crate) fn authenticated(bytes: &[u8], binding: &Value) -> Result<Value> {
+pub fn authenticated(bytes: &[u8], binding: &Value) -> Result<Value> {
     let data = json::decode(bytes, 32768)?;
     require(
         data.is_object() && matches!(data["version"].as_u64(), Some(1 | 2)),
@@ -19,7 +19,7 @@ pub(crate) fn authenticated(bytes: &[u8], binding: &Value) -> Result<Value> {
     crate::backup_remote_record::new_pin(&data["id"], binding)
 }
 impl Runtime {
-    pub(crate) fn check_remote(
+    pub fn check_remote(
         &self,
         context: &Context<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,

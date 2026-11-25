@@ -3,9 +3,9 @@
 use enzimos_platform::{Error, Result, fd_packet::Credentials, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
-pub const LIMIT: usize = 65536;
+pub(crate) const LIMIT: usize = 65536;
 pub const DESCRIPTORS: usize = 16;
-pub const ROLES: [&str; 14] = [
+pub(crate) const ROLES: [&str; 14] = [
     "caller-pidfd",
     "caller-image",
     "root-control",

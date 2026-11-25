@@ -2,9 +2,9 @@
 //! Closed repository and explicit schedule bindings. These do not grant source access.
 use enzimos_platform::{Result, json, require};
 use serde_json::{Value, json as value};
-pub const SCHEDULE: &str = "daily-with-up-to-30m-jitter";
+pub(crate) const SCHEDULE: &str = "daily-with-up-to-30m-jitter";
 
-pub fn pin(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn pin(bytes: &[u8]) -> Result<Value> {
     let v = json::decode(bytes, crate::backup_configuration::LIMIT)?;
     require(
         v.as_object().is_some_and(|r| {
@@ -36,7 +36,7 @@ pub fn pin(bytes: &[u8]) -> Result<Value> {
 
 /// Bind original bytes rather than reserialized documents: formatting edits
 /// also revoke automatic entry until explicit schedule reapproval.
-pub fn schedule(configuration: &[u8], destination_pin: &[u8]) -> Result<Value> {
+pub(crate) fn schedule(configuration: &[u8], destination_pin: &[u8]) -> Result<Value> {
     let config = crate::backup_configuration::decode(configuration)?;
     let bound = pin(destination_pin)?;
     require(
@@ -53,7 +53,7 @@ pub fn schedule(configuration: &[u8], destination_pin: &[u8]) -> Result<Value> {
 ///
 /// # Errors
 /// An invalid configuration or pin, or a pin of another configuration.
-pub fn schedule_share(configuration: &[u8], pin: &Value) -> Result<Value> {
+pub(crate) fn schedule_share(configuration: &[u8], pin: &Value) -> Result<Value> {
     crate::backup_remote_endpoint::validate(&json::decode(configuration, 32768)?)?;
     crate::backup_remote_record::pin(pin)?;
     require(
@@ -69,14 +69,22 @@ pub fn schedule_share(configuration: &[u8], pin: &Value) -> Result<Value> {
 ///
 /// # Errors
 /// As for [`schedule_share`], or a marker bound to anything else.
-pub fn verify_schedule_share(marker: &[u8], configuration: &[u8], pin: &Value) -> Result<()> {
+pub(crate) fn verify_schedule_share(
+    marker: &[u8],
+    configuration: &[u8],
+    pin: &Value,
+) -> Result<()> {
     let actual = json::decode(marker, crate::backup_configuration::LIMIT)?;
     require(
         actual == schedule_share(configuration, pin)?,
         "automatic backup opt-in binding changed; reapproval required",
     )
 }
-pub fn verify_schedule(marker: &[u8], configuration: &[u8], destination_pin: &[u8]) -> Result<()> {
+pub(crate) fn verify_schedule(
+    marker: &[u8],
+    configuration: &[u8],
+    destination_pin: &[u8],
+) -> Result<()> {
     let actual = json::decode(marker, crate::backup_configuration::LIMIT)?;
     require(
         actual == schedule(configuration, destination_pin)?,

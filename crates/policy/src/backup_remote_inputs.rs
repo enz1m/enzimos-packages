@@ -8,10 +8,7 @@ use enzimos_platform::{Result, files, json, mount_identity, require};
 use serde_json::{Value, json as value};
 use std::{
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
 const NAMES: [&str; 3] = [
@@ -28,7 +25,7 @@ fn shape(parent: &File) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
-pub struct Inputs {
+pub(crate) struct Inputs {
     parent: File,
     shape: Shape,
     mount: u64,
@@ -41,7 +38,7 @@ pub struct Inputs {
     binding: Value,
 }
 impl Inputs {
-    pub fn observe(guard: &Guard) -> Result<Self> {
+    pub(crate) fn observe(guard: &Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         guard.recheck()?;
@@ -128,7 +125,7 @@ impl Inputs {
         original.recheck(guard)?;
         Ok(original)
     }
-    pub fn recheck(&self, guard: &Guard) -> Result<()> {
+    pub(crate) fn recheck(&self, guard: &Guard) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         guard.recheck()?;
@@ -162,15 +159,15 @@ impl Inputs {
         self.recheck(guard)?;
         Ok(self.files.each_ref().map(|file| file.as_fd()))
     }
-    pub fn configuration(&self, guard: &Guard) -> Result<&Value> {
+    pub(crate) fn configuration(&self, guard: &Guard) -> Result<&Value> {
         self.recheck(guard)?;
         Ok(&self.configuration)
     }
-    pub fn binding(&self, guard: &Guard) -> Result<&Value> {
+    pub(crate) fn binding(&self, guard: &Guard) -> Result<&Value> {
         self.recheck(guard)?;
         Ok(&self.binding)
     }
-    pub fn evidence(&self, guard: &Guard) -> Result<Value> {
+    pub(crate) fn evidence(&self, guard: &Guard) -> Result<Value> {
         self.recheck(guard)?;
         Ok(
             value!({"configuration":self.configuration,"binding":self.binding,"original_epochs":self.epochs,

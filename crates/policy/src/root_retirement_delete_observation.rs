@@ -6,7 +6,7 @@ use serde_json::Value;
 /// Btrfs unlink_subvol reduces the parent size by twice the literal disk name
 /// length, updates its mtime/ctime and preserves its remaining identity fields.
 /// Parent subvolume ID/UUID and filesystem joins remain separate requirements.
-pub fn parent_delta(
+pub(crate) fn parent_delta(
     before: files::FileIdentity,
     after: files::FileIdentity,
     name: &str,
@@ -36,7 +36,10 @@ pub fn parent_delta(
 /// Current Btrfs releases the dead root's anonymous device number. An actual
 /// retained FD may therefore report st_dev=0 after a successful deletion. Name
 /// absence and complete kernel-tree removal must be proved independently.
-pub fn held_dead_root(before: files::FileIdentity, after: files::FileIdentity) -> Result<()> {
+pub(crate) fn held_dead_root(
+    before: files::FileIdentity,
+    after: files::FileIdentity,
+) -> Result<()> {
     require(
         after.0 == 0
             && before.0 != 0
@@ -50,7 +53,7 @@ pub fn held_dead_root(before: files::FileIdentity, after: files::FileIdentity) -
         "original dead Btrfs root descriptor changed beyond owned kernel retirement",
     )
 }
-pub fn inventory_delta(
+pub(crate) fn inventory_delta(
     before: &crate::birth_runtime::Records,
     after: &crate::birth_runtime::Records,
     target: &Value,

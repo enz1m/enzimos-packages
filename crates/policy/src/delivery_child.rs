@@ -61,7 +61,7 @@ fn directory_shape(file: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
 }
 /// A Root-opened original executable, retained from review through child execution.
 /// No serialized identity or digest can construct this actor.
-pub struct Image {
+pub(crate) struct Image {
     directory: File,
     directory_shape: (u64, u64, u32, u32, u32, u64),
     file: File,
@@ -70,7 +70,7 @@ pub struct Image {
     sha: String,
 }
 impl Image {
-    pub fn open() -> Result<Self> {
+    pub(crate) fn open() -> Result<Self> {
         operation::root_only()?;
         namespaces::initial()?;
         let directory = files::directory(Path::new(DIRECTORY), Some(0))?;
@@ -102,7 +102,7 @@ impl Image {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         namespaces::initial()?;
         let named_directory = files::directory(Path::new(DIRECTORY), Some(0))?;
         require(
@@ -119,7 +119,7 @@ impl Image {
             "original delivery executable changed, replaced or covered",
         )
     }
-    pub fn evidence(&self) -> Result<serde_json::Value> {
+    pub(crate) fn evidence(&self) -> Result<serde_json::Value> {
         self.recheck()?;
         Ok(
             serde_json::json!({"file":self.identity,"mount":self.mount,"sha256":self.sha,
@@ -127,7 +127,7 @@ impl Image {
         )
     }
 }
-pub struct Child {
+pub(crate) struct Child {
     pid: u32,
     pidfd: File,
     image: File,
@@ -141,7 +141,7 @@ impl Child {
         unsafe_code,
         reason = "Linux syscall ABI (_exit, dup2, fcntl and others)."
     )]
-    pub fn spawn(
+    pub(crate) fn spawn(
         approved: &Image,
         group: &Group,
         channel: &enzimos_platform::fd_packet::Packet,
@@ -310,11 +310,11 @@ impl Child {
         group.contains_only(this.pid)?;
         Ok(this)
     }
-    pub fn pid(&self) -> u32 {
+    pub(crate) fn pid(&self) -> u32 {
         self.pid
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (poll).")]
-    pub fn live(&self) -> Result<()> {
+    pub(crate) fn live(&self) -> Result<()> {
         let mut poll = libc::pollfd {
             fd: self.pidfd.as_raw_fd(),
             events: libc::POLLIN,
@@ -329,13 +329,15 @@ impl Child {
         )
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (waitid).")]
-    pub fn success(&mut self, maximum: Duration) -> Result<()> {
+    pub(crate) fn success(&mut self, maximum: Duration) -> Result<()> {
         require(
             maximum > Duration::ZERO && maximum <= Duration::from_secs(5),
             "delivery exit deadline bound",
         )?;
         let until = Instant::now() + maximum;
         loop {
+            // SAFETY: `libc::siginfo_t` is a plain C struct, for which all-zero bytes are a valid
+            // value.
             let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
             let rc = unsafe {
                 libc::waitid(

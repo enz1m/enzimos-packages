@@ -3,12 +3,12 @@
 use crate::{identity, recovery_records as records};
 use enzimos_platform::{Result, json, require};
 use serde_json::Value;
-pub const ROTATION_LIMIT: usize = 2 * 1024 * 1024;
+pub(crate) const ROTATION_LIMIT: usize = 2 * 1024 * 1024;
 /// The remote repository pinned at its first initialization: its Restic ID
 /// and the share configuration it was made with. A share whose repository has
 /// another ID is refused. Schema 1 pins came from the SFTP transport, whose
 /// host key they bound; such a NAS backup has to be set up again.
-pub fn pin(v: &Value) -> Result<()> {
+pub(crate) fn pin(v: &Value) -> Result<()> {
     require(
         !(v["schema"] == 1 || v.get("hosts_sha256").is_some()),
         crate::backup_remote_endpoint::RECONFIGURE,
@@ -27,12 +27,12 @@ pub fn pin(v: &Value) -> Result<()> {
 ///
 /// # Errors
 /// `id` or the binding's configuration digest is not a full SHA-256 hex ID.
-pub fn new_pin(id: &Value, binding: &Value) -> Result<Value> {
+pub(crate) fn new_pin(id: &Value, binding: &Value) -> Result<Value> {
     let pin = serde_json::json!({"schema":2,"repository_id":id,"configuration_sha256":binding["configuration_sha256"]});
     self::pin(&pin)?;
     Ok(pin)
 }
-pub fn initialization(v: &Value) -> Result<()> {
+pub(crate) fn initialization(v: &Value) -> Result<()> {
     json::fields(v, "schema configuration_sha256 created_boot")?;
     require(
         v["schema"].as_u64() == Some(1),
@@ -41,7 +41,7 @@ pub fn initialization(v: &Value) -> Result<()> {
     identity::sha(records::text(v, "configuration_sha256")?)?;
     identity::uuid(records::text(v, "created_boot")?).map(|_| ())
 }
-pub fn copied(v: &Value) -> Result<()> {
+pub(crate) fn copied(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema source_snapshot remote_snapshot repository_id boot_id",
@@ -55,7 +55,7 @@ pub fn copied(v: &Value) -> Result<()> {
     }
     identity::uuid(records::text(v, "boot_id")?).map(|_| ())
 }
-pub fn rotation(v: &Value) -> Result<()> {
+pub(crate) fn rotation(v: &Value) -> Result<()> {
     let metadata = v["schema"].as_u64() == Some(2);
     json::fields(
         v,

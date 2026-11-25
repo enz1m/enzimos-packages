@@ -207,6 +207,7 @@ impl<'a> Status<'a> {
         let scratch_identity = files::identity(&scratch.metadata()?);
         let scratch_mount = mount_identity::id(scratch.as_fd(), true)?;
         let m = scratch.metadata()?;
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
             m.gid() == 0

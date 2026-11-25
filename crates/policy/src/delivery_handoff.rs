@@ -65,7 +65,7 @@ pub(crate) fn verify_output(request: &Request, home: &File, file: &File) -> Resu
 /// No grant is accepted from this data-only request. Callers retain their original
 /// grant, lock, account and export, and recheck them through `authorize` at each gate.
 /// Every failure keeps the entered intent and any final output; this never retries.
-pub fn copy<F: FnMut() -> Result<()>>(
+pub(crate) fn copy<F: FnMut() -> Result<()>>(
     approved: &crate::delivery_child::Image,
     body: &[u8],
     source: &File,

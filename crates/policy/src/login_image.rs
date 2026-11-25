@@ -7,17 +7,17 @@ pub(crate) const LIMIT: usize = 3 * 1024 * 1024;
 fn crc(bytes: &[u8]) -> u32 {
     let mut sum = !0u32;
     for byte in bytes {
-        sum ^= *byte as u32;
+        sum ^= u32::from(*byte);
         for _ in 0..8 {
             sum = (sum >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(sum & 1));
         }
     }
     !sum
 }
-fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], bytes: &[u8]) {
+fn chunk(out: &mut Vec<u8>, kind: [u8; 4], bytes: &[u8]) {
     out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
     let start = out.len();
-    out.extend_from_slice(kind);
+    out.extend_from_slice(&kind);
     out.extend_from_slice(bytes);
     out.extend_from_slice(&crc(&out[start..]).to_be_bytes());
 }
@@ -115,9 +115,9 @@ pub(crate) fn canonical(bytes: &[u8]) -> Result<Vec<u8>> {
     encoder.write_all(&pixels)?;
     let encoded = encoder.finish()?;
     let mut result = b"\x89PNG\r\n\x1a\n".to_vec();
-    chunk(&mut result, b"IHDR", header);
-    chunk(&mut result, b"IDAT", &encoded);
-    chunk(&mut result, b"IEND", &[]);
+    chunk(&mut result, *b"IHDR", header);
+    chunk(&mut result, *b"IDAT", &encoded);
+    chunk(&mut result, *b"IEND", &[]);
     Ok(result)
 }
 
@@ -131,10 +131,10 @@ mod tests {
         let compressed = encoder.finish().unwrap();
         let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
         let header = [0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0];
-        chunk(&mut png, b"IHDR", &header);
-        chunk(&mut png, b"tEXt", b"private original pathname");
-        chunk(&mut png, b"IDAT", &compressed);
-        chunk(&mut png, b"IEND", &[]);
+        chunk(&mut png, *b"IHDR", &header);
+        chunk(&mut png, *b"tEXt", b"private original pathname");
+        chunk(&mut png, *b"IDAT", &compressed);
+        chunk(&mut png, *b"IEND", &[]);
         let clean = canonical(&png).unwrap();
         assert!(!clean.windows(4).any(|part| part == b"tEXt"));
         assert_eq!(canonical(&clean).unwrap(), clean);
@@ -145,9 +145,9 @@ mod tests {
             let mut bad_header = header;
             bad_header[..4].copy_from_slice(&width.to_be_bytes());
             let mut bad = b"\x89PNG\r\n\x1a\n".to_vec();
-            chunk(&mut bad, b"IHDR", &bad_header);
-            chunk(&mut bad, b"IDAT", data);
-            chunk(&mut bad, b"IEND", &[]);
+            chunk(&mut bad, *b"IHDR", &bad_header);
+            chunk(&mut bad, *b"IDAT", data);
+            chunk(&mut bad, *b"IEND", &[]);
             assert_eq!(canonical(&bad).unwrap_err().0, "login-image-invalid");
         }
         let mut trailing = png;

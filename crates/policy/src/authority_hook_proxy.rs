@@ -28,7 +28,7 @@ pub fn request_frame(body: &Value, id: &str) -> Result<()> {
         "authority hook request refused",
     )
 }
-pub fn response_frame(
+pub(crate) fn response_frame(
     body: &Value,
     sender: &Credentials,
     id: &str,

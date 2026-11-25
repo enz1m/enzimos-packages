@@ -136,7 +136,7 @@ pub fn prepare_locked(
     prepare_authorized(id, birth_id, generation, lock, &mut || lock.recheck())
 }
 /// Fresh checks surround temporary mounts and original durable job publication.
-pub fn prepare_authorized<F: FnMut() -> Result<()>>(
+pub(crate) fn prepare_authorized<F: FnMut() -> Result<()>>(
     id: &str,
     birth_id: &str,
     generation: &str,
@@ -145,7 +145,7 @@ pub fn prepare_authorized<F: FnMut() -> Result<()>>(
 ) -> Result<Value> {
     prepare_checked(id, birth_id, generation, lock, None, authorize)
 }
-pub fn prepare_reviewed<F: FnMut() -> Result<()>>(
+pub(crate) fn prepare_reviewed<F: FnMut() -> Result<()>>(
     id: &str,
     birth_id: &str,
     generation: &str,

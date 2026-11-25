@@ -6,7 +6,7 @@ use std::{
     os::fd::AsFd,
     path::{Path, PathBuf},
 };
-pub struct Source {
+pub(crate) struct Source {
     pub file: File,
     pub body: Vec<u8>,
     path: PathBuf,
@@ -15,7 +15,7 @@ pub struct Source {
     limit: usize,
 }
 impl Source {
-    pub fn observe(path: &Path, limit: usize) -> Result<Self> {
+    pub(crate) fn observe(path: &Path, limit: usize) -> Result<Self> {
         let parent = files::directory(
             path.parent()
                 .ok_or_else(|| Error("build source parent".into()))?,
@@ -42,7 +42,7 @@ impl Source {
         source.recheck()?;
         Ok(source)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
         let named = files::open_relative(&parent, Path::new(self.path.file_name().unwrap()))?;
         require(

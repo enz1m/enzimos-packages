@@ -9,7 +9,7 @@ use std::{
     path::Path,
 };
 const CONFIG: &str = "/etc/snapper/configs/home";
-pub fn validate(v: &Value) -> Result<()> {
+pub(crate) fn validate(v: &Value) -> Result<()> {
     json::fields(
         v,
         "filesystem_uuid configuration_sha256 configuration_inode configuration_mount object home_shape home_mount snapshots_shape snapshots_mount",
@@ -69,7 +69,7 @@ pub fn validate(v: &Value) -> Result<()> {
         "history configuration receipt protection",
     )
 }
-pub fn configuration(bytes: &[u8]) -> Result<()> {
+pub(crate) fn configuration(bytes: &[u8]) -> Result<()> {
     configuration_for(bytes, "/home")
 }
 pub(crate) fn configuration_for(bytes: &[u8], expected: &str) -> Result<()> {

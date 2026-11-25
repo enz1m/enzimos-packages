@@ -227,7 +227,7 @@ fn environment(body: &str) -> Result<String> {
         let s = line
             .trim_start()
             .strip_prefix("export ")
-            .unwrap_or(line.trim_start());
+            .unwrap_or_else(|| line.trim_start());
         if let Some((k, _)) = s.split_once('=') {
             let k = k.trim();
             if !k.is_empty()
@@ -479,7 +479,7 @@ fn configure_mode(root: &Path, everyday: bool, keyring_only: bool) -> Result<Val
             _ => pam(body, &name)?,
         };
         edits.push(Edit {
-            target: target.clone(),
+            target: std::sync::Arc::clone(&target),
             relative_parent: path.parent().unwrap().into(),
             parent,
             name: name.clone(),

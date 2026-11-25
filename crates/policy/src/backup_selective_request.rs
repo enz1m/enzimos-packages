@@ -3,10 +3,10 @@
 use enzimos_platform::{Error, Result, fd_packet::Credentials, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub const KIND: &str = "selective-file-export";
-pub const LIMIT: usize = 65536;
+pub(crate) const KIND: &str = "selective-file-export";
+pub(crate) const LIMIT: usize = 65536;
 pub const DESCRIPTORS: usize = 11;
-pub const ROLES: [&str; 9] = [
+pub(crate) const ROLES: [&str; 9] = [
     "caller-pidfd",
     "caller-image",
     "root",

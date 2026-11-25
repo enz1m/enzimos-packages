@@ -41,7 +41,7 @@ pub(crate) fn additional(name: &str, path: &str) -> Result<()> {
     )
 }
 /// The system and home datasets every backup captures.
-pub fn base() -> Vec<Dataset> {
+pub(crate) fn base() -> Vec<Dataset> {
     vec![
         Dataset {
             name: "root".into(),
@@ -55,7 +55,7 @@ pub fn base() -> Vec<Dataset> {
         },
     ]
 }
-pub fn layout(config: &Value) -> Result<Vec<Dataset>> {
+pub(crate) fn layout(config: &Value) -> Result<Vec<Dataset>> {
     crate::backup_configuration::validate(config)?;
     let mut sources = base();
     if let Some(rows) = config.get("additional_sources") {

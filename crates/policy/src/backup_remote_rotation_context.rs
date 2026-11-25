@@ -252,7 +252,7 @@ impl<'a> Context<'a> {
     }
     /// Fresh actual vendor observations over the original descriptions. This
     /// result is review data; it cannot construct a switch/discard actor.
-    pub fn authenticated_inventory(
+    pub(crate) fn authenticated_inventory(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<Value> {

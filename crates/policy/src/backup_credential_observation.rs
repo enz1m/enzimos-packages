@@ -3,7 +3,7 @@
 use enzimos_platform::{Result, json, memfile, require};
 use serde_json::{Value, json as value};
 use std::fs::File;
-pub const LIMIT: usize = 192 * 1024;
+pub(crate) const LIMIT: usize = 192 * 1024;
 pub(crate) fn measured(body: &Value, enrollment: &Value) -> Result<String> {
     json::fields(
         body,

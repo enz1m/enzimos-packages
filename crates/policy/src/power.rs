@@ -14,10 +14,10 @@ const ACTIONS: &[(&str, &str)] = &[
     ("power-off", "PowerOff"),
     ("ignore", "Ignore"),
 ];
-pub fn risky(s: &str) -> bool {
+pub(crate) fn risky(s: &str) -> bool {
     matches!(s, "suspend" | "ignore")
 }
-pub fn validate_selection(action: &str, risk: bool) -> Result<()> {
+pub(crate) fn validate_selection(action: &str, risk: bool) -> Result<()> {
     require(
         ACTIONS.iter().any(|a| a.0 == action) && risk == risky(action),
         "critical power risk acknowledgement mismatch",

@@ -49,11 +49,10 @@ struct Fixture {
 }
 impl Fixture {
     fn new(journal: &Value) -> Self {
-        let root = tempfile::tempdir_in(
-            std::env::var_os("ENZIMOS_TEST_TMPDIR")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::env::current_dir().unwrap()),
-        )
+        let root = tempfile::tempdir_in(std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(
+            || std::env::current_dir().unwrap(),
+            std::path::PathBuf::from,
+        ))
         .unwrap();
         let names = journal["before_files"]
             .as_object()

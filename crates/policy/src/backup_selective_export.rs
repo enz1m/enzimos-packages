@@ -36,6 +36,7 @@ fn shape(file: &File) -> Result<Shape> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 fn space(guard: &Guard) -> Result<()> {
     guard.recheck()?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(guard.control().as_raw_fd(), &mut status) } == 0

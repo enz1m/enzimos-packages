@@ -66,6 +66,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
         } == 0,
         "development agent greeting credentials unavailable",
     )?;
+    // SAFETY: `libc::sockaddr_un` is a plain C struct, for which all-zero bytes are a valid value.
     let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
     address.sun_family = libc::AF_UNIX as _;
     for (destination, source) in address.sun_path.iter_mut().zip(bytes) {
@@ -113,6 +114,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
             iov_base: bytes.as_mut_ptr().cast(),
             iov_len: bytes.len(),
         };
+        // SAFETY: `libc::msghdr` is a plain C struct, for which all-zero bytes are a valid value.
         let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
         message.msg_iov = &mut iov;
         message.msg_iovlen = 1;

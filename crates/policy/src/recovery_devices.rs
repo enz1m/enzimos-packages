@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-pub fn coldplug() -> Result<()> {
+pub(crate) fn coldplug() -> Result<()> {
     recovery_bootstrap::quiet()?;
     let mut pending = vec![PathBuf::from("/sys/devices")];
     let mut aliases = BTreeSet::new();

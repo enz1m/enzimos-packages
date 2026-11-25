@@ -188,7 +188,7 @@ impl<'g> Enrollment<'g> {
     }
     pub(crate) fn actor_identity(&self) -> Result<std::sync::Arc<()>> {
         self.recheck()?;
-        Ok(self.identity.clone())
+        Ok(std::sync::Arc::clone(&self.identity))
     }
     pub(crate) fn require_original(&self, guard: &Guard, lock: &files::Lock) -> Result<()> {
         require(
@@ -354,7 +354,7 @@ impl Completed<'_, '_> {
 /// Admit a fresh enrollment only from the original complete journal family.
 /// The returned registry retains those same actual member descriptions across
 /// its own known publication; no JSON snapshot can recreate that transition.
-pub(crate) fn new_registry(
+pub fn new_registry(
     guard: &Guard,
     id: &str,
 ) -> Result<enzimos_platform::receipt_registry::Registry> {

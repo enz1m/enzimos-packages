@@ -16,8 +16,8 @@ use std::{
     path::Path,
     time::Duration,
 };
-pub const HELLO: &[u8] = b"ENZIMOS_DELIVERY_COPY_HELLO_2";
-pub const FRAME: &[u8] = b"ENZIMOS_DELIVERY_COPY_2";
+pub(crate) const HELLO: &[u8] = b"ENZIMOS_DELIVERY_COPY_HELLO_2";
+pub(crate) const FRAME: &[u8] = b"ENZIMOS_DELIVERY_COPY_2";
 const DEADLINE: Duration = Duration::from_secs(5);
 struct Parent {
     file: File,

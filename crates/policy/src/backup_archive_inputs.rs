@@ -6,11 +6,7 @@ use crate::{
 };
 use enzimos_platform::{Error, Result, files, mount_identity, require};
 use serde_json::{Value, json};
-use std::{
-    collections::BTreeMap,
-    fs::File,
-    os::fd::{AsFd, AsRawFd},
-};
+use std::{collections::BTreeMap, fs::File, os::fd::AsFd};
 struct Directory<'a> {
     file: &'a File,
     epoch: files::FileIdentity,

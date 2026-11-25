@@ -8,7 +8,7 @@ use crate::{
     operation,
 };
 use enzimos_platform::{local_restic::Task, receipt_registry::Registry};
-use std::os::fd::{AsFd, AsRawFd};
+use std::os::fd::AsFd;
 struct Empty<'a> {
     config: Configuration,
     source: &'a storage_runtime::Guard,

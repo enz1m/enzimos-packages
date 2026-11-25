@@ -90,7 +90,7 @@ fn legacy(v: Option<&Value>) -> Result<Vec<(String, String)>> {
         .map(|(u, b)| (u.as_str().unwrap().into(), b.as_str().unwrap().into()))
         .collect())
 }
-pub fn replace_options(body: &str, bios: bool, target: &str) -> Result<String> {
+pub(crate) fn replace_options(body: &str, bios: bool, target: &str) -> Result<String> {
     let fields = boot_entries::fields(body, bios)?;
     let key = if bios { "cmdline" } else { "options" };
     let original = fields

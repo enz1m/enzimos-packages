@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 /// Original caller retains all registry and recovery journal descriptions.
 /// Only actual adopted/legacy-detached conclusions stop using staging inputs.
-pub fn protection(records: &Value, generation: &str) -> Result<BTreeSet<String>> {
+pub(crate) fn protection(records: &Value, generation: &str) -> Result<BTreeSet<String>> {
     identity::safe_id(generation)?;
     json::fields(
         records,
@@ -118,7 +118,7 @@ pub fn protection(records: &Value, generation: &str) -> Result<BTreeSet<String>>
 }
 /// Inspect common automatic-discovery naming without granting ownership. Any
 /// discovered external image protects the operation until independently joined.
-pub fn external_autodiscovery(names: &BTreeSet<String>) -> Result<()> {
+pub(crate) fn external_autodiscovery(names: &BTreeSet<String>) -> Result<()> {
     require(
         names.is_empty(),
         "unowned automatically discovered UKIs prevent complete boot retirement references",

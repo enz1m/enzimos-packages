@@ -6,10 +6,10 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::{Path, PathBuf},
 };
-pub const POLICY: &str = "/usr/lib/enzimos-native/enzimos-policy";
-pub const BACKEND: &str = "/usr/lib/enzimos-backend/enzimos-system-backend";
+pub(crate) const POLICY: &str = "/usr/lib/enzimos-native/enzimos-policy";
+pub(crate) const BACKEND: &str = "/usr/lib/enzimos-backend/enzimos-system-backend";
 /// Syntax only. A recognized name is never process or execution authority.
-pub fn image_path(path: &str) -> Result<&'static str> {
+pub(crate) fn image_path(path: &str) -> Result<&'static str> {
     match path {
         POLICY => Ok(POLICY),
         BACKEND => Ok(BACKEND),

@@ -2,9 +2,9 @@
 //! Authenticated vendor metadata syntax, never export or filesystem authority.
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
-pub const MAX_FILE: u64 = 16 * 1024 * 1024;
-pub const MAX_METADATA: usize = 1024 * 1024;
-pub fn file_path(path: &str) -> Result<&str> {
+pub(crate) const MAX_FILE: u64 = 16 * 1024 * 1024;
+pub(crate) const MAX_METADATA: usize = 1024 * 1024;
+pub(crate) fn file_path(path: &str) -> Result<&str> {
     let tail = path
         .strip_prefix("/backup-source/home/")
         .ok_or_else(|| Error("qualified selective home-file path required".into()))?;
@@ -23,7 +23,7 @@ pub fn file_path(path: &str) -> Result<&str> {
     )?;
     Ok(path)
 }
-pub fn snapshot_scope(code: Option<i32>, bytes: &[u8], snapshot: &str) -> Result<()> {
+pub(crate) fn snapshot_scope(code: Option<i32>, bytes: &[u8], snapshot: &str) -> Result<()> {
     require(
         code == Some(0),
         "restore snapshot observation failed or uncertain",
@@ -38,7 +38,12 @@ pub fn snapshot_scope(code: Option<i32>, bytes: &[u8], snapshot: &str) -> Result
     )?;
     crate::backup_points::scope(&rows[0], snapshot)
 }
-pub fn metadata(code: Option<i32>, bytes: &[u8], snapshot: &str, path: &str) -> Result<Value> {
+pub(crate) fn metadata(
+    code: Option<i32>,
+    bytes: &[u8],
+    snapshot: &str,
+    path: &str,
+) -> Result<Value> {
     require(
         code == Some(0) && bytes.len() <= MAX_METADATA,
         "selective listing failed, uncertain or bounded out",

@@ -3,7 +3,7 @@
 use crate::{identity, module_view_record};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
-pub const MAXIMUM: usize = 32;
+pub(crate) const MAXIMUM: usize = 32;
 pub const EXECUTABLE: &str = "/usr/lib/enzimos-native/enzimos-update-worker";
 pub const CONFIG: &str = "/etc/enzimos/update-pacman.conf";
 pub const RUNTIME_SECONDS: u64 = 1400;

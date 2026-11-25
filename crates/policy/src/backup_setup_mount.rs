@@ -431,7 +431,7 @@ impl<'a, 'r, 'd, T> Closed<'a, 'r, 'd, T> {
         self.recheck()?;
         Ok(&self.result)
     }
-    pub fn into_result(self) -> Result<T> {
+    pub(crate) fn into_result(self) -> Result<T> {
         self.recheck()?;
         Ok(self.result)
     }

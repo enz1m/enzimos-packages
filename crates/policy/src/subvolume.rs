@@ -21,7 +21,7 @@ fn uuid(bytes: &[u8]) -> String {
         })
         .collect()
 }
-pub fn decode_info(bytes: &[u8], path: &str) -> Result<(Value, bool)> {
+pub(crate) fn decode_info(bytes: &[u8], path: &str) -> Result<(Value, bool)> {
     require(bytes.len() == 504, "Btrfs subvolume info size")?;
     let number = |offset| u64::from_ne_bytes(bytes[offset..offset + 8].try_into().unwrap());
     let id = number(0);
@@ -58,7 +58,7 @@ pub fn observe(fd: BorrowedFd<'_>, path: &str) -> Result<(Value, bool)> {
 /// Kernel identity of the containing root, including top-level ID5. Directory
 /// inode256 alone does not distinguish different Btrfs subvolumes.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
-pub fn containing_identity(fd: BorrowedFd<'_>) -> Result<Value> {
+pub(crate) fn containing_identity(fd: BorrowedFd<'_>) -> Result<Value> {
     let mut buffer = [0u64; 63];
     require(
         unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
@@ -66,7 +66,7 @@ pub fn containing_identity(fd: BorrowedFd<'_>) -> Result<Value> {
     )?;
     decode_containing_info(unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), 504) })
 }
-pub fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
     require(bytes.len() == 504, "Btrfs containing info size")?;
     let id = u64::from_ne_bytes(bytes[0..8].try_into().unwrap());
     let flags = u64::from_ne_bytes(bytes[288..296].try_into().unwrap());

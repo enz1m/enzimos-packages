@@ -7,11 +7,11 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const COLLECTION: &str = "org.flathub.Stable";
 pub const URL: &str = "https://dl.flathub.org/repo/";
 /// The enzimOS repository's OSTree collection.
-pub const ENZIMOS_COLLECTION: &str = "org.enzimos.Apps";
+pub(crate) const ENZIMOS_COLLECTION: &str = "org.enzimos.Apps";
 /// Public update URL for apps installed from the offline media.
-pub const ENZIMOS_URL: &str = "https://flatpak.enzim.dev/repo/";
+pub(crate) const ENZIMOS_URL: &str = "https://flatpak.enzim.dev/repo/";
 /// The enzimOS repository signing key (OpenPGP v4 fingerprint).
-pub const ENZIMOS_FINGERPRINT: &str = "02AF25420A1609EAC4CB4E5FA9E4B8C18CB3F476";
+pub(crate) const ENZIMOS_FINGERPRINT: &str = "02AF25420A1609EAC4CB4E5FA9E4B8C18CB3F476";
 /// The apps the enzimOS remote may install from the medium.
 pub const ENZIMOS_APPS: [&str; 9] = [
     "org.enzimos.Calculator",

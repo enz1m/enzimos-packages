@@ -6,10 +6,7 @@ use enzimos_platform::{Result, files, json, mount_identity, require};
 use serde_json::{Value, json as value};
 use std::{
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
 pub struct Control<'a, 's> {

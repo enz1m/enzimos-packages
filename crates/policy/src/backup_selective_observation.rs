@@ -5,7 +5,8 @@ use serde_json::{Value, json as value};
 use std::fs::File;
 const MAGIC: &[u8; 8] = b"EZFILE01";
 const HEADER_LIMIT: usize = 65536;
-pub const LIMIT: usize = crate::backup_selective_result::MAX_FILE as usize + HEADER_LIMIT + 12;
+pub(crate) const LIMIT: usize =
+    crate::backup_selective_result::MAX_FILE as usize + HEADER_LIMIT + 12;
 pub(crate) fn decode<'a>(bytes: &'a [u8], request: &Value) -> Result<(Value, &'a [u8])> {
     // Separate binary framing preserves a zero-byte selected file without relaxing
     // the nonempty sealed-request contract or treating JSON as execution authority.

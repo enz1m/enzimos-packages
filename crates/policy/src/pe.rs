@@ -18,7 +18,7 @@ fn dword(body: &[u8], p: usize) -> Result<u32> {
             .unwrap(),
     ))
 }
-pub fn sections(body: &[u8]) -> Result<BTreeMap<String, &[u8]>> {
+pub(crate) fn sections(body: &[u8]) -> Result<BTreeMap<String, &[u8]>> {
     require(
         body.len() >= 64 && body.len() <= 256 * 1024 * 1024 && body.starts_with(b"MZ"),
         "UKI DOS header or bound",

@@ -10,10 +10,7 @@ use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
 const FOLDER: &str = "generation-registry";

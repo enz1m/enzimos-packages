@@ -15,7 +15,7 @@ struct Mounted {
     normal: u64,
 }
 #[derive(Default)]
-pub struct Mounts {
+pub(crate) struct Mounts {
     mounts: Vec<Mounted>,
     uncertain: Option<PathBuf>,
 }
@@ -78,7 +78,7 @@ impl Mounts {
     }
     /// Match the installed ESP's synthesized permissions. FAT cannot chmod
     /// individual receipts; an inherited process umask would make files 0700.
-    pub fn esp(&mut self, source: BorrowedFd<'_>) -> Result<()> {
+    pub(crate) fn esp(&mut self, source: BorrowedFd<'_>) -> Result<()> {
         self.attach(
             source,
             Path::new("/boot"),
@@ -86,7 +86,7 @@ impl Mounts {
             Some("rw,uid=0,gid=0,fmask=0177,dmask=0077"),
         )
     }
-    pub fn filesystem(
+    pub(crate) fn filesystem(
         &mut self,
         source: BorrowedFd<'_>,
         target: &Path,
@@ -96,10 +96,10 @@ impl Mounts {
         require(kind == "btrfs", "fixed recovery filesystem required")?;
         self.attach(source, target, Some(kind), Some(data))
     }
-    pub fn bind(&mut self, source: &File, target: &Path) -> Result<()> {
+    pub(crate) fn bind(&mut self, source: &File, target: &Path) -> Result<()> {
         self.attach(source.as_fd(), target, None, None)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         require(
             self.uncertain.is_none(),
             "independent mount tracking uncertain; retained for review",
@@ -127,7 +127,7 @@ impl Mounts {
         Ok(())
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (umount2).")]
-    pub fn close(&mut self) -> Result<()> {
+    pub(crate) fn close(&mut self) -> Result<()> {
         require(
             self.uncertain.is_none(),
             "independent mount tracking uncertain; cleanup refused",

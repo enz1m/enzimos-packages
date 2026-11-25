@@ -15,7 +15,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
-pub fn document(
+pub(crate) fn document(
     id: &str,
     config: &Value,
     origin: &Value,
@@ -78,7 +78,7 @@ fn record(folder: &str, name: &str, mount: u64) -> Result<Value> {
     let parent = files::directory(&Path::new(operation::CONTROL).join(folder), Some(0))?;
     control_record::read(&parent, Path::new(name), catalog::MAX_CATALOG, mount)
 }
-pub fn prepare_locked(
+pub(crate) fn prepare_locked(
     config: &Value,
     birth_id: &str,
     generation: &str,
@@ -164,7 +164,7 @@ pub fn prepare_locked(
     jobs.save(&id, job, None, lock)?;
     Ok(plan)
 }
-pub fn execute_locked<F: FnMut(&str, &Value) -> Result<()>>(
+pub(crate) fn execute_locked<F: FnMut(&str, &Value) -> Result<()>>(
     plan: &Value,
     lock: &files::Lock,
     observer: F,
@@ -208,7 +208,7 @@ pub fn execute_locked<F: FnMut(&str, &Value) -> Result<()>>(
 }
 /// Retained snapshots that a media restore may target: ready births of the
 /// configured root matched to ready catalog generations with the same root UUID.
-pub fn choices(config: &Value) -> Result<Vec<Value>> {
+pub(crate) fn choices(config: &Value) -> Result<Vec<Value>> {
     storage::validate(config)?;
     let filesystem = records::text(config, "filesystem_uuid")?;
     media_origin::current()?;

@@ -20,11 +20,11 @@ use serde_json::Value;
 
 const TARGET: &str = "/backup-repository";
 /// Typed refusal: the configured backup drive is not attached.
-pub const ABSENT: &str = "backup-destination-absent";
+pub(crate) const ABSENT: &str = "backup-destination-absent";
 /// Typed refusal: neither a backup drive nor a ready NAS share is set up.
 pub const NOT_CONFIGURED: &str = "backup-destination-not-configured";
 /// Typed refusal: a read-only query found the configured repository unmounted.
-pub const NOT_MOUNTED: &str = "backup-destination-not-mounted";
+pub(crate) const NOT_MOUNTED: &str = "backup-destination-not-mounted";
 
 /// Whether the fixed target currently holds a mount to borrow. Nested or
 /// stacked mounts are never borrowed or treated as absent.
@@ -42,7 +42,7 @@ pub fn mounted() -> Result<bool> {
 }
 /// The one attached candidate whose filesystem UUID is the configured one.
 /// No candidate at all is the typed `backup-destination-absent` refusal.
-pub fn configured_selection(candidates: &[Value], uuid: &str) -> Result<String> {
+pub(crate) fn configured_selection(candidates: &[Value], uuid: &str) -> Result<String> {
     crate::identity::uuid(uuid)?;
     let matching = candidates
         .iter()
@@ -88,7 +88,7 @@ fn select<'d>(
 /// on-disk signature is probed read-only (no mount, no journal); its disk
 /// topology must be independent of the protected source. The repository is
 /// represented by the stored pin; execution verifies the actual repository.
-pub fn detached_evidence(
+pub(crate) fn detached_evidence(
     guard: &Guard,
     configuration: &Configuration,
     pin: &StoredPin<'_>,

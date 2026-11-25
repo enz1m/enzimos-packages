@@ -7,7 +7,7 @@ use crate::{
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::{Value, json as value};
 use std::{collections::BTreeMap, fs::File, path::Path, time::Duration};
-pub fn kernel_listing(body: &str) -> Result<String> {
+pub(crate) fn kernel_listing(body: &str) -> Result<String> {
     require(
         body.len() <= 2 * 1024 * 1024 && !body.contains('\0'),
         "kernel package listing bound",
@@ -22,7 +22,7 @@ pub fn kernel_listing(body: &str) -> Result<String> {
     require(releases.len() == 1, "installed kernel release ambiguous")?;
     Ok(identity::safe_id(releases[0])?.into())
 }
-pub fn installed_kernels() -> Result<Value> {
+pub(crate) fn installed_kernels() -> Result<Value> {
     let mut result = value!({});
     for flavor in ["linux", "linux-lts"] {
         let body = operation::query(

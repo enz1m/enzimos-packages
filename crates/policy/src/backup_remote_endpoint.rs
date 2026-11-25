@@ -11,9 +11,9 @@ use enzimos_platform::{Error, Result, json, remote_restic::Endpoint, require};
 use serde_json::Value;
 /// Status and refusal for a NAS backup still configured for SFTP, which the
 /// OS no longer uses: the share has to be set up again.
-pub const RECONFIGURE: &str = "remote-backup-reconfigure-as-smb: the NAS backup is set up for SFTP, which is no longer supported; set it up again as an SMB share";
+pub(crate) const RECONFIGURE: &str = "remote-backup-reconfigure-as-smb: the NAS backup is set up for SFTP, which is no longer supported; set it up again as an SMB share";
 /// Whether this is a pre-SMB (SFTP) remote configuration.
-pub fn sftp(v: &Value) -> bool {
+pub(crate) fn sftp(v: &Value) -> bool {
     v.is_object()
         && (v["schema"] == 1
             || ["address", "port", "path", "host_key_sha256"]
@@ -23,14 +23,14 @@ pub fn sftp(v: &Value) -> bool {
 /// # Errors
 /// An SFTP configuration ([`RECONFIGURE`]), unknown or missing fields, or a
 /// server, share, folder, user or domain outside the closed SMB syntax.
-pub fn validate(v: &Value) -> Result<()> {
+pub(crate) fn validate(v: &Value) -> Result<()> {
     endpoint(v).map(|_| ())
 }
 /// The validated share endpoint.
 ///
 /// # Errors
 /// As [`validate`].
-pub fn endpoint(v: &Value) -> Result<Endpoint> {
+pub(crate) fn endpoint(v: &Value) -> Result<Endpoint> {
     require(!sftp(v), RECONFIGURE)?;
     let domain = v.get("domain").is_some();
     json::fields(

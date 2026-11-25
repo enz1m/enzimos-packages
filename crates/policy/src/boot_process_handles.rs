@@ -16,6 +16,7 @@ pub(super) struct Measurement {
 fn filesystem(path: &Path) -> Result<u64> {
     let path = std::ffi::CString::new(path.as_os_str().as_bytes())
         .map_err(|_| Error("numeric kernel path encoding".into()))?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statfs = unsafe { std::mem::zeroed() };
     if unsafe { libc::statfs(path.as_ptr(), &mut info) } != 0 {
         return Err(std::io::Error::last_os_error().into());
@@ -27,6 +28,7 @@ fn mount(path: &Path, unique: bool) -> Result<u64> {
     let path = std::ffi::CString::new(path.as_os_str().as_bytes())
         .map_err(|_| Error("numeric kernel path encoding".into()))?;
     let requested = if unique { 0x4000 } else { 0x1000 };
+    // SAFETY: `libc::statx` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statx = unsafe { std::mem::zeroed() };
     // Following a fixed kernel link obtains metadata. It never adopts its target
     // open-file description, enters its namespace, or grants a filesystem actor.

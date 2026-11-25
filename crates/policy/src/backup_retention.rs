@@ -16,11 +16,11 @@ use std::collections::BTreeSet;
 
 pub const PATH: &str = "/etc/enzimos/backup-retention.json";
 const LIMIT: usize = 4096;
-pub const TIERS: [&str; 5] = ["last", "daily", "weekly", "monthly", "yearly"];
+pub(crate) const TIERS: [&str; 5] = ["last", "daily", "weekly", "monthly", "yearly"];
 
 /// Two weeks of dailies, two months of weeklies, a year of monthlies, two
 /// yearlies, and never fewer than the three newest backups.
-pub fn default_policy() -> Value {
+pub(crate) fn default_policy() -> Value {
     value!({"schema":1,"automatic":true,"last":3,"daily":14,"weekly":8,"monthly":12,"yearly":2})
 }
 
@@ -36,7 +36,7 @@ fn counts(v: &Value) -> Result<()> {
 }
 
 /// Smallest and largest space limit for the backup drive.
-pub const BUDGET_MIN: u64 = 1 << 30;
+pub(crate) const BUDGET_MIN: u64 = 1 << 30;
 const BUDGET_MAX: u64 = 1 << 60;
 
 fn budget_valid(v: &Value) -> Result<&'static str> {
@@ -56,7 +56,7 @@ fn budget_valid(v: &Value) -> Result<&'static str> {
 
 /// The stored document. `budget_bytes` (optional, null = no limit) caps the
 /// space the backups may use on the drive; the oldest go first.
-pub fn validate_policy(v: &Value) -> Result<()> {
+pub(crate) fn validate_policy(v: &Value) -> Result<()> {
     let budget = budget_valid(v)?;
     json::fields(
         v,

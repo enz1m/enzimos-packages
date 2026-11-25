@@ -178,7 +178,7 @@ pub fn observe(roots: &[Device]) -> Result<Graph> {
     )?;
     Ok(before)
 }
-pub fn btrfs_roots(uuid: &str) -> Result<Vec<Device>> {
+pub(crate) fn btrfs_roots(uuid: &str) -> Result<Vec<Device>> {
     identity::uuid(uuid)?;
     let base = Path::new("/sys/fs/btrfs").join(uuid);
     require(

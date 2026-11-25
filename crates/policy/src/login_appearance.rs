@@ -11,7 +11,7 @@ use std::{
     path::Path,
 };
 /// Protected public presentation store, separate from private OS state and homes.
-pub const DIRECTORY: &str = "/var/lib/enzimos-login-appearance";
+pub(crate) const DIRECTORY: &str = "/var/lib/enzimos-login-appearance";
 const PUBLIC_LIMIT: usize = 4 * 1024 * 1024;
 
 /// Validate only public presentation settings. Session, lock and power policy

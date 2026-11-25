@@ -3,8 +3,8 @@
 use crate::backup_worker_task::Work;
 use enzimos_platform::{Error, Result, json, local_restic::Task, require};
 use serde_json::Value;
-pub const LIMIT: usize = 65536;
-pub const REQUEST_SCHEMA: u64 = 3;
+pub(crate) const LIMIT: usize = 65536;
+pub(crate) const REQUEST_SCHEMA: u64 = 3;
 pub const FRAME_SCHEMA: u64 = 1;
 pub fn id(id: &str) -> Result<()> {
     require(

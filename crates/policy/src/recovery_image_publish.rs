@@ -20,7 +20,7 @@ use std::{
     },
     path::Path,
 };
-pub const INPUT: &str = "/run/enzimos/recovery-image-input";
+pub(crate) const INPUT: &str = "/run/enzimos/recovery-image-input";
 struct Input {
     directory: File,
     identity: files::FileIdentity,
@@ -158,6 +158,7 @@ fn text(volume: &Volume, name: &str) -> Result<String> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 fn space(volume: &Volume, needed: u64) -> Result<()> {
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(volume.directory.as_raw_fd(), &mut info) } == 0

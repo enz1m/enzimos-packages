@@ -103,6 +103,7 @@ impl<'a> Tree<'a> {
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
     fn recheck(&self) -> Result<()> {
+        // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
         let required = libc::ST_RDONLY | libc::ST_NOSUID | libc::ST_NODEV | libc::ST_NOEXEC;
         require(

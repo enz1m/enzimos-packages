@@ -23,7 +23,7 @@ const AUTHORITY: &str = "/etc/pacman.d/gnupg";
 
 /// The attended display terminal, with a best-effort serial copy of everything
 /// except typed input. Secrets are read with echo disabled and never mirrored.
-pub struct Console {
+pub(crate) struct Console {
     input: std::io::BufReader<File>,
     display: File,
     serial: Option<File>,
@@ -33,7 +33,7 @@ impl Console {
         unsafe_code,
         reason = "Linux syscall ABI (dup2, getpid, getsid, ioctl and others)."
     )]
-    pub fn attach() -> Result<Self> {
+    pub(crate) fn attach() -> Result<Self> {
         let path = if Path::new("/dev/tty1").exists() {
             c"/dev/tty1"
         } else {
@@ -66,7 +66,7 @@ impl Console {
             serial,
         })
     }
-    pub fn say(&mut self, text: &str) {
+    pub(crate) fn say(&mut self, text: &str) {
         let _ = self.display.write_all(text.as_bytes());
         let _ = self.display.write_all(b"\n");
         if let Some(serial) = self.serial.as_mut() {
@@ -82,7 +82,7 @@ impl Console {
         }
         Ok(())
     }
-    pub fn ask(&mut self, text: &str) -> Result<String> {
+    pub(crate) fn ask(&mut self, text: &str) -> Result<String> {
         self.prompt(text)?;
         let mut line = String::new();
         require(
@@ -92,9 +92,10 @@ impl Console {
         Ok(line.trim().to_owned())
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (tcgetattr, tcsetattr).")]
-    pub fn secret(&mut self, text: &str) -> Result<Zeroizing<Vec<u8>>> {
+    pub(crate) fn secret(&mut self, text: &str) -> Result<Zeroizing<Vec<u8>>> {
         self.prompt(text)?;
         let fd = self.display.as_raw_fd();
+        // SAFETY: `libc::termios` is a plain C struct, for which all-zero bytes are a valid value.
         let mut saved: libc::termios = unsafe { std::mem::zeroed() };
         require(
             unsafe { libc::tcgetattr(fd, &mut saved) } == 0,
@@ -120,7 +121,7 @@ impl Console {
         )?;
         Ok(line)
     }
-    pub fn select(&mut self, rows: &[String], label: &str) -> Result<usize> {
+    pub(crate) fn select(&mut self, rows: &[String], label: &str) -> Result<usize> {
         require(!rows.is_empty(), &format!("no {label} found"))?;
         for (number, row) in rows.iter().enumerate() {
             self.say(&format!("{}. {row}", number + 1));
@@ -129,7 +130,7 @@ impl Console {
         selection(&answer, rows.len()).ok_or_else(|| Error("invalid selection".into()))
     }
 }
-pub fn selection(answer: &str, count: usize) -> Option<usize> {
+pub(crate) fn selection(answer: &str, count: usize) -> Option<usize> {
     let number = answer.parse::<usize>().ok()?;
     (1..=count).contains(&number).then(|| number - 1)
 }
@@ -143,7 +144,7 @@ fn device_path(path: &str) -> bool {
     })
 }
 /// Partitions from `lsblk --json --paths --output NAME,TYPE,SIZE`.
-pub fn partitions(lsblk: &[u8]) -> Result<Vec<(String, String)>> {
+pub(crate) fn partitions(lsblk: &[u8]) -> Result<Vec<(String, String)>> {
     let tree = json::decode(lsblk, 4 * 1024 * 1024)?;
     let mut pending = tree["blockdevices"].as_array().cloned().unwrap_or_default();
     let mut result = Vec::new();
@@ -170,7 +171,7 @@ pub fn partitions(lsblk: &[u8]) -> Result<Vec<(String, String)>> {
     Ok(result)
 }
 /// The installation's ESP UUID from its own fstab, never the first FAT partition found.
-pub fn esp_uuid(fstab: &str) -> Result<String> {
+pub(crate) fn esp_uuid(fstab: &str) -> Result<String> {
     let rows = fstab
         .lines()
         .filter(|line| !line.trim_start().starts_with('#'))
@@ -195,7 +196,7 @@ pub fn esp_uuid(fstab: &str) -> Result<String> {
     )?;
     Ok(rows[0].to_owned())
 }
-pub fn installation_name(name: &str) -> bool {
+pub(crate) fn installation_name(name: &str) -> bool {
     name == "enzimos-root"
         || name.strip_prefix("enzimos-recovered-").is_some_and(|rest| {
             !rest.is_empty()
@@ -357,7 +358,7 @@ fn terminal(console: &mut Console, root: &Path, home: &Path) {
 
 /// One attended rescue session. Returns the restore result, or null when the
 /// user chose to reboot without restoring.
-pub fn run(console: &mut Console) -> Result<Value> {
+pub(crate) fn run(console: &mut Console) -> Result<Value> {
     // Hold the operation lock before any installed control state is visible.
     let lock = operation::lock()?;
     let mut owned = Owned {

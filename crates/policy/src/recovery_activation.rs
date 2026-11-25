@@ -3,8 +3,8 @@
 use crate::{birth, boot_entries, identity, recovery_records as records};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
-pub const ASSURANCE: &str = "software-local-staged-boot-not-firmware-or-application-health";
-pub fn entry_names(identifier: &str, flavor: &str) -> Result<(String, String)> {
+pub(crate) const ASSURANCE: &str = "software-local-staged-boot-not-firmware-or-application-health";
+pub(crate) fn entry_names(identifier: &str, flavor: &str) -> Result<(String, String)> {
     records::job_id(identifier)?;
     records::flavor(flavor)?;
     Ok((

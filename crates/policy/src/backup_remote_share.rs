@@ -609,7 +609,7 @@ pub fn copy_ready() -> bool {
         .all(|key| ready[*key] == true)
 }
 /// Readiness for status: metadata only, no secret bytes are read.
-pub fn readiness(configuration_bytes: &[u8]) -> Value {
+pub(crate) fn readiness(configuration_bytes: &[u8]) -> Value {
     let secret = |name: &str| {
         std::fs::symlink_metadata(Path::new(ETC).join(name)).is_ok_and(|m| {
             m.is_file()

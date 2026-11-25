@@ -4,12 +4,12 @@ use crate::{identity, recovery_records as records};
 use enzimos_platform::{Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::{BTreeMap, BTreeSet};
-pub const CAPACITY: usize = 8;
-pub const LIMIT: usize = 32768;
+pub(crate) const CAPACITY: usize = 8;
+pub(crate) const LIMIT: usize = 32768;
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str> {
     records::text(v, key)
 }
-pub fn validate(v: &Value, id: &str) -> Result<()> {
+pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     identity::safe_id(id)?;
     json::fields(
         v,
@@ -102,7 +102,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
         "credential enrollment record bound",
     )
 }
-pub fn stable_binding(bound: &Value) -> Result<Value> {
+pub(crate) fn stable_binding(bound: &Value) -> Result<Value> {
     json::fields(bound, "filesystem_uuid mount repository_sha256")?;
     identity::uuid(text(bound, "filesystem_uuid")?)?;
     identity::sha(text(bound, "repository_sha256")?)?;
@@ -128,7 +128,7 @@ fn keys(values: &BTreeMap<String, bool>) -> Result<()> {
 /// Necessary consistency calculation only. The native review must still retain
 /// actual journal, credentials, repository and supervised worker observations.
 /// This function cannot complete a journal or construct any retained actor.
-pub fn sole_added_key(
+pub(crate) fn sole_added_key(
     enrollment: &Value,
     current: &BTreeMap<String, bool>,
     candidate: &BTreeMap<String, bool>,

@@ -55,7 +55,7 @@ pub(crate) fn validate_arguments_for_targets(
 /// Original released capture supplies the datasets; no caller-provided globs,
 /// source roots, options or alternate tag/host can enter the scope. Actual source
 /// mounts and boot/inventory stage actors are still required before execution.
-pub fn review(capture: &Released<'_, '_, '_>) -> Result<Value> {
+pub(crate) fn review(capture: &Released<'_, '_, '_>) -> Result<Value> {
     enzimos_platform::recheck_scope::evaluation(|| {
         capture.recheck()?;
         let datasets = capture

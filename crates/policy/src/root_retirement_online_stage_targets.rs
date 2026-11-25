@@ -108,7 +108,7 @@ impl<'a> Protected<'a> {
     }
     /// Verify the complete original protection while only the actual known
     /// receipt and signing namespace have crossed their owned publications.
-    pub fn recheck_signing(
+    pub(crate) fn recheck_signing(
         &self,
         published: &Published<'_>,
         state: &crate::root_retirement_signed_namespace::State<'_, '_>,
@@ -135,7 +135,7 @@ impl<'a> Protected<'a> {
         published.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_pending_entry(
+    pub(crate) fn recheck_pending_entry(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -162,7 +162,7 @@ impl<'a> Protected<'a> {
         receipt.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_committed_entry(
+    pub(crate) fn recheck_committed_entry(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -194,7 +194,7 @@ impl<'a> Protected<'a> {
         receipt.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_pending_bios(
+    pub(crate) fn recheck_pending_bios(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -221,7 +221,7 @@ impl<'a> Protected<'a> {
         receipt.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_committed_bios(
+    pub(crate) fn recheck_committed_bios(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -248,7 +248,7 @@ impl<'a> Protected<'a> {
         receipt.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_firmware_publication(
+    pub(crate) fn recheck_firmware_publication(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -280,7 +280,7 @@ impl<'a> Protected<'a> {
         receipt.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_committed_defaults(
+    pub(crate) fn recheck_committed_defaults(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -307,7 +307,7 @@ impl<'a> Protected<'a> {
         receipt.require_original_observation(&self.receipt)?;
         self.targets.recheck(authorize)
     }
-    pub fn recheck_pending_defaults(
+    pub(crate) fn recheck_pending_defaults(
         &self,
         receipt: &Published<'_>,
         signer: &crate::root_retirement_signed_namespace::Published<'_>,
@@ -348,7 +348,7 @@ impl<'a> Protected<'a> {
     /// Compile exact options from the actual protected targets, retained loader
     /// texts, ready image and original probed encrypted Root source.
     /// No boot publication, firmware write or deletion is performed.
-    pub fn compile_stage(
+    pub(crate) fn compile_stage(
         &self,
         image: &crate::root_retirement_online_image::Image<'_>,
         source: &crate::root_retirement_online_encryption::Source<'_>,

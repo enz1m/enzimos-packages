@@ -103,7 +103,7 @@ pub fn number(text: &str, title: &str) -> Result<usize> {
     require(found.len() == 1, "owned BIOS entry missing or ambiguous")?;
     Ok(found[0])
 }
-pub fn efi_string(body: &[u8]) -> Result<String> {
+pub(crate) fn efi_string(body: &[u8]) -> Result<String> {
     require(
         body.len() > 4 && body.len() <= 8192 && (body.len() - 4).is_multiple_of(2),
         "EFI loader string size",
@@ -124,7 +124,7 @@ pub fn efi_string(body: &[u8]) -> Result<String> {
 }
 /// Every entry is measured from actual boot files; certificate/UKI verification
 /// belongs to the secure-boot observer and must precede publication/confirmation.
-pub fn fingerprint_entries(
+pub(crate) fn fingerprint_entries(
     record: &Value,
     uefi: &BTreeMap<String, String>,
     bios: &str,

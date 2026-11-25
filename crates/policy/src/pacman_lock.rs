@@ -9,7 +9,7 @@ use std::{
     },
     path::Path,
 };
-pub struct PacmanLock {
+pub(crate) struct PacmanLock {
     parent: File,
     file: Option<File>,
     mount: u64,
@@ -17,7 +17,7 @@ pub struct PacmanLock {
     retain_on_drop: bool,
 }
 impl PacmanLock {
-    pub fn acquire() -> Result<Self> {
+    pub(crate) fn acquire() -> Result<Self> {
         crate::storage_runtime::initial_namespace()?;
         Self::under(Path::new("/var/lib/pacman"), 0)
     }
@@ -57,7 +57,7 @@ impl PacmanLock {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         let file = self
             .file
             .as_ref()
@@ -78,13 +78,13 @@ impl PacmanLock {
     }
     /// Once trust publication can mutate, an interrupted caller leaves the
     /// package-manager lock present until the retained receipt is reviewed.
-    pub fn retain_on_failure(&mut self) -> Result<()> {
+    pub(crate) fn retain_on_failure(&mut self) -> Result<()> {
         self.recheck()?;
         self.retain_on_drop = true;
         Ok(())
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
-    pub fn close(&mut self) -> Result<()> {
+    pub(crate) fn close(&mut self) -> Result<()> {
         if self.file.is_none() {
             return Ok(());
         }

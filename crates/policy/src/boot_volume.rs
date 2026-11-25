@@ -131,7 +131,7 @@ impl Volume {
     pub fn artifact(&self, relative: &Path, limit: u64) -> Result<Artifact> {
         self.recheck()?;
         let path = self.path(relative)?;
-        let parent = self.directory(relative.parent().unwrap_or(Path::new("")))?;
+        let parent = self.directory(relative.parent().unwrap_or_else(|| Path::new("")))?;
         let mut file = files::open_relative(
             &parent,
             Path::new(

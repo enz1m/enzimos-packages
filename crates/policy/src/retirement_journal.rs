@@ -5,7 +5,7 @@ use crate::{identity, recovery_journal::Records, recovery_records as records};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
-pub const MAX_RECORDS: usize = 32;
+pub(crate) const MAX_RECORDS: usize = 32;
 pub fn intent(v: &Value) -> Result<()> {
     json::fields(
         v,

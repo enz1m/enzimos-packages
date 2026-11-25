@@ -34,6 +34,7 @@ fn console_password() -> Result<Zeroizing<Vec<u8>>> {
     };
     require(fd >= 0, "recovery password console unavailable")?;
     let mut console = unsafe { File::from_raw_fd(fd) };
+    // SAFETY: `libc::termios` is a plain C struct, for which all-zero bytes are a valid value.
     let mut saved: libc::termios = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::tcgetattr(fd, &mut saved) } == 0,
@@ -254,7 +255,6 @@ impl ClosedDescription<'_> {
     }
 }
 fn original_flags(file: &File) -> Result<i32> {
-    use std::os::fd::AsRawFd;
     let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,

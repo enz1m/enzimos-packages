@@ -10,7 +10,7 @@ use std::{
 };
 const CONFIG: &str = "/etc/enzimos/memory-pressure.json";
 const UNIT: &str = "earlyoom.service";
-pub const PROTECTED: &[&str] = &[
+pub(crate) const PROTECTED: &[&str] = &[
     "enz-hyprland",
     "Hyprland",
     "enzui-shell",
@@ -34,7 +34,7 @@ pub const PROTECTED: &[&str] = &[
     "polkitd",
     "udisksd",
 ];
-pub fn validate_selection(v: &Value) -> Result<()> {
+pub(crate) fn validate_selection(v: &Value) -> Result<()> {
     json::fields(v, "mode risk_acknowledged")?;
     require(
         matches!(v["mode"].as_str(), Some("balanced" | "responsive" | "off"))
@@ -42,7 +42,7 @@ pub fn validate_selection(v: &Value) -> Result<()> {
         "memory policy risk acknowledgement mismatch",
     )
 }
-pub fn validate_document(v: &Value) -> Result<()> {
+pub(crate) fn validate_document(v: &Value) -> Result<()> {
     json::fields(v, "schema mode")?;
     require(
         v["schema"].as_u64() == Some(1)
@@ -164,18 +164,18 @@ pub fn arguments(mode: &str) -> Result<Vec<String>> {
 /// systemd's fixed DynamicUser= allocation range (systemd.exec(5)). The vendor
 /// earlyoom.service runs under DynamicUser=yes and the enzimOS drop-in keeps it,
 /// so the daemon's procfs entries belong to a transient UID from this range.
-pub const DYNAMIC_USERS: std::ops::RangeInclusive<u32> = 61184..=65519;
+pub(crate) const DYNAMIC_USERS: std::ops::RangeInclusive<u32> = 61184..=65519;
 /// The only cgroup v2 membership the manager-reported MainPID may have.
-pub const UNIT_CGROUP: &str = "0::/system.slice/earlyoom.service";
+pub(crate) const UNIT_CGROUP: &str = "0::/system.slice/earlyoom.service";
 /// Admit the earlyoom task's owner: Root, or one transient DynamicUser= UID.
 /// Login users (1000+) and fixed system accounts are refused.
-pub fn admitted_owner(uid: u32) -> bool {
+pub(crate) fn admitted_owner(uid: u32) -> bool {
     uid == 0 || DYNAMIC_USERS.contains(&uid)
 }
 /// The task must sit in exactly the fixed unit's cgroup in the unified
 /// hierarchy. Legacy controller lines (`N:controllers:/path`, e.g. a mounted
 /// net_cls on hybrid hosts) are admitted but grant nothing.
-pub fn unit_cgroup(body: &[u8]) -> bool {
+pub(crate) fn unit_cgroup(body: &[u8]) -> bool {
     let Ok(text) = std::str::from_utf8(body) else {
         return false;
     };
@@ -216,7 +216,7 @@ fn effective_mode(
     })
 }
 /// Typed `systemctl show` fields. Unset or infinite metrics become null, never 0.
-pub fn parse_service(text: &str) -> Result<Value> {
+pub(crate) fn parse_service(text: &str) -> Result<Value> {
     let mut state = BTreeMap::new();
     for line in text.lines() {
         let (key, value) = line
@@ -283,7 +283,7 @@ fn read() -> Result<(Value, Vec<u8>)> {
     validate_document(&v)?;
     Ok((v, b))
 }
-pub fn service_state() -> Result<Value> {
+pub(crate) fn service_state() -> Result<Value> {
     service_state_with(&Command::open("/usr/bin/systemctl")?)
 }
 /// Read the command line of the manager-reported MainPID only after binding it
@@ -356,7 +356,7 @@ pub fn policy() -> Result<Value> {
     )
 }
 /// Whether the observed service state proves `mode` is the running policy.
-pub fn converged(mode: &str, state: &Value) -> bool {
+pub(crate) fn converged(mode: &str, state: &Value) -> bool {
     if mode == "off" {
         state["ActiveState"] == "inactive"
     } else {

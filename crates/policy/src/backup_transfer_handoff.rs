@@ -476,7 +476,7 @@ impl Handoff {
     }
     /// The share configuration, share password and repository password of a
     /// transfer into the NAS share, or `None` for a drive transfer.
-    pub(crate) fn share(&self) -> Result<Option<(&Value, &File, &File)>> {
+    pub fn share(&self) -> Result<Option<(&Value, &File, &File)>> {
         self.recheck()?;
         Ok(match &self.admitted {
             Admitted::Drive { .. } => None,

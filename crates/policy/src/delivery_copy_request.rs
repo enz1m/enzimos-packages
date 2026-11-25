@@ -3,9 +3,9 @@
 use crate::{delivery_export::MAX_FILE, identity};
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::Value;
-pub const LIMIT: usize = 8192;
+pub(crate) const LIMIT: usize = 8192;
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Request {
+pub(crate) struct Request {
     pub id: String,
     pub filename: String,
     pub group_nonce: String,
@@ -33,7 +33,7 @@ fn number(v: &Value, key: &str) -> Result<u64> {
         .ok_or_else(|| Error("delivery request integer required".into()))
 }
 impl Request {
-    pub fn decode(body: &[u8]) -> Result<Self> {
+    pub(crate) fn decode(body: &[u8]) -> Result<Self> {
         let v = json::decode(body, LIMIT)?;
         let schema = v["schema"].as_u64();
         let fields = match schema {

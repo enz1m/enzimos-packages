@@ -53,7 +53,7 @@ fn offset(fd: BorrowedFd<'_>) -> Result<i64> {
     )?;
     Ok(position)
 }
-pub fn observe(selection: &Selection<'_>) -> Result<Value> {
+pub(crate) fn observe(selection: &Selection<'_>) -> Result<Value> {
     selection.recheck()?;
     let descriptor = selection.descriptor()?;
     let before = block::observe(descriptor)?;

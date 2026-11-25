@@ -248,7 +248,7 @@ pub fn collect() -> Result<Value> {
     let context = match crate::boot_retirement_context::Context::observe_shared_catalog(
         &guard,
         &lock,
-        transaction.clone(),
+        std::sync::Arc::clone(&transaction),
         &mut || permission(),
     ) {
         Ok(context) => Some(context),

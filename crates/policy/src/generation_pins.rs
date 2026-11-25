@@ -10,7 +10,7 @@ use std::{
     path::Path,
 };
 const FOLDER: &str = "generation-pins";
-pub const MAXIMUM: usize = 128;
+pub(crate) const MAXIMUM: usize = 128;
 type Shape = (u64, u64, u32, u32, u32);
 fn shape(file: &File) -> Result<Shape> {
     let m = file.metadata()?;
@@ -54,7 +54,7 @@ fn names(parent: &File) -> Result<BTreeSet<String>> {
         })
         .collect()
 }
-pub struct Snapshot<'g> {
+pub(crate) struct Snapshot<'g> {
     guard: &'g Guard,
     parent: Option<File>,
     shape: Option<Shape>,
@@ -63,7 +63,7 @@ pub struct Snapshot<'g> {
     values: Value,
 }
 impl<'g> Snapshot<'g> {
-    pub fn observe(guard: &'g Guard) -> Result<Self> {
+    pub(crate) fn observe(guard: &'g Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         guard.recheck()?;
@@ -104,7 +104,7 @@ impl<'g> Snapshot<'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let named =
             files::optional_directory_relative(self.guard.control(), Path::new(FOLDER), Some(0))?;
@@ -199,7 +199,7 @@ impl<'g> Snapshot<'g> {
         authorize()?;
         Ok(())
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let epochs = self
             .records

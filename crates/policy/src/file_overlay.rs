@@ -277,6 +277,7 @@ pub fn resources(reviewed: &Value) -> Result<()> {
         .values()
         .filter(|row| row["kind"] != "directory")
         .count();
+    // SAFETY: `libc::rlimit` is a plain C struct, for which all-zero bytes are a valid value.
     let mut limit: libc::rlimit = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0,

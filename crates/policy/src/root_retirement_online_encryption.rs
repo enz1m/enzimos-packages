@@ -4,10 +4,7 @@
 use crate::{recovery_devices::Block, settings_command::Command, storage_runtime::Guard};
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::{Value, json};
-use std::{
-    os::fd::{AsFd, AsRawFd},
-    time::Duration,
-};
+use std::{os::fd::AsFd, time::Duration};
 fn one(bytes: &[u8]) -> Result<&str> {
     require(
         bytes.len() <= 4096 && !bytes.contains(&0),

@@ -136,7 +136,7 @@ pub fn apply_locked_with_progress(
 }
 /// Checks at orchestration entry are additional to each subsystem's original resource checks.
 /// Native routing still requires authorization propagation through nested worker/publication writes.
-pub fn apply_authorized(
+pub(crate) fn apply_authorized(
     lock: &files::Lock,
     progress: &mut dyn FnMut(&str) -> Result<()>,
     authorize: &mut dyn FnMut() -> Result<()>,

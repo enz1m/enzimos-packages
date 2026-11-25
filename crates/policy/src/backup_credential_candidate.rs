@@ -62,7 +62,7 @@ impl<'g> Candidate<'g> {
             "original candidate/current credential or persistent source changed",
         )
     }
-    pub fn persistent_identity(&self) -> Result<&Value> {
+    pub(crate) fn persistent_identity(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.original["input_identity"])
     }

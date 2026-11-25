@@ -8,8 +8,8 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
-pub const FOLDER: &str = "backup-retrievals";
-pub const LIMIT: usize = 32768;
+pub(crate) const FOLDER: &str = "backup-retrievals";
+pub(crate) const LIMIT: usize = 32768;
 fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
     let m = file.metadata()?;
     require(
@@ -18,7 +18,7 @@ fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
-pub fn record(v: &Value) -> Result<()> {
+pub(crate) fn record(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema id phase remote_snapshot original remote_repository local_binding boot_id local_snapshot",
@@ -85,7 +85,7 @@ pub fn record(v: &Value) -> Result<()> {
         "bounded durable retrieval receipt",
     )
 }
-pub struct Intent {
+pub(crate) struct Intent {
     parent: File,
     shape: (u64, u64, u32, u32, u32),
     mount: u64,
@@ -109,7 +109,7 @@ impl Intent {
         let snapshot = ctx["snapshot"].as_str().unwrap();
         crate::backup_remote_points::retrieval_admission(source, snapshot, before)?;
         let selected = crate::backup_remote_points::selected(source, snapshot)?;
-        let original = selected.get("original").unwrap_or(&selected["id"]);
+        let original = selected.get("original").unwrap_or_else(|| &selected["id"]);
         let guard = handoff.guard()?;
         let parent =
             files::ensure_directory_relative(guard.control(), Path::new(FOLDER), 0o700, 0)?;

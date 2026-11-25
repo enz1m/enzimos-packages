@@ -586,6 +586,7 @@ impl Runtime {
         preflight()?;
         let run = files::directory(Path::new("/run/enzimos"), Some(0))?;
         shape(&run)?;
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
             unsafe { libc::fstatfs(run.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,
@@ -643,6 +644,7 @@ impl Runtime {
             .join("scratch");
         let scratch = files::directory(&path, Some(0))?;
         let shape = shape(&scratch)?;
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
             unsafe { libc::fstatfs(scratch.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,

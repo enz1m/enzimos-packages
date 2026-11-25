@@ -9,10 +9,7 @@ use serde_json::{Value, json as value};
 use std::{
     cell::RefCell,
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
 const FOLDER: &str = "root-retirements";

@@ -23,8 +23,8 @@ use std::{
     path::Path,
 };
 
-pub(crate) struct Plan {
-    pub(crate) before: BTreeMap<String, String>,
+pub struct Plan {
+    pub before: BTreeMap<String, String>,
     pub(crate) remaining: BTreeMap<String, String>,
     pub(crate) remove: Vec<String>,
     /// Managed enzimOS points, oldest first.
@@ -96,7 +96,7 @@ impl Plan {
     }
     /// Also remove the `count` oldest managed points the policy keeps, never the
     /// newest one and never a protected one (the space limit).
-    pub(crate) fn add_oldest(&mut self, count: usize, protect: &[String]) {
+    pub fn add_oldest(&mut self, count: usize, protect: &[String]) {
         let newest = self.managed.last().map(|(_, id)| id.clone());
         let extra: Vec<String> = self
             .managed

@@ -188,7 +188,7 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         self.recheck(authorize)?;
         Ok(&self.request)
     }
-    pub fn kernel_scope(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Scope> {
+    pub(crate) fn kernel_scope(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Scope> {
         self.components(authorize)?;
         Ok(&self.scope)
     }
@@ -272,7 +272,7 @@ impl ClosedRequest<'_> {
             "closed selected worker requires original storage actor",
         )
     }
-    pub fn require_request(&self, request: &Value) -> Result<()> {
+    pub(crate) fn require_request(&self, request: &Value) -> Result<()> {
         self.recheck()?;
         require(
             self.request == *request,

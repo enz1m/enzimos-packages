@@ -88,7 +88,7 @@ pub fn outcome(error: Option<&str>) -> &'static str {
 
 /// The copy document after a copy ended in `state` (pure, for tests).
 #[must_use]
-pub fn remote_copy_document(state: &str, code: Option<&str>, at: u64) -> Value {
+pub(crate) fn remote_copy_document(state: &str, code: Option<&str>, at: u64) -> Value {
     value!({"state":state,"at":at,"code":code.map(|c| c.chars().take(160).collect::<String>())})
 }
 

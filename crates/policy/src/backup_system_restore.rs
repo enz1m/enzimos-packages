@@ -464,6 +464,7 @@ pub fn stage_auto_locked(
     crate::namespaces::initial()?;
     lock.recheck()?;
     let root = files::directory(Path::new("/"), Some(0))?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatfs(root.as_raw_fd(), &mut status) } == 0,

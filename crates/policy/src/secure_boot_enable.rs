@@ -327,6 +327,7 @@ impl Mask {
         let m = parent.metadata()?;
         let shape = (m.dev(), m.ino(), m.mode());
         let leaf = CString::new(MASK).unwrap();
+        // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::stat = unsafe { std::mem::zeroed() };
         let found = unsafe {
             libc::fstatat(
@@ -426,6 +427,7 @@ impl Mask {
                 .as_ref()
                 .ok_or_else(|| Error("owned mask handle absent".into()))?;
             let leaf = CString::new(MASK).unwrap();
+            // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
             let mut status: libc::stat = unsafe { std::mem::zeroed() };
             require(
                 unsafe {

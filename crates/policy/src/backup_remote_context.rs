@@ -112,14 +112,11 @@ impl<'a> Context<'a> {
     }
     /// Original actual descriptions only; the future reservation must still
     /// prove sender OFDs, durably enter one send and close the actual worker scope.
-    pub(crate) fn configuration(
-        &self,
-        authorize: &mut dyn FnMut() -> Result<()>,
-    ) -> Result<&Value> {
+    pub fn configuration(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         self.inputs.configuration(self.guard)
     }
-    pub(crate) fn binding(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
+    pub fn binding(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         self.inputs.binding(self.guard)
     }

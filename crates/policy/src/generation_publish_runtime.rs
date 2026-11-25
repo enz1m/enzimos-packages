@@ -269,6 +269,7 @@ pub fn publish_authorized(
         })?;
     let needed =
         crate::update_resources::publication_required(artifact_bytes, certificate.is_some())?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(volume.directory.as_raw_fd(), &mut info) } == 0

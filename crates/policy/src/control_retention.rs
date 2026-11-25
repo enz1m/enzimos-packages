@@ -20,10 +20,10 @@ use enzimos_platform::{Result, files};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 /// Newest rows always kept in each registry.
-pub const KEEP: usize = 8;
+pub(crate) const KEEP: usize = 8;
 const LIMIT: usize = crate::catalog::MAX_CATALOG;
 /// (folder, registry bound). Retirement starts at three quarters of the bound.
-pub const REGISTRIES: [(&str, usize); 8] = [
+pub(crate) const REGISTRIES: [(&str, usize); 8] = [
     ("boot-publications", 128),
     ("update-workers", crate::update_worker_record::MAXIMUM),
     ("module-views", crate::module_view_record::MAXIMUM),
@@ -33,11 +33,11 @@ pub const REGISTRIES: [(&str, usize); 8] = [
     ("root-births", crate::birth_runtime::MAX_RECORDS),
     ("root-retirements", 16),
 ];
-pub const fn trigger(bound: usize) -> usize {
+pub(crate) const fn trigger(bound: usize) -> usize {
     bound * 3 / 4
 }
 /// Live state that keeps a finished row as a reference.
-pub struct Live {
+pub(crate) struct Live {
     pub filesystem: String,
     pub generations: BTreeSet<String>,
     pub last_update: Option<String>,
@@ -72,7 +72,7 @@ fn same_filesystem(row: &Value, live: &Live) -> bool {
 }
 /// Whether a validated row of `folder` is finished history that names nothing
 /// live. Unknown folders and unknown phases are never retirable.
-pub fn retirable(folder: &str, id: &str, row: &Value, live: &Live) -> bool {
+pub(crate) fn retirable(folder: &str, id: &str, row: &Value, live: &Live) -> bool {
     if !same_filesystem(row, live) {
         return false;
     }
@@ -137,7 +137,7 @@ fn open(guard: &Guard, folder: &str, filesystem: &str) -> Result<Option<Folder>>
     )
 }
 /// Whether any registry reached its retirement trigger.
-pub fn needed(guard: &Guard) -> Result<bool> {
+pub(crate) fn needed(guard: &Guard) -> Result<bool> {
     for (folder, bound) in REGISTRIES {
         if let Some(directory) = files::optional_directory_relative(
             guard.control(),
@@ -152,7 +152,7 @@ pub fn needed(guard: &Guard) -> Result<bool> {
 }
 /// Retire finished, unreferenced rows of every registry that reached its
 /// trigger. The caller holds the operation lock.
-pub fn retire_locked(
+pub(crate) fn retire_locked(
     guard: &Guard,
     lock: &files::Lock,
     generations: BTreeSet<String>,
@@ -235,7 +235,7 @@ pub fn retire_locked(
     Ok(Value::Object(result))
 }
 /// Whether a validated root receipt was abandoned before deleting anything.
-pub fn unstarted_abandoned(row: &Value) -> bool {
+pub(crate) fn unstarted_abandoned(row: &Value) -> bool {
     row["phase"] == "abandoned"
         && row.get("coordinator").is_none()
         && row["next_step"] == 0
@@ -244,7 +244,10 @@ pub fn unstarted_abandoned(row: &Value) -> bool {
 /// Retire abandoned root receipts that never deleted anything, whatever the
 /// registry size: such a row names nothing and, while it exists, its Root can
 /// never be planned again. The caller holds the operation lock.
-pub fn retire_unstarted_abandoned_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
+pub(crate) fn retire_unstarted_abandoned_locked(
+    guard: &Guard,
+    lock: &files::Lock,
+) -> Result<Value> {
     crate::operation::root_only()?;
     guard.recheck()?;
     lock.recheck()?;

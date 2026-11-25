@@ -114,6 +114,8 @@ impl Layout {
                 let path = relative.join(&name);
                 let name = CString::new(name.as_os_str().as_bytes())
                     .map_err(|_| enzimos_platform::Error("rotation layout name NUL".into()))?;
+                // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid
+                // value.
                 let mut stat: libc::stat = unsafe { std::mem::zeroed() };
                 require(
                     unsafe {

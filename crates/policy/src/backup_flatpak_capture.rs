@@ -77,6 +77,7 @@ impl HeldLock {
                 && m.len() <= 4096,
             "protected original Flatpak lock required",
         )?;
+        // SAFETY: `libc::flock` is a plain C struct, for which all-zero bytes are a valid value.
         let mut lock: libc::flock = unsafe { std::mem::zeroed() };
         lock.l_type = libc::F_WRLCK as _;
         lock.l_whence = libc::SEEK_SET as _;

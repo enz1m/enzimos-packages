@@ -70,7 +70,7 @@ fn resolve_interrupted(guard: &Guard, id: &str, row: &Value) -> Result<bool> {
     )?;
     Ok(true)
 }
-pub fn entry() -> Result<()> {
+pub(crate) fn entry() -> Result<()> {
     let path = Path::new(operation::CONTROL);
     match std::fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -115,7 +115,7 @@ pub fn entry() -> Result<()> {
 
 /// Independent recovery holds the actual top/control mounts and validated plan.
 /// Completed update records remain mandatory; no interrupted apply is adopted.
-pub fn independent_entry(plan: &serde_json::Value) -> Result<()> {
+pub(crate) fn independent_entry(plan: &serde_json::Value) -> Result<()> {
     let guard = crate::storage_runtime::IndependentGuard::observe(plan)?;
     let records = control_registry::read_independent(
         &guard,

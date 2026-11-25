@@ -168,6 +168,7 @@ impl<'a> Destination<'a> {
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
     pub fn status(&self) -> Result<Value> {
         self.recheck()?;
+        // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut usage: libc::statvfs = unsafe { std::mem::zeroed() };
         use std::os::fd::AsRawFd;
         require(
@@ -278,7 +279,7 @@ impl<'a> Destination<'a> {
             "original backup destination epoch changed or replaced",
         )
     }
-    pub fn expected_pin(&self) -> Result<Value> {
+    pub(crate) fn expected_pin(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"schema":1,"filesystem_uuid":self.filesystem["filesystem_uuid"],"fsroot":"/","repository":crate::backup_configuration::REPOSITORY,"repository_sha256":json::sha256(&self.config_body)}),
@@ -311,6 +312,7 @@ impl<'a> Destination<'a> {
     pub(crate) fn require_free_space(&self) -> Result<()> {
         use std::os::fd::AsRawFd;
         self.require_writable()?;
+        // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
         require(
             unsafe { libc::fstatvfs(self.repository.as_raw_fd(), &mut status) } == 0,

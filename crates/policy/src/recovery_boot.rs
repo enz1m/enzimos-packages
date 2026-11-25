@@ -6,13 +6,13 @@ use crate::{
 use enzimos_platform::{Error, Result, require};
 use serde_json::Value;
 use std::collections::BTreeMap;
-pub type Metadata = BTreeMap<String, Option<String>>;
-pub struct Entries {
+pub(crate) type Metadata = BTreeMap<String, Option<String>>;
+pub(crate) struct Entries {
     pub uefi: BTreeMap<String, String>,
     pub bios: String,
     pub sequence: Vec<String>,
 }
-pub fn entries(job: &Value) -> Result<Entries> {
+pub(crate) fn entries(job: &Value) -> Result<Entries> {
     let plan = &job["plan"];
     let id = records::text(plan, "id")?;
     records::job(job, id)?;
@@ -53,7 +53,7 @@ pub fn entries(job: &Value) -> Result<Entries> {
         sequence,
     })
 }
-pub fn replace_default(text: &str, prefix: &str, next: &str) -> Result<String> {
+pub(crate) fn replace_default(text: &str, prefix: &str, next: &str) -> Result<String> {
     require(
         text.len() <= boot_entries::MAX_TEXT && !next.contains(['\n', '\r', '\0']),
         "boot default replacement bound",
@@ -77,7 +77,11 @@ pub fn replace_default(text: &str, prefix: &str, next: &str) -> Result<String> {
     require(count == 1, "one literal loader default required")?;
     Ok(result)
 }
-pub fn expected(intent: &Value, entries: &Entries, selection: Option<&Value>) -> Result<Metadata> {
+pub(crate) fn expected(
+    intent: &Value,
+    entries: &Entries,
+    selection: Option<&Value>,
+) -> Result<Metadata> {
     let mut result = Metadata::new();
     for (name, text) in &entries.uefi {
         result.insert(format!("loader/entries/{name}"), Some(text.clone()));
@@ -102,11 +106,11 @@ pub fn expected(intent: &Value, entries: &Entries, selection: Option<&Value>) ->
     Ok(result)
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum State {
+pub(crate) enum State {
     Before,
     After,
 }
-pub fn classify(
+pub(crate) fn classify(
     record: &Value,
     entries: &Entries,
     actual: &Metadata,
@@ -166,7 +170,7 @@ pub fn classify(
     }
     Ok(states)
 }
-pub fn default_guard(defaults: &str, entries: &Entries) -> Result<String> {
+pub(crate) fn default_guard(defaults: &str, entries: &Entries) -> Result<String> {
     let fields = boot_entries::fields(defaults, false)?;
     let name = fields
         .get("default")

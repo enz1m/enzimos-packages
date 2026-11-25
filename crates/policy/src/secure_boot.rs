@@ -19,7 +19,7 @@ use std::{
 };
 use zeroize::Zeroizing;
 pub const EFI: &str = "/sys/firmware/efi/efivars";
-pub const DIRECTORY: &str = "/var/lib/enzimos-control/secure-boot";
+pub(crate) const DIRECTORY: &str = "/var/lib/enzimos-control/secure-boot";
 const GUID: &str = "8be4df61-93ca-11d2-aa0d-00e098032b8c";
 pub const DB: &str = "db-d719b2cb-3d3a-4596-a3bc-dad00e67656f";
 fn crypto<T>(v: std::result::Result<T, openssl::error::ErrorStack>) -> Result<T> {
@@ -269,7 +269,7 @@ pub fn configured() -> Result<bool> {
 }
 /// Absence is resolved beneath the retained control directory; unsafe containers
 /// and incomplete policies remain errors rather than being reported disabled.
-pub fn configured_at(control: &std::fs::File, owner: u32) -> Result<bool> {
+pub(crate) fn configured_at(control: &std::fs::File, owner: u32) -> Result<bool> {
     use std::os::fd::AsFd;
     let mount = enzimos_platform::mount_identity::id(control.as_fd(), true)?;
     require(

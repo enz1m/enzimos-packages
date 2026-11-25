@@ -4,9 +4,9 @@ use enzimos_platform::{Result, json, require};
 use serde_json::Value;
 
 pub const PATH: &str = "/etc/enzimos/backup.json";
-pub const REPOSITORY: &str = "/backup-repository/restic";
-pub const PASSWORD: &str = "/etc/enzimos/backup.password";
-pub const LIMIT: usize = 32768;
+pub(crate) const REPOSITORY: &str = "/backup-repository/restic";
+pub(crate) const PASSWORD: &str = "/etc/enzimos/backup.password";
+pub(crate) const LIMIT: usize = 32768;
 
 pub fn validate(value: &Value) -> Result<()> {
     let row = value
@@ -126,7 +126,7 @@ impl Configuration {
     pub(crate) fn descriptor(&self) -> Result<&std::fs::File> {
         self.original.descriptor()
     }
-    pub fn minimum_free_bytes(&self) -> u64 {
+    pub(crate) fn minimum_free_bytes(&self) -> u64 {
         self.value["minimum_free_bytes"]
             .as_u64()
             .unwrap_or(64 * 1024 * 1024)

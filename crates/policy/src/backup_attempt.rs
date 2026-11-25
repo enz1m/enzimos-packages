@@ -28,7 +28,7 @@ pub fn blocks(row: &Value, boot: &str) -> bool {
 /// Like [`blocks`], and an `uncertain` attempt of this boot also blocks while
 /// its transfer worker's kernel scope was never proven closed: that worker may
 /// still be writing to the destination.
-pub fn blocks_live(row: &Value, boot: &str, control: &Path) -> bool {
+pub(crate) fn blocks_live(row: &Value, boot: &str, control: &Path) -> bool {
     if blocks(row, boot) {
         return true;
     }
@@ -356,7 +356,7 @@ impl<'g> Store<'g> {
                     boot,
                     self.path
                         .parent()
-                        .unwrap_or(Path::new(crate::operation::CONTROL)),
+                        .unwrap_or_else(|| Path::new(crate::operation::CONTROL)),
                 )
             })
             .map(|(name, row)| {
@@ -426,7 +426,7 @@ impl<'g> Store<'g> {
                     boot,
                     self.path
                         .parent()
-                        .unwrap_or(Path::new(crate::operation::CONTROL)),
+                        .unwrap_or_else(|| Path::new(crate::operation::CONTROL)),
                 )
             }),
             "backup-attempt-needs-restart",

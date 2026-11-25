@@ -114,7 +114,7 @@ fn remove_owned(volume: &Volume, entry: &Text) -> Result<()> {
     parent.sync_all()?;
     volume.recheck()
 }
-pub fn detach(p: &Parameters) -> Result<String> {
+pub(crate) fn detach(p: &Parameters) -> Result<String> {
     crate::recovery_bootstrap::quiet()?;
     let volume = Volume::observe()?;
     require(volume.uuid == p.esp, "actual run ESP differs")?;

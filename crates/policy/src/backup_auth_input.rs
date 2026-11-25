@@ -72,6 +72,7 @@ impl<'i> Temporary<'i> {
         preflight()?;
         let parent = files::directory(Path::new("/run/enzimos"), Some(0))?;
         let parent_shape = shape(&parent, 0)?;
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
             unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,
@@ -302,6 +303,7 @@ pub(crate) fn borrowed(v: &serde_json::Value, id: &str, length: u64, file: &File
     let parent = files::directory(Path::new("/run/enzimos"), Some(0))?;
     let name = v["name"].as_str().unwrap();
     let folder = files::directory_relative(&parent, Path::new(name), Some(0))?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     let flags = enzimos_platform::files::status_flags(&file);
     require(

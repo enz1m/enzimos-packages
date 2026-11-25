@@ -193,7 +193,7 @@ impl Closed<'_> {
     }
     /// Borrow actual original immutable output only after original kernel closure.
     /// These bytes alone cannot create an export completion actor.
-    pub fn observed_data(&self) -> Result<(Value, Vec<u8>)> {
+    pub(crate) fn observed_data(&self) -> Result<(Value, Vec<u8>)> {
         self.recheck()?;
         let bytes = enzimos_platform::memfile::read_sealed(
             &self.original.output,

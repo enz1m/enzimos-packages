@@ -3,8 +3,8 @@
 use crate::identity;
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
-pub const MAXIMUM: usize = 32;
-pub fn validate(v: &Value, id: &str) -> Result<()> {
+pub(crate) const MAXIMUM: usize = 32;
+pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(
         v,
         "schema id phase boot_id kernel filesystem_uuid inventory_sha256 source runtime alias live",
@@ -103,7 +103,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
     }
     Ok(())
 }
-pub fn transition(before: Option<&Value>, after: &Value, id: &str) -> Result<()> {
+pub(crate) fn transition(before: Option<&Value>, after: &Value, id: &str) -> Result<()> {
     validate(after, id)?;
     let Some(before) = before else {
         return require(

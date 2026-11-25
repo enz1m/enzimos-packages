@@ -45,7 +45,7 @@ fn owner(uid: u32) -> Result<()> {
     )
 }
 /// The public, non-secret binding both records name (same as status reads).
-pub(crate) fn binding(
+pub fn binding(
     configuration: &Configuration,
     pin: &StoredPin<'_>,
     credential: &Credential,
@@ -129,7 +129,7 @@ fn write(name: &str, value: &Value) -> Result<()> {
     unsafe_code,
     reason = "Linux syscall ABI (fchmod, fchown, fcntl, lseek and others)."
 )]
-pub(crate) fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
+pub fn sealed_copy(source: BorrowedFd<'_>, uid: u32) -> Result<File> {
     let length = File::from(source.try_clone_to_owned()?).metadata()?.len();
     require((1..=4096).contains(&length), "recovery credential bound")?;
     let fd = unsafe {

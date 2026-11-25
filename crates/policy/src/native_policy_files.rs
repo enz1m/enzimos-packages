@@ -4,7 +4,7 @@ use crate::recovery_activation;
 use enzimos_platform::{Error, Result, files, require, stream_copy};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, os::unix::fs::MetadataExt, path::Path};
-pub const FILES: &[&str] = &[
+pub(crate) const FILES: &[&str] = &[
     "enzimos-policy",
     "enzimos-recovery-image-init",
     "enzimos-recovery-run-init",
@@ -71,7 +71,7 @@ pub fn observe(directory: &Path) -> Result<Value> {
 
 /// Original installed native runtime descriptions for coordinator staging.
 /// Hashes are comparisons only; decoded image metadata cannot create this actor.
-pub struct Original {
+pub(crate) struct Original {
     directory: std::fs::File,
     epoch: files::FileIdentity,
     directory_flags: i32,
@@ -81,10 +81,10 @@ pub struct Original {
     hashes: Value,
 }
 impl Original {
-    pub fn retain() -> Result<Self> {
+    pub(crate) fn retain() -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
-        use std::os::fd::{AsFd, AsRawFd};
+        use std::os::fd::AsFd;
         let path = Path::new("/usr/lib/enzimos-native");
         let directory = files::directory(path, Some(0))?;
         let epoch = files::identity(&directory.metadata()?);
@@ -167,8 +167,8 @@ impl Original {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
-        use std::os::fd::{AsFd, AsRawFd};
+    pub(crate) fn recheck(&self) -> Result<()> {
+        use std::os::fd::AsFd;
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         require(
@@ -211,11 +211,11 @@ impl Original {
         }
         Ok(())
     }
-    pub fn hashes(&self) -> Result<&Value> {
+    pub(crate) fn hashes(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.hashes)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             json!({"directory_epoch":self.epoch,"directory_flags":self.directory_flags,"mount":self.mount,"hashes":self.hashes,

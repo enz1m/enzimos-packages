@@ -31,7 +31,7 @@ fn shape(file: &File) -> Result<Shape> {
     ))
 }
 #[derive(Debug, PartialEq, Eq)]
-pub struct Row {
+pub(crate) struct Row {
     name: String,
     path: PathBuf,
 }
@@ -102,7 +102,7 @@ fn decode(bytes: &[u8]) -> Result<Vec<Row>> {
     }
     Ok(result)
 }
-pub struct Configuration<'g> {
+pub(crate) struct Configuration<'g> {
     guard: &'g Guard,
     parent: File,
     parent_shape: Shape,
@@ -110,7 +110,7 @@ pub struct Configuration<'g> {
     rows: Vec<Row>,
 }
 impl<'g> Configuration<'g> {
-    pub fn observe(guard: &'g Guard) -> Result<Self> {
+    pub(crate) fn observe(guard: &'g Guard) -> Result<Self> {
         guard.recheck()?;
         crate::namespaces::initial()?;
         let parent = files::directory(Path::new("/etc/enzimos"), Some(0))?;
@@ -131,7 +131,7 @@ impl<'g> Configuration<'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let named = files::directory(Path::new("/etc/enzimos"), Some(0))?;
         require(
@@ -153,14 +153,14 @@ impl<'g> Configuration<'g> {
         }
         Ok(())
     }
-    pub fn sources(&self) -> Result<Vec<Source<'_, 'g>>> {
+    pub(crate) fn sources(&self) -> Result<Vec<Source<'_, 'g>>> {
         self.recheck()?;
         self.rows
             .iter()
             .map(|row| Source::open(self, row))
             .collect()
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
             value!({"path":PATH,"configuration":self.original.as_ref().map(Config::evidence).transpose()?,"configured":self.original.is_some(),"rows":self.rows.iter().map(|r|value!({"name":r.name,"path":r.path})).collect::<Vec<_>>(),"global_atomicity":false}),

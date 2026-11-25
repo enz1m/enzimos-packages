@@ -8,7 +8,7 @@ use std::{
     path::Path,
 };
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstat, fstatfs, open).")]
-pub fn direct_ram_pid1() -> Result<()> {
+pub(crate) fn direct_ram_pid1() -> Result<()> {
     require(
         std::process::id() == 1 && enzimos_platform::process_identity::effective_uid() == 0,
         "independent recovery requires direct Root PID1",
@@ -21,7 +21,9 @@ pub fn direct_ram_pid1() -> Result<()> {
     };
     require(root >= 0, "RAM root unavailable")?;
     let root = unsafe { std::fs::File::from_raw_fd(root) };
+    // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
     let mut metadata: libc::stat = unsafe { std::mem::zeroed() };
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut filesystem: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstat(root.as_raw_fd(), &mut metadata) } == 0
@@ -176,7 +178,7 @@ pub fn reboot(poweroff: bool) -> Result<()> {
     Ok(())
 }
 /// Before storage exposure, no other userspace task may own devices or mounts.
-pub fn quiet() -> Result<()> {
+pub(crate) fn quiet() -> Result<()> {
     direct_ram_pid1()?;
     namespaces::initial()?;
     require(

@@ -384,7 +384,7 @@ impl<'a> Context<'a> {
     }
     /// Authenticated inventories are observations only. Only fixed key/list and
     /// snapshot queries run, using the original actual retained descriptions.
-    pub fn authenticated_inventory(
+    pub(crate) fn authenticated_inventory(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<Value> {
@@ -459,7 +459,7 @@ impl<'a> Context<'a> {
         require(
             copies
                 .values()
-                .all(|target| points.get(target.as_str().unwrap()).is_some()),
+                .all(|target| points.contains_key(target.as_str().unwrap())),
             "new repository lost copied points",
         )?;
         let old_credential = find_credential("old")?;

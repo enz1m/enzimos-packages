@@ -26,14 +26,15 @@ use std::{
     path::Path,
 };
 /// Recent records always kept in every registry handled here.
-pub const KEEP: usize = 8;
+pub(crate) const KEEP: usize = 8;
 const LIMIT: usize = 1024 * 1024;
 const EXPORTS: &str = "restore-exports";
 const GRANTS: &str = "restore-delivery-grants";
 const RETRIEVALS: &str = "backup-retrievals";
 /// Worker launch registries paired with their worker request registries.
-pub const SELECTIVE: (&str, &str) = ("selective-export-launches", "selective-export-workers");
-pub const REMOTE: (&str, &str) = ("backup-remote-launches", "backup-remote-workers");
+pub(crate) const SELECTIVE: (&str, &str) =
+    ("selective-export-launches", "selective-export-workers");
+pub(crate) const REMOTE: (&str, &str) = ("backup-remote-launches", "backup-remote-workers");
 fn identity(v: &Value, id: &str) -> Result<()> {
     require(v["id"] == id, "registry record identity")
 }
@@ -125,7 +126,11 @@ fn retire_rows(folder: &mut Folder, rows: Vec<Row>, trigger: usize) -> Result<Ve
 }
 /// Retire finished launch/worker pairs (workers first, so a launch is never
 /// removed while its worker record still needs it to prove its boot).
-pub fn retire_launches(guard: &Guard, lock: &files::Lock, pair: (&str, &str)) -> Result<Value> {
+pub(crate) fn retire_launches(
+    guard: &Guard,
+    lock: &files::Lock,
+    pair: (&str, &str),
+) -> Result<Value> {
     crate::operation::root_only()?;
     guard.recheck()?;
     lock.recheck()?;
@@ -162,7 +167,7 @@ pub fn retire_launches(guard: &Guard, lock: &files::Lock, pair: (&str, &str)) ->
     Ok(json!({"launches":launches_retired,"workers":workers_retired}))
 }
 /// Retire delivered, cancelled and expired grants.
-pub fn retire_grants(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
+pub(crate) fn retire_grants(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
     crate::operation::root_only()?;
     lock.recheck()?;
     let boot = crate::operation::boot_id()?;
@@ -179,7 +184,7 @@ pub fn retire_grants(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
     Ok(retired)
 }
 /// Retire complete and interrupted (earlier-boot) retrieval receipts.
-pub fn retire_retrievals(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
+pub(crate) fn retire_retrievals(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
     crate::operation::root_only()?;
     lock.recheck()?;
     let boot = crate::operation::boot_id()?;
@@ -289,7 +294,7 @@ fn remove_export(parent: &File, id: &str, observed: &ExportDirectory) -> Result<
 /// Remove private export copies no grant can still deliver, oldest first,
 /// once the export registry is nearly full. The data stays in the backup and
 /// can be exported again.
-pub fn retire_exports(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
+pub(crate) fn retire_exports(guard: &Guard, lock: &files::Lock) -> Result<Vec<String>> {
     crate::operation::root_only()?;
     guard.recheck()?;
     lock.recheck()?;

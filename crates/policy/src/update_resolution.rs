@@ -7,7 +7,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     time::Duration,
 };
-pub fn candidates(body: &str, packages: &[Value]) -> Result<Vec<Value>> {
+pub(crate) fn candidates(body: &str, packages: &[Value]) -> Result<Vec<Value>> {
     require(
         body.len() <= 2 * 1024 * 1024 && !body.contains('\0') && body.lines().count() <= 16384,
         "update resolution output bound",
@@ -46,7 +46,7 @@ pub fn candidates(body: &str, packages: &[Value]) -> Result<Vec<Value>> {
     }
     Ok(result)
 }
-pub fn resolve(plan: &Plan) -> Result<Vec<Value>> {
+pub(crate) fn resolve(plan: &Plan) -> Result<Vec<Value>> {
     plan.recheck_before_mutation()?;
     let body = operation::query(
         "/usr/bin/pacman",

@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-pub const MAX_RECORDS: usize = 64;
+pub(crate) const MAX_RECORDS: usize = 64;
 pub type Records = BTreeMap<String, Value>;
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str> {
     v[k].as_str()
@@ -251,7 +251,7 @@ impl Store {
             "control_mount":self.guard.control_mount_id()}),
         )
     }
-    pub fn assert_no_pending(&self) -> Result<()> {
+    pub(crate) fn assert_no_pending(&self) -> Result<()> {
         require(
             self.records
                 .values()
@@ -327,7 +327,7 @@ pub(crate) fn inventory(readonly: bool) -> Result<Records> {
     )
 }
 /// Pure normalization preserves unrelated mount options and exactly one root row.
-pub fn normalize_fstab(body: &str, fs_uuid: &str, name: &str) -> Result<String> {
+pub(crate) fn normalize_fstab(body: &str, fs_uuid: &str, name: &str) -> Result<String> {
     identity::uuid(fs_uuid)?;
     identity::safe_id(name)?;
     require(

@@ -10,10 +10,7 @@ use enzimos_platform::{Result, files, mount_identity, require};
 use serde_json::{Value, json};
 use std::{
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
 };
 
 pub struct Inventory<'a> {
@@ -136,7 +133,7 @@ impl<'a> Inventory<'a> {
         self.lock.recheck()?;
         authorize()
     }
-    pub fn require_deleted(
+    pub(crate) fn require_deleted(
         &self,
         journal: &crate::root_retirement_online_journal::Journal<'_>,
         authorize: &mut dyn FnMut() -> Result<()>,

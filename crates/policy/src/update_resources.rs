@@ -13,16 +13,16 @@ use std::{
     },
     path::Path,
 };
-pub const BOOT_GENERATIONS: usize = 4;
-pub const TRANSIENT_GENERATIONS: usize = 8;
-pub const ROOT_RESERVE: u64 = 2 * 1024 * 1024 * 1024;
-pub fn publication_required(artifact_bytes: u64, signed: bool) -> Result<u64> {
+pub(crate) const BOOT_GENERATIONS: usize = 4;
+pub(crate) const TRANSIENT_GENERATIONS: usize = 8;
+pub(crate) const ROOT_RESERVE: u64 = 2 * 1024 * 1024 * 1024;
+pub(crate) fn publication_required(artifact_bytes: u64, signed: bool) -> Result<u64> {
     artifact_bytes
         .checked_mul(if signed { 2 } else { 1 })
         .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
         .ok_or_else(|| Error("generation ESP resource overflow".into()))
 }
-pub fn check(
+pub(crate) fn check(
     generations: usize,
     module_views: usize,
     boot_stages: usize,
@@ -54,7 +54,8 @@ pub fn check(
     )
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
-pub fn available(directory: &File) -> Result<u64> {
+pub(crate) fn available(directory: &File) -> Result<u64> {
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(directory.as_raw_fd(), &mut info) } == 0,
@@ -64,7 +65,7 @@ pub fn available(directory: &File) -> Result<u64> {
         .checked_mul(info.f_frsize)
         .ok_or_else(|| Error("update filesystem space overflow".into()))
 }
-pub fn transient(name: &str, filesystem_uuid: &serde_json::Value) -> Result<usize> {
+pub(crate) fn transient(name: &str, filesystem_uuid: &serde_json::Value) -> Result<usize> {
     require(
         matches!(name, "module-views" | "boot-stage"),
         "unknown update resource registry",

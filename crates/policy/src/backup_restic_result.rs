@@ -4,14 +4,14 @@ use enzimos_platform::{Result, json, require};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Exit {
+pub(crate) enum Exit {
     Success,
     IncompleteBackup,
     RepositoryLocked,
     IncorrectPassword,
     UnknownFailure,
 }
-pub fn exit(code: Option<i32>) -> Exit {
+pub(crate) fn exit(code: Option<i32>) -> Exit {
     match code {
         Some(0) => Exit::Success,
         Some(3) => Exit::IncompleteBackup,
@@ -20,14 +20,14 @@ pub fn exit(code: Option<i32>) -> Exit {
         _ => Exit::UnknownFailure,
     }
 }
-pub fn backup(code: Option<i32>, bytes: &[u8]) -> Result<String> {
+pub(crate) fn backup(code: Option<i32>, bytes: &[u8]) -> Result<String> {
     Ok(backup_summary(code, bytes)?["snapshot_id"]
         .as_str()
         .unwrap()
         .to_owned())
 }
 /// Preserve the exact terminal vendor summary, including compatible future fields.
-pub fn backup_summary(code: Option<i32>, bytes: &[u8]) -> Result<serde_json::Value> {
+pub(crate) fn backup_summary(code: Option<i32>, bytes: &[u8]) -> Result<serde_json::Value> {
     require(
         exit(code) == Exit::Success && bytes.len() <= 2 * 1024 * 1024,
         "backup transfer failed or unknown; no replay",
@@ -68,7 +68,7 @@ pub fn backup_summary(code: Option<i32>, bytes: &[u8]) -> Result<serde_json::Val
         enzimos_platform::Error("actual backup summary unavailable; no replay".into())
     })
 }
-pub fn keys(code: Option<i32>, bytes: &[u8]) -> Result<BTreeMap<String, bool>> {
+pub(crate) fn keys(code: Option<i32>, bytes: &[u8]) -> Result<BTreeMap<String, bool>> {
     require(
         exit(code) == Exit::Success,
         "repository key observation failed or unknown",

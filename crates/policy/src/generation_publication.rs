@@ -4,7 +4,7 @@ use crate::{boot_entries, boot_options, catalog, identity, recovery_boot, signed
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeMap;
-pub const PHASES: [&str; 11] = [
+pub(crate) const PHASES: [&str; 11] = [
     "intent",
     "artifacts",
     "ready",
@@ -17,7 +17,7 @@ pub const PHASES: [&str; 11] = [
     "bios-selected",
     "complete",
 ];
-pub fn entries(
+pub(crate) fn entries(
     generation: &str,
     material: &Value,
     certificate: Option<&str>,
@@ -62,7 +62,7 @@ pub fn entries(
     }
     Ok(result)
 }
-pub fn bios(generation: &str, material: &Value, before: &str) -> Result<String> {
+pub(crate) fn bios(generation: &str, material: &Value, before: &str) -> Result<String> {
     catalog::material(material, generation)?;
     let menu = boot_entries::menu(before)?;
     require(
@@ -82,7 +82,7 @@ pub fn bios(generation: &str, material: &Value, before: &str) -> Result<String> 
     boot_entries::menu(&result)?;
     Ok(result)
 }
-pub fn validate(record: &Value, generation: &str) -> Result<()> {
+pub(crate) fn validate(record: &Value, generation: &str) -> Result<()> {
     json::fields(
         record,
         "schema generation phase filesystem_uuid created_boot material bios_before defaults_before certificate_sha256 journal_sha256",
@@ -149,7 +149,7 @@ pub fn validate(record: &Value, generation: &str) -> Result<()> {
     entries(generation, &record["material"], certificate)?;
     crate::recovery_records::digest(record, "journal_sha256")
 }
-pub fn seal(mut record: Value) -> Result<Value> {
+pub(crate) fn seal(mut record: Value) -> Result<Value> {
     record
         .as_object_mut()
         .ok_or_else(|| Error("publication record object".into()))?
@@ -158,7 +158,7 @@ pub fn seal(mut record: Value) -> Result<Value> {
     validate(&record, record["generation"].as_str().unwrap_or(""))?;
     Ok(record)
 }
-pub fn transition(before: Option<&Value>, after: &Value, generation: &str) -> Result<()> {
+pub(crate) fn transition(before: Option<&Value>, after: &Value, generation: &str) -> Result<()> {
     validate(after, generation)?;
     if let Some(before) = before {
         validate(before, generation)?;

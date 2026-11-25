@@ -3,18 +3,18 @@
 use crate::{identity, storage};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
-pub const MAXIMUM: usize = 128;
+pub(crate) const MAXIMUM: usize = 128;
 /// Terminal phase for an apply that failed before changing the system
 /// (during resolution or staging). It ends the record so the global lock,
 /// backups and recovery are not blocked by an apply that never mutated.
-pub const FAILED: &str = "failed-before-change";
+pub(crate) const FAILED: &str = "failed-before-change";
 const FAILED_AFTER: [&str; 3] = ["intent", "resolved", "stage-recorded"];
 /// Terminal phase for an apply that stopped after its fallback snapshot (and
 /// possibly the `old-<id>` fallback generation) existed but before the root
 /// rebind, the first change to the running system. The fallback stays as an
 /// ordinary root/generation for later retirement; nothing else changed.
-pub const FAILED_FALLBACK: &str = "failed-after-fallback";
-pub const FAILED_FALLBACK_RESULT: &str = "failed-fallback-kept";
+pub(crate) const FAILED_FALLBACK: &str = "failed-after-fallback";
+pub(crate) const FAILED_FALLBACK_RESULT: &str = "failed-fallback-kept";
 const FAILED_FALLBACK_AFTER: [&str; 2] = ["fallback-born", "fallback-published"];
 /// Finished records: completed, or failed before changing the running system.
 pub fn finished(record: &Value) -> bool {
@@ -22,7 +22,7 @@ pub fn finished(record: &Value) -> bool {
 }
 /// Whether an unfinished apply may end as `failed-after-fallback`: it stopped
 /// after the fallback existed and before any rebind record was created.
-pub fn fallback_only(record: &Value) -> bool {
+pub(crate) fn fallback_only(record: &Value) -> bool {
     FAILED_FALLBACK_AFTER.contains(&record["phase"].as_str().unwrap_or(""))
 }
 pub const STEPS: [&str; 12] = [

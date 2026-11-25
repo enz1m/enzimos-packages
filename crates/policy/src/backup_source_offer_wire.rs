@@ -3,9 +3,9 @@
 use enzimos_platform::{Error, Result, fd_packet, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub const LIMIT: usize = 65536;
-pub const BASE_FILES: usize = 3;
-pub const CHUNK: usize = fd_packet::MAX_FILES - BASE_FILES;
+pub(crate) const LIMIT: usize = 65536;
+pub(crate) const BASE_FILES: usize = 3;
+pub(crate) const CHUNK: usize = fd_packet::MAX_FILES - BASE_FILES;
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
         .as_str()
@@ -14,7 +14,7 @@ fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
 fn nonce(s: &str) -> Result<()> {
     crate::backup_worker_request::id(s)
 }
-pub fn targets(request: &Value) -> Result<Vec<String>> {
+pub(crate) fn targets(request: &Value) -> Result<Vec<String>> {
     let mut targets = request["sources"]
         .as_object()
         .ok_or_else(|| Error("source offer member map".into()))?
@@ -24,7 +24,7 @@ pub fn targets(request: &Value) -> Result<Vec<String>> {
     targets.sort();
     Ok(targets)
 }
-pub fn request(v: &Value) -> Result<()> {
+pub(crate) fn request(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema kind id boot_id nonce caller worker input_sha256 sources arguments",
@@ -111,7 +111,7 @@ pub fn request(v: &Value) -> Result<()> {
         &targets(v)?.into_iter().collect(),
     )
 }
-pub fn frame(
+pub(crate) fn frame(
     v: &Value,
     original: &Value,
     expected_index: usize,

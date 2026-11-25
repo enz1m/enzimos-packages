@@ -101,7 +101,11 @@ impl<'g> Observation<'g> {
         )?;
         self.guard.recheck()
     }
-    pub fn require_original_journals(&self, jobs: &Journal, activations: &Journal) -> Result<()> {
+    pub(crate) fn require_original_journals(
+        &self,
+        jobs: &Journal,
+        activations: &Journal,
+    ) -> Result<()> {
         self.recheck()?;
         require(
             self.jobs.evidence()? == jobs.evidence()?

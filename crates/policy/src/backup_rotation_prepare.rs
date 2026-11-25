@@ -199,6 +199,7 @@ pub fn prepare_locked(
         .storage_bytes()?
         .checked_add(128 * 1024 * 1024)
         .ok_or_else(|| Error("rotation space overflow".into()))?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(mount.descriptor()?.as_raw_fd(), &mut fs) } == 0

@@ -149,7 +149,7 @@ pub fn status(
 ///
 /// # Errors
 /// None in practice; the result type matches the drive status.
-pub fn share_status(guard: &crate::storage_runtime::Guard) -> Result<Value> {
+pub(crate) fn share_status(guard: &crate::storage_runtime::Guard) -> Result<Value> {
     let observed = (|| -> Result<&'static str> {
         let read =
             |name: &str| Document::optional(&Path::new(crate::operation::CONTROL).join(name), 0);

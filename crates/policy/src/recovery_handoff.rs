@@ -7,8 +7,8 @@ use crate::{
 use enzimos_platform::{Error, Result, files, json, memfile, require};
 use serde_json::{Value, json as value};
 use std::{ffi::CString, os::fd::AsRawFd, path::Path};
-pub const KEY: &str = "enzimos-recovery-unlock.key";
-pub fn options(id: &str, activation: &Value, luks: &str) -> Result<String> {
+pub(crate) const KEY: &str = "enzimos-recovery-unlock.key";
+pub(crate) fn options(id: &str, activation: &Value, luks: &str) -> Result<String> {
     records::job_id(id)?;
     identity::uuid(luks)?;
     recovery_activation::validate(activation, id)?;
@@ -43,7 +43,7 @@ pub fn options(id: &str, activation: &Value, luks: &str) -> Result<String> {
     Ok(result)
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
-pub fn load(id: &str, activation: &Value, luks: &str, secret: &[u8]) -> Result<Value> {
+pub(crate) fn load(id: &str, activation: &Value, luks: &str, secret: &[u8]) -> Result<Value> {
     crate::recovery_bootstrap::quiet()?;
     require(
         std::env::consts::ARCH == "x86_64" && !secret.is_empty() && secret.len() < 1000,
@@ -116,7 +116,7 @@ pub fn load(id: &str, activation: &Value, luks: &str, secret: &[u8]) -> Result<V
         value!({"cmdline_sha256":json::sha256(command.as_bytes()),"kernel_sha256":kernel.sha,"base_initrd_sha256":base.sha}),
     )
 }
-pub fn validate(
+pub(crate) fn validate(
     id: &str,
     activation: &Value,
     run: &Value,

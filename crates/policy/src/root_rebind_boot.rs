@@ -7,14 +7,14 @@ use crate::{
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::{Value, json as value};
 use std::{collections::BTreeSet, path::Path};
-pub fn body(volume: &Volume, name: &str, limit: usize) -> Result<Vec<u8>> {
+pub(crate) fn body(volume: &Volume, name: &str, limit: usize) -> Result<Vec<u8>> {
     let artifact = volume.artifact(Path::new(name), limit as u64)?;
     let bytes = files::read_file(&artifact.file, limit, Some(0), true)?;
     artifact.recheck()?;
     volume.recheck()?;
     Ok(bytes)
 }
-pub fn texts(volume: &Volume) -> Result<Texts> {
+pub(crate) fn texts(volume: &Volume) -> Result<Texts> {
     let directory = volume.directory(Path::new("loader/entries"))?;
     let names = files::directory_names(&directory, 126)?;
     require(names.len() <= 126, "rebind boot entry count bound")?;
@@ -51,7 +51,7 @@ pub fn texts(volume: &Volume) -> Result<Texts> {
     volume.recheck()?;
     Ok(result)
 }
-pub fn generations(volume: &Volume, catalog: &Value) -> Result<()> {
+pub(crate) fn generations(volume: &Volume, catalog: &Value) -> Result<()> {
     let records = catalog["generations"].as_object().unwrap();
     let path = volume.path(Path::new("enzimos/generations"))?;
     let mut original_members = Vec::new();
@@ -122,7 +122,7 @@ pub fn generations(volume: &Volume, catalog: &Value) -> Result<()> {
     }
     volume.recheck()
 }
-pub fn auxiliary(volume: &Volume, images: &Value, activations: &Value) -> Result<()> {
+pub(crate) fn auxiliary(volume: &Volume, images: &Value, activations: &Value) -> Result<()> {
     let actual = texts(volume)?;
     let menu = boot_entries::menu(&actual["limine/limine.conf"])?;
     for image in images.as_object().unwrap().values() {

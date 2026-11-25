@@ -9,10 +9,7 @@ use crate::{
 };
 use enzimos_platform::{Result, process, require};
 use serde_json::{Value, json as value};
-use std::{
-    os::fd::{AsFd, AsRawFd},
-    time::Duration,
-};
+use std::{os::fd::AsFd, time::Duration};
 fn command(action: &str) -> Result<(&'static str, &'static [&'static str])> {
     match action {
         "scrub" => Ok(("/usr/bin/btrfs", &["scrub", "start", "-B", "@fd-dir:0"])),

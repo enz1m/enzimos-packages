@@ -3,10 +3,10 @@
 use enzimos_platform::{Error, Result, fd_packet::Credentials, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub const KIND: &str = "credential-review";
-pub const LIMIT: usize = 65536;
-pub const DESCRIPTORS: usize = 13;
-pub const ROLES: [&str; 11] = [
+pub(crate) const KIND: &str = "credential-review";
+pub(crate) const LIMIT: usize = 65536;
+pub(crate) const DESCRIPTORS: usize = 13;
+pub(crate) const ROLES: [&str; 11] = [
     "caller-pidfd",
     "caller-image",
     "root",
@@ -39,7 +39,7 @@ fn credential(v: &Value) -> Result<()> {
         "original private credential review input required",
     )
 }
-pub fn context(v: &Value) -> Result<()> {
+pub(crate) fn context(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema role id boot_id caller source enrollment input_identity destination configuration pin root_directory repository_directory current_credential next_credential restic header operation_lock worker_closed review_complete key_creation_replayed old_access_revoked credential_exported",
@@ -149,7 +149,7 @@ pub fn context(v: &Value) -> Result<()> {
         "credential context bound",
     )
 }
-pub fn request(v: &Value) -> Result<()> {
+pub(crate) fn request(v: &Value) -> Result<()> {
     json::fields(v, "schema kind id boot_id worker context")?;
     require(
         v["schema"] == 1 && v["kind"] == KIND,
@@ -166,7 +166,7 @@ pub fn request(v: &Value) -> Result<()> {
         "sealed credential request bound",
     )
 }
-pub fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<Vec<u32>> {
+pub(crate) fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<Vec<u32>> {
     request(request_value)?;
     json::fields(v, "schema kind id request_sha256 descriptor_numbers intent")?;
     require(

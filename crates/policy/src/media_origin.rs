@@ -4,7 +4,7 @@ use crate::{namespaces, operation, recovery_records};
 use enzimos_platform::{Result, files, json, require, stream_copy};
 use serde_json::{Value, json as value};
 use std::path::Path;
-pub const MARKER: &str = "/run/enzimos/installer-rescue-origin.json";
+pub(crate) const MARKER: &str = "/run/enzimos/installer-rescue-origin.json";
 pub const POLICY: &str = "/usr/lib/enzimos-native/enzimos-policy";
 fn observed() -> Result<Value> {
     operation::root_only()?;

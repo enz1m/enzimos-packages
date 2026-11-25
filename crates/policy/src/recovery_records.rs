@@ -45,7 +45,7 @@ pub fn digest(v: &Value, key: &str) -> Result<()> {
         "recovery document digest mismatch",
     )
 }
-pub fn media_origin(v: &Value) -> Result<()> {
+pub(crate) fn media_origin(v: &Value) -> Result<()> {
     json::fields(v, "schema boot_id kernel policy_sha256")?;
     require(
         v["schema"].as_u64() == Some(1),
@@ -209,7 +209,7 @@ pub fn run_entry_names(identifier: &str) -> Result<(String, String)> {
         format!("enzimOS recovery run {short}"),
     ))
 }
-pub fn literal_entry(s: &str) -> Result<()> {
+pub(crate) fn literal_entry(s: &str) -> Result<()> {
     let stem = s
         .strip_suffix(".conf")
         .ok_or_else(|| Error("invalid previous UEFI default".into()))?;
@@ -281,7 +281,7 @@ pub fn run(v: &Value, identifier: &str) -> Result<()> {
         "invalid recovery run result",
     )
 }
-pub fn workflow(v: &Value, identifier: &str) -> Result<()> {
+pub(crate) fn workflow(v: &Value, identifier: &str) -> Result<()> {
     json::fields(
         v,
         "schema id plan_sha256 flavor boot_id state action activation_sha256",

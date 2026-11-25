@@ -8,10 +8,7 @@ use enzimos_platform::{Result, files, mount_identity, require};
 use serde_json::{Value, json};
 use std::{
     fs::File,
-    os::{
-        fd::{AsFd, AsRawFd},
-        unix::fs::MetadataExt,
-    },
+    os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
 const FOLDER: &str = "recovery-images";

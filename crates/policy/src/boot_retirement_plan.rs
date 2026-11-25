@@ -4,7 +4,7 @@ use crate::{boot_entries, catalog, identity};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
-pub const MEMBERS: [&str; 6] = [
+pub(crate) const MEMBERS: [&str; 6] = [
     "vmlinuz-linux",
     "vmlinuz-linux-lts",
     "initramfs-linux.img",
@@ -12,7 +12,7 @@ pub const MEMBERS: [&str; 6] = [
     "READY.json",
     "PUBLISHED.json",
 ];
-pub fn entry_names(generation: &str) -> Result<([String; 2], [String; 2])> {
+pub(crate) fn entry_names(generation: &str) -> Result<([String; 2], [String; 2])> {
     identity::safe_id(generation)?;
     Ok((
         [
@@ -25,7 +25,7 @@ pub fn entry_names(generation: &str) -> Result<([String; 2], [String; 2])> {
         ],
     ))
 }
-pub fn without_bios(text: &str, generation: &str) -> Result<String> {
+pub(crate) fn without_bios(text: &str, generation: &str) -> Result<String> {
     let menu = boot_entries::menu(text)?;
     let (_, titles) = entry_names(generation)?;
     let chosen = &menu.entries[menu.selected - 1].title;
@@ -144,7 +144,7 @@ pub fn retention(
     }
     Ok(())
 }
-pub fn tombstone(data: &Value, generation: &str, boot: &str) -> Result<Value> {
+pub(crate) fn tombstone(data: &Value, generation: &str, boot: &str) -> Result<Value> {
     identity::uuid(boot)?;
     catalog::validate(data, data["filesystem_uuid"].as_str().unwrap_or(""))?;
     let row = data["generations"]
@@ -186,7 +186,7 @@ pub fn mentions(v: &Value, generation: &str) -> Result<bool> {
 
 /// Complete retained-loader cross references. The candidate's own exact two
 /// entries are the only exemption; this calculation grants no deletion authority.
-pub fn loader_references(
+pub(crate) fn loader_references(
     texts: &std::collections::BTreeMap<String, String>,
     generation: &str,
     candidate_ukis: &BTreeSet<String>,

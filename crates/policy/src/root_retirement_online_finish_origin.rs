@@ -13,7 +13,7 @@ use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
-    os::fd::{AsFd, AsRawFd},
+    os::fd::AsFd,
     path::Path,
 };
 struct Selection {

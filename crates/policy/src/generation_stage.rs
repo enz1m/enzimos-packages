@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-pub const NAMES: [&str; 4] = [
+pub(crate) const NAMES: [&str; 4] = [
     "vmlinuz-linux",
     "initramfs-linux.img",
     "vmlinuz-linux-lts",
@@ -233,7 +233,7 @@ impl Stage {
     pub fn copy(&self, destination: &File) -> Result<()> {
         self.copy_authorized(destination, &mut || Ok(()))
     }
-    pub fn copy_authorized(
+    pub(crate) fn copy_authorized(
         &self,
         destination: &File,
         authorize: &mut dyn FnMut() -> Result<()>,

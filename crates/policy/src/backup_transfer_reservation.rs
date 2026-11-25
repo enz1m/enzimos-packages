@@ -175,12 +175,12 @@ impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
     }
     /// Immutable comparison data only. Reading it grants no acknowledgement,
     /// descriptor or consumer authority; control replies still call recheck().
-    pub fn original_request(&self) -> &Value {
+    pub(crate) fn original_request(&self) -> &Value {
         &self.request
     }
     /// The actual retained scope for sender/sequence parsing only. Its kernel
     /// checks remain active; acknowledgement still requires the complete actor.
-    pub fn control_scope(&self) -> &Scope {
+    pub(crate) fn control_scope(&self) -> &Scope {
         &self.scope
     }
     pub fn request(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {

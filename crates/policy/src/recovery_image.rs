@@ -7,8 +7,8 @@ use crate::{
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::Value;
 use std::{fs::File, os::fd::AsFd, path::Path};
-pub const MAX_IMAGE: u64 = 192 * 1024 * 1024;
-pub const MAX_IMAGES: usize = 8;
+pub(crate) const MAX_IMAGE: u64 = 192 * 1024 * 1024;
+pub(crate) const MAX_IMAGES: usize = 8;
 pub const ASSURANCE: &str = "software-local-recovery-boot-not-firmware-or-application-health";
 pub fn identifier(id: &str) -> Result<&str> {
     let hash = id
@@ -59,11 +59,11 @@ pub fn manifest(v: &Value) -> Result<()> {
         "recovery kernel descriptor mismatch",
     )
 }
-pub fn entry_names(id: &str) -> Result<(String, String)> {
+pub(crate) fn entry_names(id: &str) -> Result<(String, String)> {
     identifier(id)?;
     Ok((format!("{id}.conf"), format!("enzimOS recovery {id}")))
 }
-pub fn entry_texts(id: &str, options: &str) -> Result<(String, String)> {
+pub(crate) fn entry_texts(id: &str, options: &str) -> Result<(String, String)> {
     let (_, title) = entry_names(id)?;
     records::command_line(options)?;
     let prefix = format!("/enzimos/recovery-images/{id}");
@@ -253,7 +253,7 @@ pub(crate) fn retain_artifacts(v: &Value) -> Result<Artifacts> {
     retained.recheck()?;
     Ok(retained)
 }
-pub fn verify_artifacts(v: &Value) -> Result<Volume> {
+pub(crate) fn verify_artifacts(v: &Value) -> Result<Volume> {
     let retained = retain_artifacts(v)?;
     retained.recheck()?;
     Ok(retained.volume)

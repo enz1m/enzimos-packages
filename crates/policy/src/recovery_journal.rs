@@ -415,7 +415,7 @@ impl Journal {
     pub fn open(kind: Kind, create: bool) -> Result<Self> {
         Self::open_guarded(kind, create, Authority::Online(Guard::observe()?))
     }
-    pub fn open_independent(kind: Kind, create: bool, plan: &Value) -> Result<Self> {
+    pub(crate) fn open_independent(kind: Kind, create: bool, plan: &Value) -> Result<Self> {
         Self::open_guarded(
             kind,
             create,

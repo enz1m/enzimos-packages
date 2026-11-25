@@ -34,6 +34,7 @@ fn ram_type(kind: libc::c_long) -> bool {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
 fn ram(file: &File) -> Result<()> {
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatfs(file.as_raw_fd(), &mut status) } == 0 && ram_type(status.f_type),

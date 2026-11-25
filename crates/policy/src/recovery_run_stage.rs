@@ -13,7 +13,7 @@ use crate::{
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::{Value, json as value};
 use std::{path::Path, time::Duration};
-pub const INIT: &str = "/usr/lib/enzimos-native/enzimos-recovery-run-init";
+pub(crate) const INIT: &str = "/usr/lib/enzimos-native/enzimos-recovery-run-init";
 pub(crate) fn luks_uuid(guard: &Guard) -> Result<String> {
     guard.recheck()?;
     let source = operation::query(
@@ -78,7 +78,7 @@ pub fn stage_locked(
         lock.recheck()
     })
 }
-pub fn stage_authorized<F: FnMut() -> Result<()>>(
+pub(crate) fn stage_authorized<F: FnMut() -> Result<()>>(
     id: &str,
     digest: &str,
     flavor: &str,

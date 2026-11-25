@@ -3,7 +3,7 @@
 use crate::{deferred, identity};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
-pub const MAXIMUM: usize = 256;
+pub(crate) const MAXIMUM: usize = 256;
 pub fn id(action: &str, marker: &Value) -> Result<String> {
     deferred::validate(marker, action)?;
     Ok(format!(

@@ -30,7 +30,7 @@ pub fn root_options(options: &str, subvolume: &str) -> Result<String> {
     require(found == 1, "one explicit rootflags value required")?;
     Ok(words.join(" "))
 }
-pub fn generation_options(options: &str, generation: &str) -> Result<String> {
+pub(crate) fn generation_options(options: &str, generation: &str) -> Result<String> {
     safe_id(generation)?;
     require(
         options.len() <= 4096 && !options.chars().any(char::is_control),

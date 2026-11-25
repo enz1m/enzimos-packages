@@ -38,7 +38,7 @@ pub fn status_locked(lock: &files::Lock) -> Result<Value> {
 
 /// Read only the fixed Root journal. This untrusted bootstrap grants no authority:
 /// IndependentGuard subsequently binds every planned filesystem and boot identity.
-pub fn load_job(id: &str) -> Result<Value> {
+pub(crate) fn load_job(id: &str) -> Result<Value> {
     recovery_records::job_id(id)?;
     namespaces::initial()?;
     let control = files::directory(Path::new(operation::CONTROL), Some(0))?;
@@ -66,7 +66,7 @@ pub fn load_job(id: &str) -> Result<Value> {
     IndependentGuard::observe(&job["plan"])?;
     Ok(job)
 }
-pub fn load_plan(id: &str, digest: &str) -> Result<Value> {
+pub(crate) fn load_plan(id: &str, digest: &str) -> Result<Value> {
     identity::sha(digest)?;
     let job = load_job(id)?;
     require(
@@ -89,7 +89,7 @@ fn target_object(context: &Context, object: &Value, writable: bool) -> Result<st
     )?;
     Ok(fd)
 }
-pub fn verify_staged(context: &Context, job: &Value) -> Result<Value> {
+pub(crate) fn verify_staged(context: &Context, job: &Value) -> Result<Value> {
     recovery_records::job(job, recovery_records::text(&context.plan, "id")?)?;
     require(
         job["phase"] == "staged" && job["plan"] == context.plan,
@@ -224,6 +224,7 @@ pub fn stage_locked<F: FnMut(&str, &Value) -> Result<()>>(
         matches!(std::fs::symlink_metadata(&path),Err(e) if e.kind() == std::io::ErrorKind::NotFound),
         "existing recovery destination cannot be adopted",
     )?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut space: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(context.guard.top().as_raw_fd(), &mut space) } == 0

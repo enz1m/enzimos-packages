@@ -292,7 +292,7 @@ impl<'a, 'g> Inventory<'a, 'g> {
     }
     /// Admit only the known creation proven by an original retained actor.
     /// A decoded row or an independently opened old snapshot cannot invoke this.
-    pub fn advance_created(
+    pub(crate) fn advance_created(
         &self,
         created: &crate::backup_snapshot_creation::Created<'_, '_, 'g>,
     ) -> Result<()> {

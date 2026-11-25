@@ -38,7 +38,7 @@ pub fn identity(pid: u32, kind: &str) -> Result<(u64, u64)> {
         .map_err(|error| sample_error(pid, kind, error))?;
     Ok((metadata.dev(), metadata.ino()))
 }
-pub fn kernel_thread(body: &str) -> Result<()> {
+pub(crate) fn kernel_thread(body: &str) -> Result<()> {
     ticks(body, 2)?;
     let start = body
         .find('(')
@@ -133,7 +133,12 @@ impl Observation {
     pub fn json(&self) -> Value {
         value!({"departed_processes":[],"namespaces":self.views.iter().map(|v| value!({"namespace":format!("mnt:[{}]",v.identity.1),"representative_pid":v.representative,"sha256":v.sha,"mounts":v.mounts.iter().map(|r| value!({"id":r.id,"parent":r.parent,"major":r.major,"minor":r.minor,"root":r.root,"target":r.target,"fstype":r.filesystem,"options":r.options})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
     }
-    pub fn refuse_subtrees(&self, source: &str, target: &str, target_root: &str) -> Result<()> {
+    pub(crate) fn refuse_subtrees(
+        &self,
+        source: &str,
+        target: &str,
+        target_root: &str,
+    ) -> Result<()> {
         for view in &self.views {
             for row in &view.mounts {
                 require(
@@ -203,7 +208,7 @@ fn exited_after_sample(file: &File, failed: bool) -> Result<bool> {
             events: libc::POLLIN,
             revents: 0,
         };
-        let timeout = remaining.as_millis().max(1).min(25) as i32;
+        let timeout = remaining.as_millis().clamp(1, 25) as i32;
         let result = unsafe { libc::poll(&mut poll, 1, timeout) };
         if result < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
             continue;

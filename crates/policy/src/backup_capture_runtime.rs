@@ -13,6 +13,7 @@ use std::os::fd::AsRawFd;
 fn free(destination: &Destination<'_>, minimum: u64) -> Result<()> {
     destination.require_writable()?;
     let fd = destination.repository_descriptor()?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(fd.as_raw_fd(), &mut status) } == 0,

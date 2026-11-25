@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 /// Run only from actual original guarded actors and the sole staged receipt.
 /// Errors preserve durable partial evidence; callers must never replay this body.
 /// No decoded plan, receipt, path or success marker supplies these actors.
-pub fn publish_default(
+pub(crate) fn publish_default(
     guard: &Guard,
     lock: &files::Lock,
     receipt: &Receipt<'_>,
@@ -130,7 +130,7 @@ pub fn measure_one_shot(
 }
 /// Complete the one-shot path using only actual original/owned producers.
 /// Firmware selection follows the durable receipt, retained signing and loaders.
-pub fn publish_one_shot(
+pub(crate) fn publish_one_shot(
     guard: &Guard,
     lock: &files::Lock,
     receipt: &Receipt<'_>,

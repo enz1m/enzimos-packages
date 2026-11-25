@@ -29,7 +29,7 @@ fn retained(parent: &File, path: &Path, mount: u64, filesystem: &str) -> Result<
     )?;
     Ok(file)
 }
-pub fn roots(journal: &Value, guard: &Guard) -> Result<()> {
+pub(crate) fn roots(journal: &Value, guard: &Guard) -> Result<()> {
     root_rebind_record::validate(journal, text(journal, "id")?)?;
     guard.recheck()?;
     require(

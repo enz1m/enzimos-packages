@@ -17,9 +17,9 @@ use std::{
     path::Path,
     time::Duration,
 };
-pub const CONFIG: &str = "/usr/lib/enzimos-native/recovery-rust-mkinitcpio.conf";
-pub const HOOK: &str = "/usr/lib/initcpio/install/enzimos-rust-recovery";
-pub const DESCRIPTOR: &str = "usr/lib/enzimos-native/recovery-image.json";
+pub(crate) const CONFIG: &str = "/usr/lib/enzimos-native/recovery-rust-mkinitcpio.conf";
+pub(crate) const HOOK: &str = "/usr/lib/initcpio/install/enzimos-rust-recovery";
+pub(crate) const DESCRIPTOR: &str = "usr/lib/enzimos-native/recovery-image.json";
 const TOOLS: &[&str] = &[
     "cryptsetup",
     "blkid",
@@ -121,7 +121,7 @@ fn check_base(
 /// Image payloads use the retained, verified streaming publisher. Metadata
 /// atomic writers keep their separate 32 MiB cap; this role admits only the two
 /// fixed image members within the existing 192 MiB image contract.
-pub fn stage_artifact(parent: &File, name: &str, body: &[u8], owner: u32) -> Result<File> {
+pub(crate) fn stage_artifact(parent: &File, name: &str, body: &[u8], owner: u32) -> Result<File> {
     require(
         matches!(name, "kernel" | "initrd.img")
             && !body.is_empty()
@@ -257,6 +257,7 @@ pub fn build_locked(release: &str, options: &str, lock: &files::Lock) -> Result<
     };
     files::ensure_directory(Path::new(operation::STATE), 0o700, 0)?;
     let parent = files::ensure_directory(Path::new("/var/lib/enzimos/recovery-build"), 0o700, 0)?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut info: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
         unsafe { libc::fstatvfs(parent.as_raw_fd(), &mut info) } == 0

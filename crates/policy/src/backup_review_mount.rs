@@ -190,6 +190,7 @@ impl Mount {
             .mount
             .as_ref()
             .ok_or_else(|| Error("closed review mount".into()))?;
+        // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
         let mut info = [0u64; 63];
         require(

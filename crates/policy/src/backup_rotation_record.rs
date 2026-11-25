@@ -4,11 +4,11 @@ use crate::{identity, recovery_records as records};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub const MAXIMUM: usize = 16;
+pub(crate) const MAXIMUM: usize = 16;
 // A4096-point copy map plus the original ID inventory exceeds the old32KiB read cap.
-pub const LIMIT: usize = 1024 * 1024;
-pub const MAX_POINTS: usize = 4096;
-pub const BOUNDARIES: [[Option<&str>; 7]; 6] = [
+pub(crate) const LIMIT: usize = 1024 * 1024;
+pub(crate) const MAX_POINTS: usize = 4096;
+pub(crate) const BOUNDARIES: [[Option<&str>; 7]; 6] = [
     [
         Some("old"),
         Some("new"),
@@ -64,13 +64,13 @@ pub const BOUNDARIES: [[Option<&str>; 7]; 6] = [
         Some("new"),
     ],
 ];
-pub fn boundary(state: &[Option<&str>; 7]) -> Result<usize> {
+pub(crate) fn boundary(state: &[Option<&str>; 7]) -> Result<usize> {
     BOUNDARIES
         .iter()
         .position(|row| row == state)
         .ok_or_else(|| Error("rotation is outside exact recorded boundaries".into()))
 }
-pub fn credential_identity(v: &Value) -> Result<()> {
+pub(crate) fn credential_identity(v: &Value) -> Result<()> {
     json::fields(
         v,
         "inode size mtime_ns root_id filesystem_uuid root_uuid root_path",
@@ -89,7 +89,7 @@ pub fn credential_identity(v: &Value) -> Result<()> {
     identity::uuid(records::text(v, "root_uuid")?)?;
     identity::safe_id(records::text(v, "root_path")?).map(|_| ())
 }
-pub fn validate(v: &Value, id: &str) -> Result<()> {
+pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(
         v,
         "schema id phase created_boot repository_binding old_points input_identity password_identity repository_inode new_repository_sha256 new_repository_inode copies",

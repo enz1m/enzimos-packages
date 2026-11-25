@@ -126,12 +126,8 @@ pub(crate) fn verify_tar(bytes: &[u8], path: &str, listing: &Listing) -> Result<
             let raw = member.path_bytes();
             let mut name =
                 std::str::from_utf8(&raw).map_err(|_| Error("tree tar path encoding".into()))?;
-            while name.starts_with("./") || name.starts_with('/') {
-                name = if name.starts_with("./") {
-                    &name[2..]
-                } else {
-                    &name[1..]
-                };
+            while let Some(rest) = name.strip_prefix("./").or_else(|| name.strip_prefix('/')) {
+                name = rest;
             }
             name = name.trim_end_matches('/');
             let kind = member.header().entry_type();

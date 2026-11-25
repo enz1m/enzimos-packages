@@ -4,8 +4,8 @@ use crate::{authority, identity};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub const MAXIMUM: usize = 32;
-pub fn hashes(value: &Value) -> Result<()> {
+pub(crate) const MAXIMUM: usize = 32;
+pub(crate) fn hashes(value: &Value) -> Result<()> {
     let rows = value
         .as_object()
         .ok_or_else(|| Error("authority file hashes missing".into()))?;
@@ -22,7 +22,7 @@ pub fn hashes(value: &Value) -> Result<()> {
     }
     Ok(())
 }
-pub fn validate(record: &Value, id: &str) -> Result<()> {
+pub(crate) fn validate(record: &Value, id: &str) -> Result<()> {
     json::fields(
         record,
         "schema id phase boot filesystem_uuid authority before after approved local summary",
@@ -121,7 +121,7 @@ pub fn validate(record: &Value, id: &str) -> Result<()> {
         "authority summary or mounted identity changed",
     )
 }
-pub fn prefix(before: &Value, after: &Value, written: usize) -> Result<Value> {
+pub(crate) fn prefix(before: &Value, after: &Value, written: usize) -> Result<Value> {
     hashes(before)?;
     hashes(after)?;
     require(
@@ -134,7 +134,7 @@ pub fn prefix(before: &Value, after: &Value, written: usize) -> Result<Value> {
     }
     Ok(expected)
 }
-pub fn transition(prior: Option<&Value>, record: &Value, id: &str) -> Result<()> {
+pub(crate) fn transition(prior: Option<&Value>, record: &Value, id: &str) -> Result<()> {
     validate(record, id)?;
     if let Some(prior) = prior {
         validate(prior, id)?;

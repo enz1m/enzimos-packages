@@ -15,7 +15,7 @@ const DIRECTORY: &str = "/run/enzimos";
 const NAME: &str = "backup-running.json";
 const LIMIT: usize = 1024;
 /// Closed phase vocabulary of the `running` status field.
-pub const PHASES: [&str; 5] = [
+pub(crate) const PHASES: [&str; 5] = [
     "preparing",
     "capturing",
     "transferring",
@@ -23,7 +23,7 @@ pub const PHASES: [&str; 5] = [
     "copying",
 ];
 /// Where the running phase writes: the backup drive or the NAS share.
-pub const TARGETS: [&str; 2] = ["drive", "share"];
+pub(crate) const TARGETS: [&str; 2] = ["drive", "share"];
 
 fn now() -> u64 {
     std::time::SystemTime::now()
@@ -129,7 +129,7 @@ fn project(record: &Value, boot: &str, alive: &dyn Fn(u32, u64) -> bool) -> Valu
 /// Whether a live process other than this one records a backup run in this
 /// boot. An unreadable boot identity counts as a foreign run.
 #[must_use]
-pub fn foreign() -> bool {
+pub(crate) fn foreign() -> bool {
     Store::system().foreign(std::process::id())
 }
 /// The current backup run, or `null` when idle (see the module documentation).

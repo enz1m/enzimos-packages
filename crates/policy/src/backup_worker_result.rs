@@ -2,7 +2,7 @@
 //! A consumer observation never claims the worker, mount or setup has closed.
 use enzimos_platform::{Result, json, require};
 use serde_json::Value;
-pub fn for_request(result: &Value, request: &Value) -> Result<()> {
+pub(crate) fn for_request(result: &Value, request: &Value) -> Result<()> {
     validate(result, request["task"].as_str().unwrap_or(""))?;
     if result["status"] == "provisioned" {
         require(
@@ -18,7 +18,7 @@ pub fn for_request(result: &Value, request: &Value) -> Result<()> {
     }
     Ok(())
 }
-pub fn validate(result: &Value, task: &str) -> Result<()> {
+pub(crate) fn validate(result: &Value, task: &str) -> Result<()> {
     match result["status"].as_str() {
         Some("provisioned") => {
             json::fields(result, "status mode key_id metadata_checked header")?;

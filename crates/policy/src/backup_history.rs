@@ -16,7 +16,7 @@ use crate::{control_registry::Folder, storage_runtime::Guard};
 use enzimos_platform::{Result, files, json, require};
 use serde_json::Value;
 /// Newest finished backups whose receipts are always kept.
-pub const KEEP: usize = 8;
+pub(crate) const KEEP: usize = 8;
 /// Completion receipts kept (completions are keyed by attempt, not by job).
 const KEEP_COMPLETIONS: usize = 16;
 const LIMIT: usize = 8 * 1024 * 1024;
@@ -103,7 +103,7 @@ fn open(guard: &Guard, folder: &str) -> Result<Option<Folder>> {
 }
 /// Retire the receipts of old finished backups. The caller holds the backup
 /// operation lock and has not yet observed any of these registries.
-pub fn retire_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
+pub(crate) fn retire_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     crate::operation::root_only()?;
     guard.recheck()?;
     lock.recheck()?;
@@ -192,7 +192,7 @@ pub fn retire_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
 
 /// Newest failed backups whose receipts are kept for diagnostics; their
 /// snapshots and staging are removed as soon as no process can use them.
-pub const KEEP_FAILED: usize = 8;
+pub(crate) const KEEP_FAILED: usize = 8;
 const WORKERS: &str = "backup-transfer-workers";
 const BOOTS: &str = "backup-boot-captures";
 const STAGES: &str = "backup-inventory-stages";

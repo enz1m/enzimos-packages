@@ -29,7 +29,7 @@ fn lock() -> Result<files::Lock> {
 /// Queued removals as repository paths (`/backup-source/home/...`), with the
 /// rows they came from.
 #[must_use]
-pub fn pending() -> Vec<(String, Value)> {
+pub(crate) fn pending() -> Vec<(String, Value)> {
     let Ok(bytes) = std::fs::read(queue_path()) else {
         return Vec::new();
     };
@@ -69,7 +69,7 @@ fn drop_applied(applied: &[Value]) -> Result<()> {
 /// Apply the queue with the destination attached. Never fails the backup:
 /// the outcome is returned for the status document.
 #[must_use]
-pub fn apply_locked(guard: &Guard, lock: &files::Lock) -> Value {
+pub(crate) fn apply_locked(guard: &Guard, lock: &files::Lock) -> Value {
     let queued = pending();
     if queued.is_empty() {
         return value!({"applied":0,"pending":0});

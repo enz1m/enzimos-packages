@@ -202,7 +202,7 @@ impl Snapshot {
         self.records["update_workers"][id] = record.clone();
         self.recheck()
     }
-    pub fn worker_history(&mut self, id: &str, checkpoints: &[Value]) -> Result<()> {
+    pub(crate) fn worker_history(&mut self, id: &str, checkpoints: &[Value]) -> Result<()> {
         require(
             self.worker.as_deref() == Some(id),
             "worker history scope changed",

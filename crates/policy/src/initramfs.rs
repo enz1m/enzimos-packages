@@ -5,8 +5,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::{Cursor, Read},
 };
-pub const MAX_UNPACKED: usize = 768 * 1024 * 1024;
-pub const MAX_MEMBERS: usize = 65536;
+pub(crate) const MAX_UNPACKED: usize = 768 * 1024 * 1024;
+pub(crate) const MAX_MEMBERS: usize = 65536;
 #[derive(Debug, Clone)]
 pub struct Member {
     pub mode: u32,

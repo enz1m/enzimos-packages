@@ -408,7 +408,7 @@ impl Handoff {
         self.recheck()?;
         Ok(&self.files[4])
     }
-    pub fn current_descriptor(&self) -> Result<&File> {
+    pub(crate) fn current_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.files[5])
     }
@@ -434,7 +434,7 @@ impl Handoff {
         self.recheck()?;
         Ok(record)
     }
-    pub fn candidate_descriptor(&self) -> Result<&File> {
+    pub(crate) fn candidate_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.files[6])
     }

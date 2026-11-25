@@ -3,13 +3,13 @@
 use crate::{identity, operation};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
-pub const ACTIONS: [(&str, &str); 4] = [
+pub(crate) const ACTIONS: [(&str, &str); 4] = [
     ("scrub", "enzimos-scrub.service"),
     ("trim", "enzimos-trim.service"),
     ("backup", "enzimos-backup.service"),
     ("authority", "enzimos-authority-refresh.service"),
 ];
-pub const MAX_DEFERRALS: u64 = 100_000;
+pub(crate) const MAX_DEFERRALS: u64 = 100_000;
 pub fn unit(action: &str) -> Result<&'static str> {
     ACTIONS
         .iter()
@@ -61,7 +61,7 @@ pub fn next(previous: Option<&Value>, action: &str, boot: &str, now: u64) -> Res
     validate(&record, action)?;
     Ok(record)
 }
-pub fn previous_boot_actions(
+pub(crate) fn previous_boot_actions(
     records: &std::collections::BTreeMap<String, Value>,
     boot: &str,
 ) -> Result<Vec<String>> {

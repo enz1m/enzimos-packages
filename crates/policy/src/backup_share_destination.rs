@@ -84,7 +84,7 @@ pub fn pin(guard: &Guard) -> Result<Value> {
 ///
 /// # Errors
 /// A pin that does not name the current share configuration.
-pub fn schedule_binding(scope: &ShareScope, guard: &Guard) -> Result<Value> {
+pub(crate) fn schedule_binding(scope: &ShareScope, guard: &Guard) -> Result<Value> {
     crate::backup_binding::schedule_share(scope.public_bytes()?, &pin(guard)?)
 }
 /// Whether the NAS answers on the SMB port; nothing is mounted and no

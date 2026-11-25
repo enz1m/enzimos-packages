@@ -10,7 +10,7 @@ use std::{
     },
     path::Path,
 };
-pub fn directory(file: &File) -> Result<Value> {
+pub(crate) fn directory(file: &File) -> Result<Value> {
     let m = file.metadata()?;
     let value = value!({"device":m.dev(),"inode":m.ino(),"mount":mount_identity::id(file.as_fd(),true)?,
         "mode":m.mode(),"uid":m.uid(),"gid":m.gid()});
@@ -21,7 +21,7 @@ pub fn directory(file: &File) -> Result<Value> {
 /// caller's pidfd/image and KCMP. This function cannot infer mount ownership
 /// from a path or JSON, and cannot create a writable mount or completion receipt.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
-pub fn recheck(
+pub(crate) fn recheck(
     request: &Value,
     source: &crate::storage_runtime::Guard,
     root: &File,

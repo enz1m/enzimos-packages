@@ -104,7 +104,7 @@ pub fn filename_matches(filename: &str, name: &str, version: &str) -> bool {
         })
 }
 /// The release comes from one actual regular kernel image, never a package name.
-pub fn kernel_release(file: &File, flavor: &str) -> Result<String> {
+pub(crate) fn kernel_release(file: &File, flavor: &str) -> Result<String> {
     require(
         matches!(flavor, "linux" | "linux-lts"),
         "unsupported update kernel flavor",

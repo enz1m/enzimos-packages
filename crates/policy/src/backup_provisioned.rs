@@ -54,7 +54,7 @@ impl<'g> Provisioned<'g> {
         this.recheck()?;
         Ok(this)
     }
-    pub fn public_result(&self) -> Result<Value> {
+    pub(crate) fn public_result(&self) -> Result<Value> {
         self.recheck()?;
         require(
             self.bound.is_some(),

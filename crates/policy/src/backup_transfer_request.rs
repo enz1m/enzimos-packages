@@ -3,9 +3,9 @@
 use enzimos_platform::{Error, Result, fd_packet::Credentials, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
-pub const LIMIT: usize = 65536;
-pub const DESCRIPTORS: usize = 11;
-pub const ROLES: [&str; 9] = [
+pub(crate) const LIMIT: usize = 65536;
+pub(crate) const DESCRIPTORS: usize = 11;
+pub(crate) const ROLES: [&str; 9] = [
     "caller-pidfd",
     "caller-image",
     "root",
@@ -18,7 +18,7 @@ pub const ROLES: [&str; 9] = [
 ];
 /// Descriptor roles of a backup into the NAS share, at the drive roles'
 /// positions where the two share a role (caller, Restic, operation lock).
-pub const SHARE_ROLES: [&str; 9] = [
+pub(crate) const SHARE_ROLES: [&str; 9] = [
     "caller-pidfd",
     "caller-image",
     "root-control",
@@ -30,11 +30,11 @@ pub const SHARE_ROLES: [&str; 9] = [
     "operation-lock",
 ];
 /// Whether a validated context transfers into the NAS share.
-pub fn share(context: &Value) -> bool {
+pub(crate) fn share(context: &Value) -> bool {
     context["role"] == SHARE_ROLE
 }
 /// The descriptor roles of a validated context, in send order.
-pub fn roles(context: &Value) -> &'static [&'static str; 9] {
+pub(crate) fn roles(context: &Value) -> &'static [&'static str; 9] {
     if share(context) { &SHARE_ROLES } else { &ROLES }
 }
 const SHARE_ROLE: &str = "backup-transfer-share-context";
@@ -43,7 +43,7 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str> {
         .as_str()
         .ok_or_else(|| Error("transfer request text field".into()))
 }
-pub fn context(v: &Value) -> Result<()> {
+pub(crate) fn context(v: &Value) -> Result<()> {
     if share(v) {
         return share_context(v);
     }
@@ -201,7 +201,7 @@ fn share_context(v: &Value) -> Result<()> {
         "bounded share transfer context",
     )
 }
-pub fn request(v: &Value) -> Result<()> {
+pub(crate) fn request(v: &Value) -> Result<()> {
     json::fields(v, "schema kind id boot_id worker context")?;
     require(
         v["schema"] == 1 && v["kind"] == "captured-backup-transfer",
@@ -218,7 +218,7 @@ pub fn request(v: &Value) -> Result<()> {
         "bounded sealed transfer request",
     )
 }
-pub fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<Vec<u32>> {
+pub(crate) fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<Vec<u32>> {
     request(request_value)?;
     json::fields(v, "schema kind id request_sha256 descriptor_numbers intent")?;
     require(

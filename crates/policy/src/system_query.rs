@@ -159,7 +159,7 @@ impl Folder {
 }
 
 /// OS release is data, never shell input. Only the five legacy public keys escape.
-pub fn os_release(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn os_release(bytes: &[u8]) -> Result<Value> {
     require(
         bytes.len() <= 16384 && !bytes.contains(&0),
         "OS release byte bound",
@@ -205,7 +205,7 @@ pub fn marker(cmdline: &[u8]) -> Result<Option<String>> {
     }
     Ok(marker)
 }
-pub fn package_version(bytes: &[u8], name: &str) -> Result<Value> {
+pub(crate) fn package_version(bytes: &[u8], name: &str) -> Result<Value> {
     let text = std::str::from_utf8(bytes).map_err(|_| Error("package status encoding".into()))?;
     let words = text.split_whitespace().collect::<Vec<_>>();
     if words.is_empty() {
@@ -228,7 +228,7 @@ const PACKAGES: [&str; 4] = [
     "linux",
     "linux-lts",
 ];
-pub fn package_rows(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn package_rows(bytes: &[u8]) -> Result<Value> {
     require(bytes.len() <= 16384, "package status output bound")?;
     let text =
         std::str::from_utf8(bytes).map_err(|_| Error("package inventory encoding".into()))?;

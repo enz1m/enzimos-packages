@@ -30,9 +30,9 @@ use std::{
     path::Path,
 };
 /// The newest update pair (`old-<id>` fallback and `<id>`) is never offered.
-pub const KEEP_NEWEST: usize = 2;
+pub(crate) const KEEP_NEWEST: usize = 2;
 /// A bounded number of destructive retirements per run.
-pub const MAX_RETIREMENTS: usize = 4;
+pub(crate) const MAX_RETIREMENTS: usize = 4;
 const TRANSIENT_FOLDERS: [&str; 2] = ["boot-stage", "module-views"];
 const MAX_TREE_DEPTH: usize = 32;
 const MAX_TREE_MEMBERS: u64 = 1_000_000;
@@ -70,7 +70,7 @@ pub fn candidates(
 /// Why transient staging for apply `id` must stay, or None when it is provably
 /// unreferenced: the apply finished, its view and worker are complete or
 /// absent, both of its generations are retired and it is not the last update.
-pub fn transient_blocker(
+pub(crate) fn transient_blocker(
     id: &str,
     applies: &Records,
     module_views: &Value,
@@ -452,6 +452,7 @@ fn empty(
         }
         let name = CString::new(name.as_bytes())
             .map_err(|_| Error("transient member name encoding".into()))?;
+        // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::stat = unsafe { std::mem::zeroed() };
         require(
             unsafe {

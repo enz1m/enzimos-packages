@@ -4,7 +4,7 @@ use enzimos_platform::{Result, files, mount_identity, require};
 use std::{
     fs::File,
     os::{
-        fd::{AsFd, AsRawFd, BorrowedFd},
+        fd::{AsFd, BorrowedFd},
         unix::fs::MetadataExt,
     },
     path::{Path, PathBuf},

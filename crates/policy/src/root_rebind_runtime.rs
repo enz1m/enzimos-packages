@@ -229,7 +229,7 @@ impl Adapter for Runtime<'_> {
 pub fn prepare_locked(id: &str, lock: &files::Lock) -> Result<Value> {
     prepare_authorized(id, lock, &mut || lock.recheck())
 }
-pub fn prepare_authorized(
+pub(crate) fn prepare_authorized(
     id: &str,
     lock: &files::Lock,
     authorize: &mut dyn FnMut() -> Result<()>,

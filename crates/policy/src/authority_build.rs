@@ -72,7 +72,7 @@ pub struct Prepared {
     source_authority: PathBuf,
 }
 impl Prepared {
-    pub fn recheck_material(&self) -> Result<()> {
+    pub(crate) fn recheck_material(&self) -> Result<()> {
         for (input, owner) in &self.inputs {
             if !input.path.starts_with(&self.source_authority) {
                 input.recheck(*owner)?;
