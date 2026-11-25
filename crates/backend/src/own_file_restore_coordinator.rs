@@ -23,7 +23,7 @@ fn measure(
         "grant_registry_sha256":original["grant_registry_sha256"]}),
     )
 }
-pub fn observe(guard: &Guard, selection: &Value, uid: u32) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard, selection: &Value, uid: u32) -> Result<Value> {
     enzimos_policy::operation::root_only()?;
     enzimos_policy::namespaces::initial()?;
     let lock = enzimos_policy::operation::lock()?;
@@ -46,7 +46,7 @@ pub fn observe(guard: &Guard, selection: &Value, uid: u32) -> Result<Value> {
         measure(&context, &recipient, &mut || Ok(()))
     })
 }
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     id: &str,
     selection: &Value,

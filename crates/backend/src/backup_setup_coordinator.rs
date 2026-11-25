@@ -37,7 +37,7 @@ impl Finished {
 /// settled by `backup_setup_failure`: this run's own publications are retracted
 /// when no repository can exist and no pin was bound; otherwise they are kept
 /// for inspection and `enzimos-policy backup-setup reset-uncertain`.
-pub fn run(
+pub(crate) fn run(
     plan: &Plan<'_, '_, '_>,
     review_sha: &str,
     input: &Validated,
@@ -198,7 +198,10 @@ fn abandon_intent(
     });
     failure::settle(error, facts, || outer.retract(lock))
 }
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained provisioning input."
+)]
 fn publish_and_provision(
     plan: &Plan<'_, '_, '_>,
     restic: &Image,

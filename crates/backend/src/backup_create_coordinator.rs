@@ -28,7 +28,7 @@ use serde_json::{Value, json as value};
 /// backup drive the backup goes straight into the ready NAS share (see
 /// `shared`). The outcome is recorded as the backup run status, like a
 /// scheduled run.
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     id: &str,
     expected: &Value,
@@ -284,7 +284,7 @@ fn execute_locked(
     authorize()?;
     inventory.recheck()?;
     destination.require_writable()?;
-    let attempt = Attempt::begin(guard, &lock)?;
+    let attempt = Attempt::begin(guard, lock)?;
     let mut boundary = || {
         authorize()?;
         guard.recheck()?;

@@ -13,23 +13,23 @@ use enzimos_platform::{Error, Result};
 use std::path::Path;
 
 /// Prefix of an error whose rollback was proven (see `settle`).
-pub const ROLLED_BACK: &str = "setup-rolled-back: ";
+pub(crate) const ROLLED_BACK: &str = "setup-rolled-back: ";
 /// The failure was settled by a proven rollback; a new review can start.
-pub fn proven_rollback(error: &Error) -> bool {
+pub(crate) fn proven_rollback(error: &Error) -> bool {
     error.0.starts_with(ROLLED_BACK)
 }
 /// Prefix an error with the fixed setup step that produced it.
-pub fn step<T>(name: &'static str, result: Result<T>) -> Result<T> {
+pub(crate) fn step<T>(name: &'static str, result: Result<T>) -> Result<T> {
     result.map_err(|error| Error(format!("{name}: {}", error.0)))
 }
-pub fn log(line: &str) {
+pub(crate) fn log(line: &str) {
     eprintln!(
         "enzimos-system-backend: backup setup: {}",
         enzimos_policy::diagnostic::bounded(line)
     );
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Facts {
+pub(crate) struct Facts {
     /// Repository creation was entered on the destination device.
     pub repository_entered: bool,
     /// Anything is still mounted at or below /backup-repository.
@@ -43,11 +43,11 @@ pub struct Facts {
     pub intents_unfinished: bool,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Decision {
+pub(crate) enum Decision {
     Retract,
     Retain(&'static str),
 }
-pub fn decide(facts: Facts) -> Decision {
+pub(crate) fn decide(facts: Facts) -> Decision {
     if facts.destination_mounted {
         Decision::Retain("/backup-repository is still mounted")
     } else if facts.pin_present {
@@ -87,7 +87,7 @@ fn unfinished(directory: &Path) -> Result<bool> {
 }
 /// The proof `enzimos-policy backup-setup reset-uncertain` leaves after it
 /// retracted one setup request (Root-private, in the control directory).
-pub fn reset_proof() -> Result<Option<serde_json::Value>> {
+pub(crate) fn reset_proof() -> Result<Option<serde_json::Value>> {
     use enzimos_platform::{files, require};
     use std::os::unix::fs::MetadataExt;
     let control = files::directory(Path::new(enzimos_policy::operation::CONTROL), Some(0))?;
@@ -109,7 +109,7 @@ pub fn reset_proof() -> Result<Option<serde_json::Value>> {
 /// Whether a reset proof settles this `uncertain` enrollment as rolled back:
 /// it names this exact request and plan, and the live facts allow the same
 /// retraction an in-process rollback requires.
-pub fn reset_settles(
+pub(crate) fn reset_settles(
     record: &serde_json::Value,
     proof: Option<&serde_json::Value>,
     facts: Facts,
@@ -125,7 +125,7 @@ pub fn reset_settles(
         && decide(facts) == Decision::Retract
 }
 /// Live facts from the kernel mount table and the fixed publication names.
-pub fn observe(repository_entered: bool) -> Result<Facts> {
+pub(crate) fn observe(repository_entered: bool) -> Result<Facts> {
     let rows = enzimos_policy::storage_runtime::rows()?;
     let control = Path::new(enzimos_policy::operation::CONTROL);
     let etc = Path::new("/etc/enzimos");
@@ -145,7 +145,11 @@ pub fn observe(repository_entered: bool) -> Result<Facts> {
 /// Log the failure, then retract only when `decide` allows it. Returns the
 /// original error; settlement never turns a failure into success. A proven
 /// rollback is marked with `ROLLED_BACK` so the job ledger can say so.
-pub fn settle(error: Error, facts: Result<Facts>, retract: impl FnOnce() -> Result<()>) -> Error {
+pub(crate) fn settle(
+    error: Error,
+    facts: Result<Facts>,
+    retract: impl FnOnce() -> Result<()>,
+) -> Error {
     log(&format!("failed at {}", error.0));
     match facts.map(decide) {
         Ok(Decision::Retract) => match retract() {

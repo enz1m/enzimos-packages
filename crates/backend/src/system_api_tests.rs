@@ -277,6 +277,10 @@ async fn terminal(proxy: &Proxy<'_>, id: &str) -> Value {
     .unwrap()
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[expect(
+    clippy::await_holding_lock,
+    reason = "The guard serializes this test against fork-based fixtures for its whole run."
+)]
 async fn actual_sender_authority_revocation_and_provider_owner_changes_never_replay() {
     let _fork_guard = crate::LOCK_FIXTURE_GUARD.lock().unwrap();
     let uid = enzimos_platform::process_identity::real_uid();
@@ -387,7 +391,7 @@ async fn actual_sender_authority_revocation_and_provider_owner_changes_never_rep
     )
     .unwrap();
     let approval_authority = authority.clone();
-    let api = Api::new(authority, store, provider.clone())
+    let api = Api::new(authority, store, std::sync::Arc::clone(&provider))
         .with_history(history)
         .with_setup(setup);
     let service = tokio::spawn(system_service::serve(stream, api, Duration::from_secs(60)));

@@ -16,7 +16,7 @@ use serde_json::{Value, json as value};
 fn selection(input: &Value) -> Result<&str> {
     super::system_selection::validate(14, input)?;
     json::fields(input, "id")?;
-    Ok(input["id"].as_str().unwrap())
+    enzimos_platform::json::string(&input["id"])
 }
 fn execute(
     guard: &Guard,
@@ -32,16 +32,13 @@ fn execute(
     let root = super::root_retirement_stage_coordinator::root_uuid(id)?;
     let lock = operation::lock()?;
     let journal = Journal::observe(guard, &lock, id, Phase::Deleted)?;
-    let fingerprint = journal.record()?["plan_sha256"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let fingerprint = enzimos_platform::json::string(&journal.record()?["plan_sha256"])?.to_owned();
     let mut permission = || {
         authorize()?;
         guard.recheck()?;
         lock.recheck()?;
         refs.require_root_target(
-            guard.configuration["filesystem_uuid"].as_str().unwrap(),
+            enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
             &root,
             &fingerprint,
         )
@@ -129,10 +126,10 @@ fn execute(
         ))),
     }
 }
-pub fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
     execute(guard, input, refs, None, &mut || Ok(()), &mut |_| Ok(()))
 }
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     input: &Value,
     expected: &Value,

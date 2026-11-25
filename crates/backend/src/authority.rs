@@ -42,18 +42,26 @@ fn string(p: &Properties, key: &str, max: usize) -> Result<String> {
     )?;
     Ok(s)
 }
+/// A caller bound to its live logind session.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Peer {
+    /// Logind session ID of the caller.
     pub session: String,
+    /// Session the request originated from when it differs, such as a user switch.
     pub origin_session: Option<String>,
+    /// Logind user ID path of the caller.
     pub id: String,
+    /// Caller user ID.
     pub uid: u32,
+    /// Caller process ID.
     pub pid: u32,
+    /// Seat of the session.
     pub seat: String,
+    /// Session type, such as `wayland` or `tty`.
     #[serde(rename = "type")]
     pub kind: String,
 }
-pub fn session_peer(
+pub(crate) fn session_peer(
     p: &Properties,
     session: &str,
     origin: Option<String>,
@@ -95,6 +103,7 @@ pub fn session_peer(
         kind,
     })
 }
+/// Logind session binding and polkit authorization for system bus callers.
 #[derive(Clone)]
 pub struct Authority {
     connection: Connection,
@@ -105,16 +114,16 @@ pub struct Authority {
     /// never authorize again, so long-lived services should restart.
     stale: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
+/// A polkit approval for one sender and action, valid until its deadline.
 pub struct Grant {
     sender: String,
+    /// The approved caller.
     pub peer: Peer,
     deadline: Instant,
 }
 #[cfg(feature = "update-worker")]
 #[path = "authority_setup.rs"]
 mod setup;
-#[cfg(feature = "update-worker")]
-pub use setup::SetupApproval;
 struct PendingAuthorization {
     connection: Connection,
     owner: OwnedUniqueName,
@@ -148,6 +157,11 @@ impl Drop for PendingAuthorization {
     }
 }
 impl Authority {
+    /// Connect to the system bus as Root and pin the logind and polkit owners.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller is Root, or when the bus, logind or polkit is unavailable.
     pub async fn system() -> Result<Self> {
         require(
             enzimos_platform::process_identity::effective_uid() == 0,
@@ -156,6 +170,11 @@ impl Authority {
         let c = bounded(Connection::system(), 5).await?;
         Self::new(c).await
     }
+    /// Pin the logind and polkit owners on `connection`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when logind or polkit has no owner on the bus.
     pub async fn new(connection: Connection) -> Result<Self> {
         let mut authority = Self::sessions(connection).await?;
         let daemon = bounded(DBusProxy::new(&authority.connection), 2).await?;
@@ -172,6 +191,10 @@ impl Authority {
     }
     /// logind session binding only, for services whose callers need no polkit
     /// approval; polkit need not be running.
+    ///
+    /// # Errors
+    ///
+    /// Fails when logind has no owner on the bus.
     pub async fn sessions(connection: Connection) -> Result<Self> {
         let daemon = bounded(DBusProxy::new(&connection), 2).await?;
         let login_owner = bounded(
@@ -188,6 +211,7 @@ impl Authority {
             stale: Default::default(),
         })
     }
+    /// The bus connection used for queries.
     pub fn connection(&self) -> &Connection {
         &self.connection
     }
@@ -258,6 +282,12 @@ impl Authority {
         )?;
         Ok((uid, pid))
     }
+    /// Bind a bus sender to its live logind session.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the sender's credentials or session cannot be read, change during the lookup, or
+    /// logind's owner changed.
     pub async fn peer(&self, sender: &str) -> Result<Peer> {
         self.owners().await?;
         let (uid, pid) = self.credentials(sender).await?;
@@ -271,6 +301,10 @@ impl Authority {
     }
     /// Bind credentials the caller obtained from another bus (such as a user
     /// bus) to their live logind session. The caller rechecks its own peer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the process has no qualifying live session, or logind refuses or changes owner.
     pub async fn session_for(&self, uid: u32, pid: u32) -> Result<Peer> {
         require(
             (1000..u32::MAX).contains(&uid) && (1..i32::MAX as u32).contains(&pid),
@@ -351,6 +385,13 @@ impl Authority {
         self.owners().await?;
         Ok(result)
     }
+    /// Ask polkit whether `sender` may perform `action`, returning a grant valid for `valid_for_ms`
+    /// from `arrived`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the action name is invalid, the request expired, the sender has no live session,
+    /// or polkit refuses or is unavailable.
     pub async fn authorize(
         &self,
         sender: &str,
@@ -416,7 +457,7 @@ impl Authority {
     /// The original caller is still the same live peer in the same active,
     /// unlocked local session. Unlike `recheck`, this has no request deadline:
     /// an admitted job may legitimately run far longer than its request window.
-    pub async fn still_bound(&self, grant: &Grant) -> Result<()> {
+    pub(crate) async fn still_bound(&self, grant: &Grant) -> Result<()> {
         require(
             tokio::time::timeout(Duration::from_secs(5), self.peer(&grant.sender))
                 .await
@@ -425,6 +466,11 @@ impl Authority {
             "caller-session-changed",
         )
     }
+    /// Verify a grant is unexpired and its sender is still the same session peer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the grant expired or the sender's session changed.
     pub async fn recheck(&self, grant: &Grant) -> Result<()> {
         require(Instant::now() < grant.deadline, "request-expired")?;
         require(

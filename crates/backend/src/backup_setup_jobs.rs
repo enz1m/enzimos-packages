@@ -9,14 +9,14 @@ use enzimos_platform::{Error, Result, require, secret};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tokio::sync::OwnedSemaphorePermit;
-pub type Guard = Box<dyn Fn() -> Result<()> + Send + Sync>;
-pub type Ledger = Arc<Mutex<SetupStore<Guard>>>;
+pub(crate) type Guard = Box<dyn Fn() -> Result<()> + Send + Sync>;
+pub(crate) type Ledger = Arc<Mutex<SetupStore<Guard>>>;
 pub(crate) fn lock(ledger: &Ledger) -> Result<std::sync::MutexGuard<'_, SetupStore<Guard>>> {
     ledger
         .lock()
         .map_err(|_| Error("job-store-needs-review".into()))
 }
-pub struct Ticket<P> {
+pub(crate) struct Ticket<P> {
     ledger: Ledger,
     provider: Arc<P>,
     _permit: OwnedSemaphorePermit,
@@ -33,7 +33,11 @@ pub struct Ticket<P> {
     settled: bool,
 }
 impl<P: Provider> Ticket<P> {
-    pub fn review(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct admitted request input."
+    )]
+    pub(crate) fn review(
         ledger: Ledger,
         provider: Arc<P>,
         permit: OwnedSemaphorePermit,
@@ -52,7 +56,7 @@ impl<P: Provider> Ticket<P> {
         if !created {
             return Ok((response, None));
         }
-        let sha = response["plan_sha256"].as_str().unwrap().into();
+        let sha = enzimos_platform::json::string(&response["plan_sha256"])?.into();
         Ok((
             response,
             Some(Self {
@@ -73,7 +77,11 @@ impl<P: Provider> Ticket<P> {
             }),
         ))
     }
-    pub fn input(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct admitted request input."
+    )]
+    pub(crate) fn input(
         ledger: Ledger,
         provider: Arc<P>,
         permit: OwnedSemaphorePermit,
@@ -111,7 +119,7 @@ impl<P: Provider> Ticket<P> {
     }
     /// Run the admitted worker once. Every failure is written to the journal
     /// with the request ID, the phase and a bounded reason (never input bytes).
-    pub fn run(self, authority: Authority, runtime: tokio::runtime::Handle) -> Result<()> {
+    pub(crate) fn run(self, authority: Authority, runtime: tokio::runtime::Handle) -> Result<()> {
         let id = self.id.clone();
         let input = self.input.is_some();
         let result = self.execute(authority, runtime);
@@ -131,7 +139,7 @@ impl<P: Provider> Ticket<P> {
             authority.approve_setup(&self.sender, self.interaction, self.arrived, &self.peer),
         )
         .map_err(|e| Error(format!("approval: {}", e.0)))?;
-        let caller = self.caller.clone();
+        let caller = std::sync::Arc::clone(&self.caller);
         let authorize = || {
             caller.recheck()?;
             blocking(&runtime, scope.recheck(&authority))?;
@@ -172,7 +180,7 @@ impl<P: Provider> Ticket<P> {
             self.settled = true;
             return Ok(());
         }
-        let ledger = self.ledger.clone();
+        let ledger = std::sync::Arc::clone(&self.ledger);
         let id = self.id.clone();
         let uid = self.uid;
         let sha = self.sha.clone();
@@ -182,7 +190,7 @@ impl<P: Provider> Ticket<P> {
             self.settled = true;
             Ok(())
         };
-        let provider = self.provider.clone();
+        let provider = std::sync::Arc::clone(&self.provider);
         provider.backup_review(&state["plan"], &authorize, &mut publish)?;
         require(
             self.settled,

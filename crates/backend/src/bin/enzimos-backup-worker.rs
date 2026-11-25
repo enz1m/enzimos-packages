@@ -19,12 +19,16 @@ fn execute() -> enzimos_platform::Result<()> {
         rlim_max: 0,
     };
     require(
+        // SAFETY: `core` is a valid rlimit that outlives the call.
         unsafe { libc::setrlimit(libc::RLIMIT_CORE, &core) } == 0
+            // SAFETY: prctl(PR_SET_DUMPABLE) takes no pointers.
             && unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "backup worker process protection unavailable",
     )?;
     std::env::set_current_dir("/")?;
     for (name, _) in std::env::vars_os() {
+        // SAFETY: The process is still single-threaded here, so no other thread reads the
+        // environment.
         unsafe {
             std::env::remove_var(name);
         }
@@ -35,6 +39,8 @@ fn execute() -> enzimos_platform::Result<()> {
         ("LANG", "C.UTF-8"),
         ("LC_ALL", "C.UTF-8"),
     ] {
+        // SAFETY: The process is still single-threaded here, so no other thread reads the
+        // environment.
         unsafe {
             std::env::set_var(name, v);
         }

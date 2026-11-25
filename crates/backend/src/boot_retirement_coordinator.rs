@@ -46,13 +46,13 @@ fn measurement(
     let result = value!({"context_sha256":json::fingerprint(original)?,
         "backend_sha256":json::fingerprint(&refs.refs.planning_evidence()?)?,
         "intent_sha256":intent["intent_sha256"],
-        "steps":intent["steps"].as_array().unwrap().iter().map(|s|s["id"].clone()).collect::<Vec<_>>(),
+        "steps":enzimos_platform::json::array(&intent["steps"])?.iter().map(|s|s["id"].clone()).collect::<Vec<_>>(),
         "root_subvolume_retained":true});
-    refs.protect(original["generation"].as_str().unwrap())?;
+    refs.protect(enzimos_platform::json::string(&original["generation"])?)?;
     context.recheck(authorize)?;
     Ok(result)
 }
-pub fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
     operation::root_only()?;
     enzimos_policy::namespaces::initial()?;
     let (generation, sha) = selection(input)?;
@@ -74,7 +74,7 @@ pub fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Val
     permission()?;
     Ok(measured)
 }
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     input: &Value,
     expected: &Value,

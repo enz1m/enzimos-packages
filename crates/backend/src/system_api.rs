@@ -19,7 +19,7 @@ use std::{
     time::Instant,
 };
 /// Whether the backend may advertise the native backup enrollment workflow.
-pub const BACKUP_SETUP_RUNTIME_QUALIFIED: bool = true;
+pub(crate) const BACKUP_SETUP_RUNTIME_QUALIFIED: bool = true;
 /// The `backup_setup` capability. It is advertised as runtime-qualified only
 /// when this backend actually serves it: a native provider and an open ledger.
 pub(crate) fn backup_setup_capability(served: bool) -> Value {
@@ -82,6 +82,7 @@ impl Drop for Alive {
         self.0.store(false, Ordering::Release);
     }
 }
+/// System1 request handler: authorization, job ledgers and the operation provider.
 pub struct Api<P> {
     authority: Authority,
     provider: Arc<P>,
@@ -91,21 +92,26 @@ pub struct Api<P> {
     setup: Option<super::backup_setup_jobs::Ledger>,
 }
 impl Api<Native> {
+    /// Open the production handler with its native provider and job stores.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the provider or a job store cannot be opened.
     pub async fn open(connection: zbus::Connection) -> Result<Self> {
         let provider = Arc::new(Native::open()?);
-        let original = provider.clone();
+        let original = std::sync::Arc::clone(&provider);
         let guard: Box<dyn Fn() -> Result<()> + Send + Sync> = Box::new(move || original.recheck());
         let store = Store::open(
             &Path::new(enzimos_policy::operation::CONTROL).join("backend-operations"),
             guard,
         )?;
-        let original = provider.clone();
+        let original = std::sync::Arc::clone(&provider);
         let history_guard: super::history_jobs::Guard = Box::new(move || original.recheck());
         let history = super::jobs::JobStore::open(
             &Path::new(enzimos_policy::operation::CONTROL).join("backend-jobs"),
             history_guard,
         )?;
-        let original = provider.clone();
+        let original = std::sync::Arc::clone(&provider);
         let setup_guard: super::backup_setup_jobs::Guard = Box::new(move || original.recheck());
         let setup = super::backup_setup_store::SetupStore::open(
             &Path::new(enzimos_policy::operation::CONTROL).join("backend-backup-setup"),
@@ -119,6 +125,7 @@ impl Api<Native> {
     }
 }
 impl<P: Provider> Api<P> {
+    /// Build a handler over `store` and `provider`.
     pub fn new(
         authority: Authority,
         store: Store<Box<dyn Fn() -> Result<()> + Send + Sync>>,
@@ -126,21 +133,21 @@ impl<P: Provider> Api<P> {
     ) -> Self {
         Self {
             authority,
-            jobs: Arc::new(Jobs::new(store, provider.clone())),
+            jobs: Arc::new(Jobs::new(store, std::sync::Arc::clone(&provider))),
             provider,
             calls: Arc::new(tokio::sync::Semaphore::new(8)),
             history: None,
             setup: None,
         }
     }
-    pub fn with_history(
+    pub(crate) fn with_history(
         mut self,
         store: super::jobs::JobStore<super::history_jobs::Guard>,
     ) -> Self {
         self.history = Some(Arc::new(std::sync::Mutex::new(store)));
         self
     }
-    pub fn with_setup(
+    pub(crate) fn with_setup(
         mut self,
         store: super::backup_setup_store::SetupStore<super::backup_setup_jobs::Guard>,
     ) -> Self {
@@ -174,9 +181,7 @@ impl<P: Provider> Api<P> {
             "background_broker_witness":"InspectBackgroundBroker schema1; observation only, no activation or stop grant"})
     }
     async fn operation(&self, call: Call) -> Result<Reply> {
-        let permit = self
-            .calls
-            .clone()
+        let permit = std::sync::Arc::clone(&self.calls)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let request = wire::Operation::decode(call.body.as_deref().unwrap_or("").as_bytes())?;
@@ -194,9 +199,9 @@ impl<P: Provider> Api<P> {
         let uid = grant.peer.uid;
         let authority = self.authority.clone();
         let runtime = tokio::runtime::Handle::current();
-        let jobs = self.jobs.clone();
+        let jobs = std::sync::Arc::clone(&self.jobs);
         let alive = Alive(Arc::new(AtomicBool::new(true)));
-        let active = alive.0.clone();
+        let active = std::sync::Arc::clone(&alive.0);
         let sender = call.sender;
         let (response, ticket) = tokio::task::spawn_blocking(move || {
             let _permit = permit;
@@ -229,7 +234,7 @@ impl<P: Provider> Api<P> {
             eprintln!(
                 "enzimos-system-backend: {operation} {step} refused: {}",
                 enzimos_policy::diagnostic::bounded(&error.0)
-            )
+            );
         })?;
         if let Some((ticket, grant)) = ticket {
             let authority = self.authority.clone();
@@ -284,9 +289,7 @@ impl<P: Provider> Api<P> {
         Ok(response.into())
     }
     async fn query(&self, call: Call) -> Result<Reply> {
-        let permit = self
-            .calls
-            .clone()
+        let permit = std::sync::Arc::clone(&self.calls)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let request = wire::query(call.body.as_deref().unwrap_or("").as_bytes())?;
@@ -303,8 +306,8 @@ impl<P: Provider> Api<P> {
         let peer = grant.peer.clone();
         let authority = self.authority.clone();
         let runtime = tokio::runtime::Handle::current();
-        let provider = self.provider.clone();
-        let query = request["query"].as_str().unwrap().to_owned();
+        let provider = std::sync::Arc::clone(&self.provider);
+        let query = enzimos_platform::json::string(&request["query"])?.to_owned();
         let name = query.clone();
         let result = tokio::task::spawn_blocking(move || {
             let _permit = permit;
@@ -330,9 +333,7 @@ impl<P: Provider> Api<P> {
         Ok(json!({"schema":1,"query":request["query"],"result":result}).into())
     }
     async fn history(&self, call: Call, execute: bool) -> Result<Reply> {
-        let permit = self
-            .calls
-            .clone()
+        let permit = std::sync::Arc::clone(&self.calls)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let body = call.body.as_deref().unwrap_or("").as_bytes();
@@ -350,7 +351,7 @@ impl<P: Provider> Api<P> {
             .authorize(
                 &call.sender,
                 "org.enzimos.system.home-history-create",
-                request["allow_interaction"].as_bool().unwrap(),
+                enzimos_platform::json::boolean(&request["allow_interaction"])?,
                 call.arrived,
                 150000,
             )
@@ -358,14 +359,14 @@ impl<P: Provider> Api<P> {
         let id = if execute {
             enzimos_platform::files::random_hex(16)?
         } else {
-            request["request_id"].as_str().unwrap().into()
+            enzimos_platform::json::string(&request["request_id"])?.into()
         };
         let authority = self.authority.clone();
         let runtime = tokio::runtime::Handle::current();
-        let jobs = self.jobs.clone();
-        let provider = self.provider.clone();
+        let jobs = std::sync::Arc::clone(&self.jobs);
+        let provider = std::sync::Arc::clone(&self.provider);
         let alive = Alive(Arc::new(AtomicBool::new(true)));
-        let active = alive.0.clone();
+        let active = std::sync::Arc::clone(&alive.0);
         let result = tokio::task::spawn_blocking(move || {
             let _permit = permit;
             let mut commit = || {

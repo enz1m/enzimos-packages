@@ -19,6 +19,10 @@ use serde_json::{Value, json as value};
 /// backup starts when the drive is connected) and exits successfully. A backup
 /// is recorded as `ok` as soon as it is published, before cleanup and the copy
 /// to the NAS share, so neither can turn it into a failure.
+///
+/// # Errors
+///
+/// Fails when the backup itself fails; the outcome is recorded before the error is returned.
 pub fn create(automatic: bool) -> Result<Value> {
     let mut created = false;
     let result = create_inner(automatic, &mut created);

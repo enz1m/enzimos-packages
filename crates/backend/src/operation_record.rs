@@ -6,8 +6,8 @@ use super::{
 };
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
-pub const MAX_DOCUMENT: usize = 8192;
-pub const PROGRESS: [&str; 7] = [
+pub(crate) const MAX_DOCUMENT: usize = 8192;
+pub(crate) const PROGRESS: [&str; 7] = [
     "planned",
     "queued",
     "validating",
@@ -21,19 +21,19 @@ fn invalid() -> Error {
 }
 // System1 job_store's historical canonical bytes include a terminal newline.
 // This differs from native policy receipts and must preserve their own digests.
-pub fn canonical(body: &Value) -> Result<Vec<u8>> {
+pub(crate) fn canonical(body: &Value) -> Result<Vec<u8>> {
     let mut bytes = json::canonical(body)?;
     bytes.push(b'\n');
     Ok(bytes)
 }
-pub fn seal(body: &Value) -> Result<String> {
+pub(crate) fn seal(body: &Value) -> Result<String> {
     Ok(json::sha256(&canonical(body)?))
 }
-pub fn destination_name(path: &str, id: &str) -> Result<String> {
+pub(crate) fn destination_name(path: &str, id: &str) -> Result<String> {
     enzimos_platform::delivery_name::restored(path, id)
 }
 
-pub fn validate(body: &Value) -> Result<()> {
+pub(crate) fn validate(body: &Value) -> Result<()> {
     json::fields(
         body,
         "schema request_id owner_uid operation state progress plan plan_sha256 result",
@@ -44,7 +44,7 @@ pub fn validate(body: &Value) -> Result<()> {
             && body["request_id"].as_str().is_some_and(|s| hex(s, 32))
             && body["owner_uid"]
                 .as_u64()
-                .is_some_and(|n| n < u32::MAX as u64)
+                .is_some_and(|n| n < u64::from(u32::MAX))
             && body["operation"]
                 .as_str()
                 .is_some_and(|s| OPERATIONS.contains(&s)),
@@ -67,8 +67,12 @@ pub fn validate(body: &Value) -> Result<()> {
             && body["plan_sha256"] == seal(&body["plan"])?,
         "job-plan-invalid",
     )?;
-    let operation = body["operation"].as_str().unwrap();
-    let schema = OPERATIONS.iter().position(|s| *s == operation).unwrap() as u64 + 3;
+    let operation = enzimos_platform::json::string(&body["operation"])?;
+    let schema = OPERATIONS
+        .iter()
+        .position(|s| *s == operation)
+        .ok_or_else(|| Error("job-plan-invalid".into()))? as u64
+        + 3;
     if !matches!(schema, 3 | 5) {
         system_selection::validate(schema, &body["plan"]["selection"])?;
     }
@@ -111,14 +115,14 @@ pub fn validate(body: &Value) -> Result<()> {
         "job-record-invalid",
     )
 }
-pub fn initial(id: &str, uid: u32, operation: &str, plan: Value) -> Result<Value> {
+pub(crate) fn initial(id: &str, uid: u32, operation: &str, plan: Value) -> Result<Value> {
     let digest = seal(&plan)?;
     let body = value!({"schema":3,"request_id":id,"owner_uid":uid,"operation":operation,"state":"planned",
         "progress":"planned","plan":plan,"plan_sha256":digest,"result":null});
     validate(&body)?;
     Ok(body)
 }
-pub fn transition(before: &Value, after: &Value) -> Result<()> {
+pub(crate) fn transition(before: &Value, after: &Value) -> Result<()> {
     validate(before)?;
     validate(after)?;
     for key in [
@@ -131,8 +135,8 @@ pub fn transition(before: &Value, after: &Value) -> Result<()> {
     ] {
         require(before[key] == after[key], "job-plan-changed")?;
     }
-    let a = before["state"].as_str().unwrap();
-    let b = after["state"].as_str().unwrap();
+    let a = enzimos_platform::json::string(&before["state"])?;
+    let b = enzimos_platform::json::string(&after["state"])?;
     require(
         matches!(
             (a, b),
@@ -147,9 +151,9 @@ pub fn transition(before: &Value, after: &Value) -> Result<()> {
             PROGRESS
                 .iter()
                 .position(|s| body["progress"] == *s)
-                .unwrap()
+                .ok_or_else(|| Error("job-transition-refused".into()))
         };
-        require(index(after) >= index(before), "job-transition-refused")?;
+        require(index(after)? >= index(before)?, "job-transition-refused")?;
     }
     if matches!(b, "uncertain" | "cancelled") {
         require(
@@ -159,7 +163,7 @@ pub fn transition(before: &Value, after: &Value) -> Result<()> {
     }
     Ok(())
 }
-pub fn public(body: &Value) -> Result<Value> {
+pub(crate) fn public(body: &Value) -> Result<Value> {
     validate(body)?;
     let mut result = serde_json::Map::new();
     for name in [

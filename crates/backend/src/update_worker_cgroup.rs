@@ -11,6 +11,11 @@ use std::{
     },
     path::{Path, PathBuf},
 };
+/// Parse the `populated` flag from a cgroup.events body.
+///
+/// # Errors
+///
+/// Fails when the body is oversized, malformed, or lacks exactly one `populated` row.
 pub fn populated(body: &str) -> Result<bool> {
     require(
         body.len() <= 4096 && !body.contains('\0'),
@@ -55,13 +60,16 @@ fn identity(file: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
 fn genuine(file: &File) -> Result<()> {
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut filesystem: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `filesystem` is a writable `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), &mut filesystem) } == 0
             && filesystem.f_type == 0x63677270,
         "actual cgroup v2 filesystem required",
     )
 }
+/// A worker unit's cgroup directory, retained by descriptor.
 pub struct Group {
     directory: File,
     path: PathBuf,
@@ -72,9 +80,20 @@ impl Group {
         self.recheck()?;
         Ok(&self.directory)
     }
+    /// [`Group::observe_for`] with the update worker definition of job `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `id` is valid, or as [`Group::observe_for`] does.
     pub fn observe(id: &str) -> Result<Self> {
         Self::observe_for(&crate::update_worker_contract::Definition::updater(id)?)
     }
+    /// Open the worker unit's cgroup below `system.slice`.
+    ///
+    /// # Errors
+    ///
+    /// Fails outside the initial namespaces or when the cgroup is not a genuine cgroup v2
+    /// directory.
     pub fn observe_for(definition: &crate::update_worker_contract::Definition) -> Result<Self> {
         enzimos_policy::namespaces::initial()?;
         let path = Path::new("/sys/fs/cgroup/system.slice").join(&definition.unit);
@@ -96,6 +115,11 @@ impl Group {
             "retained worker cgroup changed",
         )
     }
+    /// Whether the cgroup has no processes, accepting its deletion only as proof of emptiness.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the cgroup was replaced or its events cannot be read.
     pub fn empty(&self) -> Result<bool> {
         self.recheck()?;
         match std::fs::symlink_metadata(&self.path) {

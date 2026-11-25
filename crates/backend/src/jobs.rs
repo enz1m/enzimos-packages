@@ -5,12 +5,12 @@ use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::path::Path;
 
-pub fn identifier(s: &str) -> bool {
+pub(crate) fn identifier(s: &str) -> bool {
     s.len() == 32
         && s.bytes()
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
-pub fn validate(record: &Value, id: &str) -> Result<()> {
+pub(crate) fn validate(record: &Value, id: &str) -> Result<()> {
     json::fields(
         record,
         "schema request_id owner_uid operation state snapshot",
@@ -21,7 +21,7 @@ pub fn validate(record: &Value, id: &str) -> Result<()> {
             && identifier(id)
             && record["owner_uid"]
                 .as_u64()
-                .is_some_and(|n| n < u32::MAX as u64)
+                .is_some_and(|n| n < u64::from(u32::MAX))
             && record["operation"] == "home-history-create",
         "job-record-invalid",
     )?;
@@ -61,7 +61,7 @@ pub(crate) fn transition(before: &Value, after: &Value) -> Result<()> {
         "job-transition-refused",
     )
 }
-pub fn public(record: &Value) -> Result<Value> {
+pub(crate) fn public(record: &Value) -> Result<Value> {
     let id = record["request_id"]
         .as_str()
         .ok_or_else(|| Error("job-record-invalid".into()))?;
@@ -70,11 +70,11 @@ pub fn public(record: &Value) -> Result<Value> {
         value!({"schema":2,"operation":record["operation"],"request_id":id,"state":record["state"],"snapshot":record["snapshot"]}),
     )
 }
-pub struct JobStore<G> {
+pub(crate) struct JobStore<G> {
     store: Store<G>,
 }
 impl<G: Fn() -> Result<()>> JobStore<G> {
-    pub fn open(path: &Path, guard: G) -> Result<Self> {
+    pub(crate) fn open(path: &Path, guard: G) -> Result<Self> {
         Self::open_owned(path, 0, guard)
     }
     pub(crate) fn open_owned(path: &Path, owner: u32, guard: G) -> Result<Self> {
@@ -82,11 +82,11 @@ impl<G: Fn() -> Result<()>> JobStore<G> {
             store: Store::open_history(path, owner, guard)?,
         })
     }
-    pub fn status(&self, id: &str, uid: u32) -> Result<Value> {
+    pub(crate) fn status(&self, id: &str, uid: u32) -> Result<Value> {
         self.store.status(id, uid)
     }
     /// true means a fresh durable attempt; a completed row never calls a provider.
-    pub fn prepare(&mut self, id: &str, uid: u32) -> Result<(Value, bool)> {
+    pub(crate) fn prepare(&mut self, id: &str, uid: u32) -> Result<(Value, bool)> {
         match self.status(id, uid) {
             Ok(body) => {
                 require(
@@ -102,7 +102,7 @@ impl<G: Fn() -> Result<()>> JobStore<G> {
         self.store.publish(id, row.clone())?;
         Ok((row, true))
     }
-    pub fn phase(
+    pub(crate) fn phase(
         &mut self,
         id: &str,
         uid: u32,

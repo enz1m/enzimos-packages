@@ -2,8 +2,8 @@
 //! Exact private/public backup setup job contract; no credential material.
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
-pub const MAX_ATTEMPTS: u64 = 8;
-pub fn validate(v: &Value) -> Result<()> {
+pub(crate) const MAX_ATTEMPTS: u64 = 8;
+pub(crate) fn validate(v: &Value) -> Result<()> {
     json::fields(
         v,
         "schema request_id owner_uid state attempts plan plan_sha256",
@@ -66,7 +66,7 @@ pub fn validate(v: &Value) -> Result<()> {
                     || (!matches!(
                         v["state"].as_str(),
                         Some("planned" | "review-awaiting-approval" | "reviewing")
-                    ) && v["attempts"].as_u64().unwrap() > 0),
+                    ) && enzimos_platform::json::unsigned(&v["attempts"])? > 0),
                 "job-record-invalid",
             )?;
         }
@@ -78,7 +78,7 @@ pub fn validate(v: &Value) -> Result<()> {
         "job-plan-invalid",
     )
 }
-pub fn initial(id: &str, uid: u32, plan: Value) -> Result<Value> {
+pub(crate) fn initial(id: &str, uid: u32, plan: Value) -> Result<Value> {
     let state = if plan["operation"] == "backup-device-review" {
         "review-awaiting-approval"
     } else {
@@ -97,16 +97,16 @@ pub fn initial(id: &str, uid: u32, plan: Value) -> Result<Value> {
 /// failure whose rollback could not be proven: do not repeat automatically.
 /// After `enzimos-policy backup-setup reset-uncertain` proves that rollback
 /// for this request, the next status read records it as `rolled-back` too.
-pub fn public(v: &Value) -> Result<Value> {
+pub(crate) fn public(v: &Value) -> Result<Value> {
     validate(v)?;
     Ok(
         value!({"schema":v["schema"],"request_id":v["request_id"],"state":v["state"],"attempts":v["attempts"],"plan_sha256":v["plan_sha256"],
         "mode":v["plan"]["mode"],"automatic_backup_enabled":false,
-        "retryable":v["state"] == "rolled-back" || (v["plan"]["operation"] == "backup-initial-setup" && matches!(v["state"].as_str(),Some("password-retry"|"refused")) && v["attempts"].as_u64().unwrap() < MAX_ATTEMPTS),
+        "retryable":v["state"] == "rolled-back" || (v["plan"]["operation"] == "backup-initial-setup" && matches!(v["state"].as_str(),Some("password-retry"|"refused")) && enzimos_platform::json::unsigned(&v["attempts"])? < MAX_ATTEMPTS),
         "cancellation_available":matches!(v["state"].as_str(),Some("review-awaiting-approval"|"planned"|"awaiting-approval"|"password-retry"|"refused"))}),
     )
 }
-pub fn transition(previous: &Value, next: &Value) -> Result<()> {
+pub(crate) fn transition(previous: &Value, next: &Value) -> Result<()> {
     validate(previous)?;
     validate(next)?;
     require(
@@ -115,8 +115,8 @@ pub fn transition(previous: &Value, next: &Value) -> Result<()> {
             .all(|k| previous[*k] == next[*k]),
         "job-owner-mismatch",
     )?;
-    let from = previous["state"].as_str().unwrap();
-    let to = next["state"].as_str().unwrap();
+    let from = enzimos_platform::json::string(&previous["state"])?;
+    let to = enzimos_platform::json::string(&next["state"])?;
     require(
         matches!(
             (from, to),
@@ -160,7 +160,7 @@ pub fn transition(previous: &Value, next: &Value) -> Result<()> {
             "job-plan-changed",
         )?;
     }
-    let attempts = previous["attempts"].as_u64().unwrap();
+    let attempts = enzimos_platform::json::unsigned(&previous["attempts"])?;
     require(
         next["attempts"]
             == if to == "awaiting-approval" {

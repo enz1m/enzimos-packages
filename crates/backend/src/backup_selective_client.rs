@@ -38,6 +38,7 @@ fn readable(channel: &enzimos_platform::fd_packet::Packet) -> Result<bool> {
         events: libc::POLLIN,
         revents: 0,
     };
+    // SAFETY: `poll` is one writable pollfd and the count is 1.
     let rc = unsafe { libc::poll(&mut poll, 1, 0) };
     require(
         rc >= 0
@@ -51,11 +52,13 @@ fn readable(channel: &enzimos_platform::fd_packet::Packet) -> Result<bool> {
 fn directory(id: &str) -> Result<(File, Listener)> {
     let run = files::directory(Path::new("/run/enzimos"), Some(0))?;
     let m = run.metadata()?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         m.uid() == 0
             && m.gid() == 0
             && m.mode() & 0o7777 == 0o700
+            // SAFETY: `fs` is a writable `libc::statfs` and `run` keeps the descriptor open.
             && unsafe { libc::fstatfs(run.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x01021994,
         "selective export IPC requires original Root-private tmpfs",
@@ -85,7 +88,7 @@ fn directory(id: &str) -> Result<(File, Listener)> {
 /// Run on an owned blocking thread, outside an entered Tokio runtime. The fresh
 /// authorization callback is invoked on the owning thread, never cached as a
 /// Boolean grant. Original process and file actors stay on that thread.
-pub fn launch<'a, 'g>(
+pub(crate) fn launch<'a, 'g>(
     context: &Context<'a, 'g>,
     authorize: &dyn Fn() -> Result<()>,
 ) -> Result<Closed<'g>> {
@@ -93,7 +96,7 @@ pub fn launch<'a, 'g>(
     let mut permission = || authorize();
     context.recheck(&mut permission)?;
     let original = context.evidence(&mut permission)?;
-    let id = original["id"].as_str().unwrap().to_owned();
+    let id = enzimos_platform::json::string(&original["id"])?.to_owned();
     let definition = Definition::backup(&id)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -191,6 +194,10 @@ pub fn launch<'a, 'g>(
             // Deliberately retain these actual descriptors until daemon exit if
             // whole-scope death cannot be proved. Durable intents forbid replay;
             // dropping them here would incorrectly retire a live reservation.
+            #[expect(
+                clippy::mem_forget,
+                reason = "The reservation must outlive this error path."
+            )]
             std::mem::forget(reserved);
             return Err(error);
         }

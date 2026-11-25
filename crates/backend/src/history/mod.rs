@@ -25,7 +25,7 @@ pub const HOME_ROOT: &str = "/home";
 /// Snapshots of the home subvolume.
 pub const SNAPSHOTS: &str = "/home/.snapshots";
 /// Description enzimOS gives home history snapshots (automatic and manual).
-pub const DESCRIPTION: &str = "enzimOS home history";
+pub(crate) const DESCRIPTION: &str = "enzimOS home history";
 /// Most snapshots considered.
 const MAX_SNAPSHOTS: usize = 2000;
 
@@ -61,7 +61,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 
 /// Parse Snapper's `YYYY-MM-DD HH:MM:SS` (UTC).
 #[must_use]
-pub fn parse_date(text: &str) -> Option<i64> {
+pub(crate) fn parse_date(text: &str) -> Option<i64> {
     let b = text.as_bytes();
     if b.len() != 19
         || b[4] != b'-'
@@ -89,7 +89,7 @@ pub fn parse_date(text: &str) -> Option<i64> {
 
 /// Parse one Snapper `info.xml`; `None` unless it is a home history snapshot.
 #[must_use]
-pub fn parse_info(xml: &str) -> Option<Snapshot> {
+pub(crate) fn parse_info(xml: &str) -> Option<Snapshot> {
     if tag(xml, "description")? != DESCRIPTION {
         return None;
     }
@@ -134,7 +134,7 @@ pub fn list(snapshots: &File) -> Result<Vec<Snapshot>> {
 ///
 /// # Errors
 /// Fails when it is gone.
-pub fn open_snapshot(snapshots: &File, number: u32) -> Result<File> {
+pub(crate) fn open_snapshot(snapshots: &File, number: u32) -> Result<File> {
     fsview::open_beneath(
         snapshots,
         Path::new(&format!("{number}/snapshot")),
@@ -155,7 +155,7 @@ impl Owner {
     ///
     /// # Errors
     /// Refuses system accounts and homes outside `/home`.
-    pub fn lookup(uid: u32) -> Result<Self> {
+    pub(crate) fn lookup(uid: u32) -> Result<Self> {
         require((1000..u32::MAX).contains(&uid), "not-authorized")?;
         let account = enzimos_platform::accounts::lookup_uid(uid)?;
         Self::from_home(uid, &account.home)
@@ -164,7 +164,7 @@ impl Owner {
     ///
     /// # Errors
     /// Refuses homes outside `/home` or with unusual components.
-    pub fn from_home(uid: u32, home: &str) -> Result<Self> {
+    pub(crate) fn from_home(uid: u32, home: &str) -> Result<Self> {
         let rel = Path::new(home)
             .strip_prefix(HOME_ROOT)
             .map_err(|_| Error("home-not-covered".into()))?
@@ -194,7 +194,7 @@ impl Owner {
     ///
     /// # Errors
     /// `not-found` when the home did not exist or belonged to someone else.
-    pub fn home_in(&self, snapshot: &File) -> Result<File> {
+    pub(crate) fn home_in(&self, snapshot: &File) -> Result<File> {
         let home = fsview::open_beneath(snapshot, &self.home, libc::O_RDONLY | libc::O_DIRECTORY)?;
         require(home.metadata()?.uid() == self.uid, "not-found")?;
         Ok(home)
@@ -203,7 +203,7 @@ impl Owner {
 
 /// A file's identity for telling versions apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Stamp {
+pub(crate) struct Stamp {
     /// Inode number (kept across Btrfs snapshots).
     pub ino: u64,
     /// Size in bytes.
@@ -218,7 +218,7 @@ pub struct Stamp {
 impl Stamp {
     /// From metadata.
     #[must_use]
-    pub fn of(m: &std::fs::Metadata) -> Self {
+    pub(crate) fn of(m: &std::fs::Metadata) -> Self {
         let t = m.file_type();
         Self {
             ino: m.ino(),
@@ -308,7 +308,7 @@ pub fn versions(
 
 /// One entry of a folder as it was.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Item {
+pub(crate) struct Item {
     /// Name.
     pub name: String,
     /// `f`, `d`, `l` or `o`.
@@ -325,7 +325,7 @@ pub struct Item {
 ///
 /// # Errors
 /// `not-found` when the folder did not exist or was not theirs.
-pub fn folder(
+pub(crate) fn folder(
     owner: &Owner,
     snapshot: &File,
     rel: Option<&Path>,
@@ -365,7 +365,7 @@ pub fn folder(
 ///
 /// # Errors
 /// `not-found` unless it is a regular file the caller owned then.
-pub fn open(owner: &Owner, snapshot: &File, rel: &Path) -> Result<File> {
+pub(crate) fn open(owner: &Owner, snapshot: &File, rel: &Path) -> Result<File> {
     let home = owner.home_in(snapshot)?;
     let file = fsview::open_beneath(&home, rel, libc::O_RDONLY)?;
     let meta = file.metadata()?;
@@ -375,7 +375,7 @@ pub fn open(owner: &Owner, snapshot: &File, rel: &Path) -> Result<File> {
 
 /// The caller's live folder `rel` (`None` = home), if it exists.
 #[must_use]
-pub fn live_folder(owner: &Owner, home_root: &File, rel: Option<&Path>) -> Option<File> {
+pub(crate) fn live_folder(owner: &Owner, home_root: &File, rel: Option<&Path>) -> Option<File> {
     let path = match rel {
         None => owner.home.clone(),
         Some(rel) => owner.home.join(rel),
@@ -385,7 +385,7 @@ pub fn live_folder(owner: &Owner, home_root: &File, rel: Option<&Path>) -> Optio
 
 /// Live metadata of `rel` in the caller's home.
 #[must_use]
-pub fn live_meta(owner: &Owner, home_root: &File, rel: &Path) -> Option<std::fs::Metadata> {
+pub(crate) fn live_meta(owner: &Owner, home_root: &File, rel: &Path) -> Option<std::fs::Metadata> {
     let file = fsview::open_beneath(home_root, &owner.home.join(rel), libc::O_PATH).ok()?;
     file.metadata().ok()
 }

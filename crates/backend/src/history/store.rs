@@ -12,11 +12,11 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
 /// State directory.
-pub const STATE: &str = backup_rules::STATE;
+pub(crate) const STATE: &str = backup_rules::STATE;
 const MAX_EXCLUDED: usize = 256;
 const MAX_REMOVALS: usize = 1000;
 /// Default free space kept on the home filesystem, in percent.
-pub const DEFAULT_FREE_PERCENT: u32 = 15;
+pub(crate) const DEFAULT_FREE_PERCENT: u32 = 15;
 
 /// Where state lives (overridable in tests).
 #[derive(Clone, Debug)]
@@ -50,7 +50,7 @@ fn write_json(path: &Path, value: &Value) -> Result<()> {
 
 /// A queued removal from the external backup.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Removal {
+pub(crate) struct Removal {
     /// Account that asked.
     pub uid: u32,
     /// Path relative to `/home` (e.g. `alice/Documents/a.txt`).
@@ -84,7 +84,7 @@ impl Store {
     ///
     /// # Errors
     /// Refuses invalid or too many exclusions.
-    pub fn set_rules(&self, uid: u32, rules: &Rules) -> Result<()> {
+    pub(crate) fn set_rules(&self, uid: u32, rules: &Rules) -> Result<()> {
         require(rules.excluded.len() <= MAX_EXCLUDED, "too-many-exclusions")?;
         for path in &rules.excluded {
             backup_rules::valid_excluded(path)?;
@@ -120,7 +120,7 @@ impl Store {
     ///
     /// # Errors
     /// Refuses values outside 5–50.
-    pub fn set_free_percent(&self, percent: u32) -> Result<()> {
+    pub(crate) fn set_free_percent(&self, percent: u32) -> Result<()> {
         require((5..=50).contains(&percent), "invalid-free-percent")?;
         write_json(
             &self.root.join("settings.json"),
@@ -129,7 +129,7 @@ impl Store {
     }
     /// Removals from the external backup still to be done.
     #[must_use]
-    pub fn removals(&self) -> Vec<Removal> {
+    pub(crate) fn removals(&self) -> Vec<Removal> {
         read_json(&self.root.join("removals.json"))
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default()
@@ -150,7 +150,7 @@ impl Store {
     ///
     /// # Errors
     /// Refuses more than the bound.
-    pub fn set_removals(&self, removals: &[Removal]) -> Result<()> {
+    pub(crate) fn set_removals(&self, removals: &[Removal]) -> Result<()> {
         require(removals.len() <= MAX_REMOVALS, "too-many-removals")?;
         let rows: Vec<Value> = removals
             .iter()
@@ -172,7 +172,7 @@ impl Store {
     ///
     /// # Errors
     /// Fails on write errors.
-    pub fn set_pruned(&self, numbers: &[u32]) -> Result<()> {
+    pub(crate) fn set_pruned(&self, numbers: &[u32]) -> Result<()> {
         write_json(&self.root.join("pruned.json"), &json!(numbers))
     }
     /// Cached measurement.
@@ -184,7 +184,7 @@ impl Store {
     ///
     /// # Errors
     /// Fails on write errors.
-    pub fn set_usage(&self, usage: &Value) -> Result<()> {
+    pub(crate) fn set_usage(&self, usage: &Value) -> Result<()> {
         write_json(&self.root.join("usage.json"), usage)
     }
     /// Take the history lock (blocking up to `wait`).

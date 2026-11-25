@@ -40,8 +40,15 @@ impl Handler for Fake {
         }
         if call.member == "BackupSetupInput" {
             let mut bytes = [0u8; 14];
-            assert_eq!(call.descriptor.unwrap().read_at(&mut bytes, 0).unwrap(), 14);
-            assert_eq!(&bytes, b"public fixture");
+            let descriptor = call.descriptor.expect("input call carries a descriptor");
+            assert_eq!(
+                descriptor
+                    .read_at(&mut bytes, 0)
+                    .expect("readable descriptor"),
+                14,
+                "whole fixture read"
+            );
+            assert_eq!(&bytes, b"public fixture", "fixture content");
         }
         Ok(Reply {
             body: json!({"schema":1,"member":call.member}),
@@ -110,8 +117,8 @@ async fn exact_frames_descriptor_lifetime_redaction_and_owned_work_idle_gate() {
     let task = tokio::spawn(system_service::serve(
         stream,
         Fake {
-            calls: calls.clone(),
-            active: active.clone(),
+            calls: std::sync::Arc::clone(&calls),
+            active: std::sync::Arc::clone(&active),
             public: File::open(&public).unwrap(),
         },
         Duration::from_millis(100),

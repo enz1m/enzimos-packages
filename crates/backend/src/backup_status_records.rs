@@ -13,7 +13,7 @@ use std::{
     path::Path,
 };
 
-pub struct Receipt {
+pub(crate) struct Receipt {
     pub seconds: i64,
     pub nanoseconds: i64,
     pub state: String,
@@ -143,14 +143,14 @@ impl Folder {
         Ok(())
     }
 }
-pub struct Snapshot<'a> {
+pub(crate) struct Snapshot<'a> {
     guard: &'a Guard,
     control: files::FileIdentity,
     attempts: Option<Folder>,
     jobs: Option<Folder>,
 }
 impl<'a> Snapshot<'a> {
-    pub fn observe(guard: &'a Guard) -> Result<Self> {
+    pub(crate) fn observe(guard: &'a Guard) -> Result<Self> {
         guard.recheck()?;
         let control = files::identity(&guard.control().metadata()?);
         let attempts = Folder::observe(guard, "backup-attempts")?;
@@ -164,7 +164,7 @@ impl<'a> Snapshot<'a> {
         snapshot.recheck()?;
         Ok(snapshot)
     }
-    pub fn recheck(&self) -> Result<()> {
+    pub(crate) fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         for folder in self.attempts.iter().chain(self.jobs.iter()) {
             folder.recheck(self.guard)?;
@@ -174,15 +174,12 @@ impl<'a> Snapshot<'a> {
             "backup status control inventory changed",
         )
     }
-    pub fn latest(&self) -> Result<Option<Receipt>> {
+    pub(crate) fn latest(&self) -> Result<Option<Receipt>> {
         self.recheck()?;
         let value = project(self)?;
         self.recheck()?;
         Ok(value)
     }
-}
-pub fn latest(guard: &Guard) -> Result<Option<Receipt>> {
-    Snapshot::observe(guard)?.latest()
 }
 fn project(snapshot: &Snapshot<'_>) -> Result<Option<Receipt>> {
     let guard = snapshot.guard;
@@ -194,10 +191,13 @@ fn project(snapshot: &Snapshot<'_>) -> Result<Option<Receipt>> {
             let Some(value) = &record.value else {
                 continue;
             };
-            let id = record.name.strip_suffix(".json").unwrap();
+            let id = record
+                .name
+                .strip_suffix(".json")
+                .ok_or_else(|| Error("backup status record name".into()))?;
             let outcome = if folder.name == "backup-attempts" {
                 enzimos_policy::backup_attempt::validate(value, id)?;
-                match value["state"].as_str().unwrap() {
+                match enzimos_platform::json::string(&value["state"])? {
                     "running" if value["boot_id"] == boot => None,
                     "running" | "uncertain" | "abandoned" => Some(("uncertain", None)),
                     "completed" => Some((
@@ -218,7 +218,7 @@ fn project(snapshot: &Snapshot<'_>) -> Result<Option<Receipt>> {
                 if value["operation"] != "backup-create" {
                     None
                 } else {
-                    match value["state"].as_str().unwrap() {
+                    match enzimos_platform::json::string(&value["state"])? {
                         "completed" => Some((
                             "completed",
                             Some(

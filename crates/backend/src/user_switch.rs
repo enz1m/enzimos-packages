@@ -220,7 +220,7 @@ impl Provider {
         for (id, uid, _, _, path) in rows {
             let row = self.session(path.as_str()).await?;
             require(row.id == id && row.uid == uid, "Unavailable")?;
-            result.push(row)
+            result.push(row);
         }
         Ok(result)
     }
@@ -280,7 +280,7 @@ impl Provider {
             "Unavailable",
         )?;
         if existing {
-            policy::existing(&current, &fresh, self.greeter)?
+            policy::existing(&current, &fresh, self.greeter)?;
         } else {
             policy::local(&current, caller.uid, "user", Some(true), Some(true))?;
             policy::local(&fresh, self.greeter, "greeter", None, None)?;
@@ -342,7 +342,7 @@ impl Provider {
                     let row = sessions[i].clone();
                     self.activate(sender, &caller, &row, false).await?;
                     vt = row.vt;
-                    target = Some(row)
+                    target = Some(row);
                 }
                 Choice::Start(n) => {
                     vt = n;
@@ -407,16 +407,16 @@ impl Provider {
                     require(candidates.len() <= 1, "Unavailable")?;
                     if let Some(row) = candidates.into_iter().next() {
                         policy::local(&row, self.greeter, "greeter", None, None)?;
-                        target = Some(row)
+                        target = Some(row);
                     }
                 }
             }
             if let Some(row) = &target {
                 let fresh = self.session(&row.path).await?;
                 if target_id.is_some() {
-                    policy::local(&fresh, row.uid, "user", None, Some(true))?
+                    policy::local(&fresh, row.uid, "user", None, Some(true))?;
                 } else {
-                    policy::local(&fresh, self.greeter, "greeter", None, None)?
+                    policy::local(&fresh, self.greeter, "greeter", None, None)?;
                 }
                 if self.active(row).await? {
                     return Ok(());
@@ -443,7 +443,7 @@ fn request(message: &Message) -> Result<(String, Option<String>)> {
     )?;
     let sender = h.sender().ok_or_else(unavailable)?.to_string();
     require(sender.starts_with(':'), "Not authorized")?;
-    let target = match h.member().map(|s| s.as_str()) {
+    let target = match h.member().map(zbus::names::MemberName::as_str) {
         Some("OpenGreeter") => {
             message
                 .body()
@@ -489,8 +489,8 @@ async fn standard(connection: &Connection, message: &Message) -> Result<bool> {
     }
     let standard = matches!(
         (
-            h.interface().map(|s| s.as_str()),
-            h.member().map(|s| s.as_str())
+            h.interface().map(zbus::names::InterfaceName::as_str),
+            h.member().map(zbus::names::MemberName::as_str)
         ),
         (
             Some("org.freedesktop.DBus.Introspectable"),
@@ -510,9 +510,9 @@ async fn standard(connection: &Connection, message: &Message) -> Result<bool> {
         return Ok(true);
     }
     if h.member().is_some_and(|s| s.as_str() == "Introspect") {
-        bounded(connection.reply(&h, &XML)).await?
+        bounded(connection.reply(&h, &XML)).await?;
     } else {
-        bounded(connection.reply(&h, &())).await?
+        bounded(connection.reply(&h, &())).await?;
     }
     Ok(true)
 }
@@ -522,6 +522,8 @@ fn greeter_uid() -> Result<u32> {
     let mut buffer = vec![0u8; 65536];
     let mut result = std::ptr::null_mut();
     require(
+        // SAFETY: The name is a NUL-terminated literal and the record, buffer and result pointers
+        // are valid for the given sizes.
         unsafe {
             libc::getpwnam_r(
                 c"greeter".as_ptr(),
@@ -534,10 +536,17 @@ fn greeter_uid() -> Result<u32> {
             && !result.is_null(),
         "greeter account unavailable",
     )?;
+    // SAFETY: getpwnam_r returned 0 with a non-null result, so it initialized `record`.
     let uid = unsafe { record.assume_init() }.pw_uid;
     require(uid > 0 && uid < u32::MAX, "greeter account unavailable")?;
     Ok(uid)
 }
+/// Serve the user-switch bus service until idle.
+///
+/// # Errors
+///
+/// Fails unless started by bus activation as Root, or when the greeter account or bus is
+/// unavailable.
 pub async fn serve() -> Result<()> {
     require(
         std::env::args_os().count() == 1
@@ -571,12 +580,14 @@ async fn serve_on(connection: Connection, greeter: u32) -> Result<()> {
                 let Some(message)=message else {return Ok(())};let message=message.map_err(|_|unavailable())?;
                 if message.header().primary().msg_type()!=zbus::message::Type::MethodCall {continue}
                 if standard(&connection, &message).await? {continue}
-                let call=request(&message);
-                if !pending.is_empty() || call.is_err(){reply(&connection,&message,Err(if !pending.is_empty(){Error("Switching is already in progress".into())}else{call.err().unwrap()})).await?;continue}
-                let (sender,target)=call.unwrap();let c=connection.clone();last=tokio::time::Instant::now();
+                let (sender,target)=match request(&message) {
+                    Ok(call) if pending.is_empty() => call,
+                    Err(error) if pending.is_empty() => {reply(&connection,&message,Err(error)).await?;continue}
+                    _ => {reply(&connection,&message,Err(Error("Switching is already in progress".into()))).await?;continue}
+                };let c=connection.clone();last=tokio::time::Instant::now();
                 pending.spawn(async move {let result=tokio::time::timeout(Duration::from_secs(20),async {let p=Provider::observe(c.clone(),greeter).await?;p.switch(&sender,target.as_deref()).await}).await.unwrap_or_else(|_|Err(Error("Switching timed out".into())));reply(&c,&message,result).await});
             },
-            _=tokio::time::sleep_until(last+Duration::from_secs(60)),if pending.is_empty()=>return Ok(())
+            ()=tokio::time::sleep_until(last+Duration::from_secs(60)),if pending.is_empty()=>return Ok(())
         }
     }
 }

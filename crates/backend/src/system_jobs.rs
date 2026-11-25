@@ -19,7 +19,7 @@ impl ReferenceView {
     fn observe(ledger: &Ledger, own: Option<&str>) -> Result<Self> {
         let original = lock(ledger)?.reference_snapshot(own)?;
         Ok(Self {
-            ledger: ledger.clone(),
+            ledger: std::sync::Arc::clone(ledger),
             original,
         })
     }
@@ -37,7 +37,7 @@ impl ReferenceView {
     /// The full original view is still checked at every call.
     pub fn planning_evidence(&self) -> Result<Value> {
         let mut evidence = self.evidence()?;
-        evidence.as_object_mut().unwrap().remove("own_request");
+        enzimos_platform::json::object_mut(&mut evidence)?.remove("own_request");
         Ok(evidence)
     }
     pub fn require_root_target(
@@ -85,12 +85,12 @@ impl enzimos_policy::boot_retirement_context::runtime::References for ReferenceV
         ReferenceView::require_unmentioned(self, generation)
     }
 }
-pub struct Jobs<P> {
+pub(crate) struct Jobs<P> {
     provider: Arc<P>,
     ledger: Ledger,
     worker: Arc<Semaphore>,
 }
-pub struct Ticket<P> {
+pub(crate) struct Ticket<P> {
     provider: Arc<P>,
     ledger: Ledger,
     _permit: OwnedSemaphorePermit,
@@ -125,29 +125,30 @@ fn matches_request(body: &Value, request: &Operation, uid: u32) -> Result<()> {
     Ok(())
 }
 impl<P: Provider> Jobs<P> {
-    pub fn new(store: Store<Guard>, provider: Arc<P>) -> Self {
+    pub(crate) fn new(store: Store<Guard>, provider: Arc<P>) -> Self {
         Self {
             provider,
             ledger: Arc::new(Mutex::new(store)),
             worker: Arc::new(Semaphore::new(1)),
         }
     }
-    pub fn active(&self) -> bool {
+    pub(crate) fn active(&self) -> bool {
         self.worker.available_permits() == 0
     }
     pub(crate) fn worker_permit(&self) -> Result<OwnedSemaphorePermit> {
-        self.worker
-            .clone()
+        std::sync::Arc::clone(&self.worker)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))
     }
-    pub fn status(&self, request: &Operation, uid: u32) -> Result<Value> {
-        let body =
-            lock(&self.ledger)?.status(request.body()["request_id"].as_str().unwrap(), uid)?;
+    pub(crate) fn status(&self, request: &Operation, uid: u32) -> Result<Value> {
+        let body = lock(&self.ledger)?.status(
+            enzimos_platform::json::string(&request.body()["request_id"])?,
+            uid,
+        )?;
         matches_request(&body, request, uid)?;
         record::public(&body)
     }
-    pub fn plan(
+    pub(crate) fn plan(
         &self,
         request: &Operation,
         uid: u32,
@@ -159,8 +160,9 @@ impl<P: Provider> Jobs<P> {
             "operation-unavailable",
         )?;
         authorize()?;
-        let id = request.body()["request_id"].as_str().unwrap();
-        match lock(&self.ledger)?.status(id, uid) {
+        let id = enzimos_platform::json::string(&request.body()["request_id"])?;
+        let existing = lock(&self.ledger)?.status(id, uid);
+        match existing {
             Ok(body) => {
                 matches_request(&body, request, uid)?;
                 return record::public(&body);
@@ -195,7 +197,7 @@ impl<P: Provider> Jobs<P> {
         matches_request(&body, request, uid)?;
         record::public(&body)
     }
-    pub fn cancel(
+    pub(crate) fn cancel(
         &self,
         request: &Operation,
         uid: u32,
@@ -204,7 +206,7 @@ impl<P: Provider> Jobs<P> {
         require(request.action == "cancel", "job-request-invalid")?;
         authorize()?;
         let mut store = lock(&self.ledger)?;
-        let id = request.body()["request_id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&request.body()["request_id"])?;
         let body = store.status(id, uid)?;
         matches_request(&body, request, uid)?;
         if body["state"] == "cancelled" {
@@ -217,16 +219,16 @@ impl<P: Provider> Jobs<P> {
         let next = store.advance(
             id,
             uid,
-            body["plan_sha256"].as_str().unwrap(),
+            enzimos_platform::json::string(&body["plan_sha256"])?,
             "cancelled",
-            body["progress"].as_str().unwrap(),
+            enzimos_platform::json::string(&body["progress"])?,
             Value::Null,
         )?;
         record::public(&next)
     }
     /// The caller must retain and run the returned ticket exactly once.
     /// A duplicate terminal submit returns status without allocating a worker.
-    pub fn submit(
+    pub(crate) fn submit(
         &self,
         request: &Operation,
         uid: u32,
@@ -234,7 +236,7 @@ impl<P: Provider> Jobs<P> {
     ) -> Result<(Value, Option<Ticket<P>>)> {
         require(request.action == "submit", "job-request-invalid")?;
         authorize()?;
-        let id = request.body()["request_id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&request.body()["request_id"])?;
         let body = lock(&self.ledger)?.status(id, uid)?;
         matches_request(&body, request, uid)?;
         match body["state"].as_str() {
@@ -244,9 +246,7 @@ impl<P: Provider> Jobs<P> {
             }
             _ => return Err(Error("job-result-uncertain-no-replay".into())),
         }
-        let permit = self
-            .worker
-            .clone()
+        let permit = std::sync::Arc::clone(&self.worker)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let references = if body["operation"]
@@ -265,12 +265,12 @@ impl<P: Provider> Jobs<P> {
         if let Some(references) = &references {
             references.recheck()?;
         }
-        let digest = body["plan_sha256"].as_str().unwrap().to_owned();
+        let digest = enzimos_platform::json::string(&body["plan_sha256"])?.to_owned();
         let queued =
             lock(&self.ledger)?.advance(id, uid, &digest, "queued", "queued", Value::Null)?;
         let ticket = Ticket {
-            provider: self.provider.clone(),
-            ledger: self.ledger.clone(),
+            provider: std::sync::Arc::clone(&self.provider),
+            ledger: std::sync::Arc::clone(&self.ledger),
             _permit: permit,
             id: id.into(),
             uid,
@@ -282,7 +282,7 @@ impl<P: Provider> Jobs<P> {
     }
 }
 impl<P: Provider> Ticket<P> {
-    pub fn run(mut self, commit: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
+    pub(crate) fn run(mut self, commit: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         let body = lock(&self.ledger)?.status(&self.id, self.uid)?;
         if body["state"] == "cancelled" {
             self.settled = true;
@@ -305,7 +305,7 @@ impl<P: Provider> Ticket<P> {
             "validating",
             Value::Null,
         )?;
-        let ledger = self.ledger.clone();
+        let ledger = std::sync::Arc::clone(&self.ledger);
         let mut progress = |phase: &str| -> Result<()> {
             lock(&ledger)?.advance(
                 &self.id,
@@ -348,21 +348,21 @@ impl<P> Drop for Ticket<P> {
         if self.settled {
             return;
         }
-        if let Ok(mut store) = lock(&self.ledger) {
-            if let Ok(body) = store.status(&self.id, self.uid) {
-                if matches!(body["state"].as_str(), Some("queued" | "running")) {
-                    // Failure to persist is never interpreted as permission to
-                    // replay. Startup retires surviving active rows as uncertain.
-                    let _ = store.advance(
-                        &self.id,
-                        self.uid,
-                        &self.digest,
-                        "uncertain",
-                        body["progress"].as_str().unwrap(),
-                        Value::Null,
-                    );
-                }
-            }
+        if let Ok(mut store) = lock(&self.ledger)
+            && let Ok(body) = store.status(&self.id, self.uid)
+            && matches!(body["state"].as_str(), Some("queued" | "running"))
+            && let Ok(progress) = enzimos_platform::json::string(&body["progress"])
+        {
+            // Failure to persist is never interpreted as permission to
+            // replay. Startup retires surviving active rows as uncertain.
+            let _ = store.advance(
+                &self.id,
+                self.uid,
+                &self.digest,
+                "uncertain",
+                progress,
+                Value::Null,
+            );
         }
     }
 }

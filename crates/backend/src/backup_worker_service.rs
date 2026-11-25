@@ -8,6 +8,12 @@ use enzimos_policy::{
 };
 use serde_json::json as value;
 use std::{path::Path, time::Duration};
+/// Run the backup worker for job `id`: hand off to its Root caller and execute the received
+/// request.
+///
+/// # Errors
+///
+/// Fails when the caller is not the original Root coordinator, or the handoff or request fails.
 pub fn serve(id: &str) -> Result<()> {
     enzimos_policy::namespaces::initial()?;
     enzimos_policy::backup_worker_request::id(id)?;
@@ -171,7 +177,7 @@ pub fn serve(id: &str) -> Result<()> {
         scratch.image_evidence()? == request["restic"],
         "worker consumer image differs from original request",
     )?;
-    let task = Work::parse(request["task"].as_str().unwrap())?;
+    let task = Work::parse(enzimos_platform::json::string(&request["task"])?)?;
     let result = scratch.workflow(
         task,
         handoff.repository_descriptor()?,
@@ -185,6 +191,10 @@ pub fn serve(id: &str) -> Result<()> {
     // receipt. The caller must observe this original pidfd and entire cgroup closed.
     Ok(())
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this worker role."
+)]
 fn transfer(
     runtime: &tokio::runtime::Runtime,
     manager: &Manager,
@@ -240,6 +250,10 @@ fn transfer(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this worker role."
+)]
 fn credential_review(
     runtime: &tokio::runtime::Runtime,
     manager: &Manager,
@@ -277,6 +291,10 @@ fn credential_review(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this worker role."
+)]
 fn selective_file(
     runtime: &tokio::runtime::Runtime,
     manager: &Manager,
@@ -314,6 +332,10 @@ fn selective_file(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this worker role."
+)]
 fn remote_copy(
     runtime: &tokio::runtime::Runtime,
     manager: &Manager,

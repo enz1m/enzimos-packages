@@ -20,25 +20,21 @@ fn selection(input: &Value) -> Result<(&str, &str, &str)> {
     super::system_selection::validate(13, input)?;
     json::fields(input, "id image exit")?;
     Ok((
-        input["id"].as_str().unwrap(),
-        input["image"].as_str().unwrap(),
-        input["exit"].as_str().unwrap(),
+        enzimos_platform::json::string(&input["id"])?,
+        enzimos_platform::json::string(&input["image"])?,
+        enzimos_platform::json::string(&input["exit"])?,
     ))
 }
 pub(crate) fn root_uuid(id: &str) -> Result<String> {
-    require(
-        id.len() == 37 && id.starts_with("root-") && super::system_wire::hex(&id[5..], 32),
-        "Root stage receipt identity",
-    )?;
-    let raw = &id[5..];
-    let uuid = format!(
-        "{}-{}-{}-{}-{}",
-        &raw[..8],
-        &raw[8..12],
-        &raw[12..16],
-        &raw[16..20],
-        &raw[20..]
-    );
+    let raw = id
+        .strip_prefix("root-")
+        .filter(|raw| super::system_wire::hex(raw, 32))
+        .ok_or_else(|| Error("Root stage receipt identity".into()))?;
+    let (a, rest) = raw.split_at(8);
+    let (b, rest) = rest.split_at(4);
+    let (c, rest) = rest.split_at(4);
+    let (d, e) = rest.split_at(4);
+    let uuid = format!("{a}-{b}-{c}-{d}-{e}");
     enzimos_policy::identity::uuid(&uuid)?;
     Ok(uuid)
 }
@@ -57,9 +53,9 @@ fn execute(
     let lock = operation::lock()?;
     let journal = Journal::observe(guard, &lock, id, Phase::Prepared)?;
     let original_row = journal.record()?;
-    let plan = original_row["plan_sha256"].as_str().unwrap().to_owned();
+    let plan = enzimos_platform::json::string(&original_row["plan_sha256"])?.to_owned();
     refs.require_root_target(
-        guard.configuration["filesystem_uuid"].as_str().unwrap(),
+        enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
         &root,
         &plan,
     )?;
@@ -68,7 +64,7 @@ fn execute(
         guard.recheck()?;
         lock.recheck()?;
         refs.require_root_target(
-            guard.configuration["filesystem_uuid"].as_str().unwrap(),
+            enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
             &root,
             &plan,
         )
@@ -175,10 +171,10 @@ fn execute(
         ))),
     }
 }
-pub fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
     execute(guard, input, refs, None, &mut || Ok(()), &mut |_| Ok(()))
 }
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     input: &Value,
     expected: &Value,

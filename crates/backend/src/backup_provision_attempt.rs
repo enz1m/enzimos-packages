@@ -15,7 +15,11 @@ use enzimos_policy::{
     backup_worker_producer::Inputs,
 };
 use std::fs::File;
-pub fn run<'g>(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this worker role."
+)]
+pub(crate) fn run<'g>(
     plan: &'g Plan<'_, '_, '_>,
     restic: &Image,
     outer: &Prepared<'_, '_, '_, '_>,

@@ -15,17 +15,26 @@ use zbus::{
     fdo::{RequestNameFlags, RequestNameReply},
     message::{Flags, Type},
 };
+/// One admitted method call to the system service.
 pub struct Call {
+    /// Method name.
     pub member: String,
+    /// Unique bus name of the caller.
     pub sender: String,
+    /// JSON request body, when the method takes one.
     pub body: Option<String>,
+    /// First passed descriptor, when the method takes one.
     pub descriptor: Option<File>,
     /// `BackupRemoteShareSetup` only: the optional second sealed input.
     pub second: Option<File>,
+    /// When the call arrived, for request deadlines.
     pub arrived: Instant,
 }
+/// A method reply.
 pub struct Reply {
+    /// JSON reply body.
     pub body: Value,
+    /// Descriptor returned with the reply, if any.
     pub descriptor: Option<File>,
 }
 impl From<Value> for Reply {
@@ -36,7 +45,7 @@ impl From<Value> for Reply {
         }
     }
 }
-pub fn validate(message: &Message) -> Result<Call> {
+pub(crate) fn validate(message: &Message) -> Result<Call> {
     let arrived = Instant::now();
     let header = message.header();
     require(
@@ -45,15 +54,17 @@ pub fn validate(message: &Message) -> Result<Call> {
     )?;
     let member = header
         .member()
-        .map(|v| v.as_str())
+        .map(zbus::names::MemberName::as_str)
         .ok_or_else(|| Error("wire-method-unavailable".into()))?;
     let sender = header
         .sender()
-        .map(|v| v.as_str())
+        .map(zbus::names::UniqueName::as_str)
         .ok_or_else(|| Error("unique-system-bus-sender-required".into()))?;
     wire::call(
-        header.path().map(|v| v.as_str()).unwrap_or(""),
-        header.interface().map(|v| v.as_str()).unwrap_or(""),
+        header.path().map_or("", zbus::zvariant::ObjectPath::as_str),
+        header
+            .interface()
+            .map_or("", zbus::names::InterfaceName::as_str),
         member,
         &super::system_header::signature(message.data())?,
         header.primary().flags().contains(Flags::NoReplyExpected),
@@ -121,8 +132,11 @@ pub fn validate(message: &Message) -> Result<Call> {
         arrived,
     })
 }
+/// Request handler served by [`serve`].
 pub trait Handler: Send + Sync + 'static {
+    /// Handle one admitted call.
     fn handle(&self, call: Call) -> impl Future<Output = Result<Reply>> + Send;
+    /// Whether any request is in progress, which keeps the service from idling out.
     fn active(&self) -> bool;
     /// The pinned logind/polkit owner was replaced; this process can never
     /// authorize again and should exit once idle so activation restarts it.
@@ -141,7 +155,10 @@ async fn reply(connection: &Connection, message: &Message, result: Result<Reply>
         Ok(reply) => {
             require(
                 reply.descriptor.is_none()
-                    || message.header().member().map(|m| m.as_str())
+                    || message
+                        .header()
+                        .member()
+                        .map(zbus::names::MemberName::as_str)
                         == Some("BackupRecoveryExport"),
                 "wire-signature",
             )?;
@@ -170,6 +187,12 @@ async fn reply(connection: &Connection, message: &Message, result: Result<Reply>
         }
     }
 }
+/// Serve calls from `stream` with at most eight in flight, returning once idle for `idle` or when
+/// the handler goes stale.
+///
+/// # Errors
+///
+/// Fails when `idle` is out of bounds, the bus name cannot be held, or the bus disconnects.
 pub async fn serve<H: Handler>(
     mut stream: MessageStream,
     handler: H,
@@ -195,16 +218,17 @@ pub async fn serve<H: Handler>(
             next = stream.next() => {
                 let message = next.ok_or_else(|| Error("backend-service-bus-disconnected".into()))?.map_err(|_| Error("backend-service-bus-disconnected".into()))?;
                 if message.header().primary().msg_type() != Type::MethodCall { continue; }
-                let call = validate(&message);
-                if tasks.len() >= 8 || call.is_err() {
-                    // A refused reply that cannot be delivered only concerns that caller.
-                    let _ = reply(&connection, &message, Err(call.err().unwrap_or_else(|| Error("service-busy".into())))).await;
-                    last = tokio::time::Instant::now();
-                    continue;
-                }
-                let call = call.unwrap();
+                let call = match validate(&message) {
+                    Ok(call) if tasks.len() < 8 => call,
+                    refused => {
+                        // A refused reply that cannot be delivered only concerns that caller.
+                        let _ = reply(&connection, &message, Err(refused.err().unwrap_or_else(|| Error("service-busy".into())))).await;
+                        last = tokio::time::Instant::now();
+                        continue;
+                    }
+                };
                 let connection = connection.clone();
-                let handler = handler.clone();
+                let handler = std::sync::Arc::clone(&handler);
                 tasks.spawn(async move {
                     let result = tokio::time::timeout(Duration::from_secs(180), handler.handle(call)).await.unwrap_or_else(|_| Err(Error("backend-result-unknown-do-not-retry-automatically".into())));
                     reply(&connection, &message, result).await

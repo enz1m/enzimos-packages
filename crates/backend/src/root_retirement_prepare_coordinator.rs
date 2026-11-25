@@ -30,7 +30,7 @@ fn execute(
     let (root, sha) = selection(input)?;
     guard.recheck()?;
     refs.require_root_target(
-        guard.configuration["filesystem_uuid"].as_str().unwrap(),
+        enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
         root,
         sha,
     )?;
@@ -40,7 +40,7 @@ fn execute(
         guard.recheck()?;
         lock.recheck()?;
         refs.require_root_target(
-            guard.configuration["filesystem_uuid"].as_str().unwrap(),
+            enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
             root,
             sha,
         )
@@ -93,10 +93,10 @@ fn execute(
         ))),
     }
 }
-pub fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard, input: &Value, refs: &ReferenceView) -> Result<Value> {
     execute(guard, input, refs, None, &mut || Ok(()), &mut |_| Ok(()))
 }
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     input: &Value,
     expected: &Value,

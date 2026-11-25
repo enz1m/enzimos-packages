@@ -28,7 +28,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
-pub struct Finished {
+pub(crate) struct Finished {
     pub closed: Closed,
     pub observation: Observation,
 }
@@ -42,7 +42,7 @@ fn ready(v: &Value, sender: &Credentials, id: &str, pid: u32, invocation: &str) 
     )
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
-pub async fn launch(
+pub(crate) async fn launch(
     intent: &mut Intent<'_>,
     owned: &Scope<'_, '_, '_>,
     inputs: &Inputs<'_>,
@@ -56,7 +56,7 @@ pub async fn launch(
     )?;
     let request = prepared["request"].clone();
     enzimos_policy::backup_worker_request::executable(&request)?;
-    let id = request["id"].as_str().unwrap();
+    let id = enzimos_platform::json::string(&request["id"])?;
     let root = File::from(owned.descriptor()?.try_clone_to_owned()?);
     inputs.recheck(&request, intent.source()?, owned, &root)?;
     let sealed = memfile::sealed("backup-worker-request", &json::canonical(&request)?)?;
@@ -66,11 +66,13 @@ pub async fn launch(
     intent.starting()?;
     let run = files::directory(Path::new("/run/enzimos"), Some(0))?;
     let m = run.metadata()?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         m.uid() == 0
             && m.gid() == 0
             && m.mode() & 0o7777 == 0o700
+            // SAFETY: `fs` is a writable `libc::statfs` and `run` keeps the descriptor open.
             && unsafe { libc::fstatfs(run.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x01021994,
         "backup caller IPC requires original Root-private tmpfs",
@@ -104,8 +106,7 @@ pub async fn launch(
     let kernel = owner.backup_scope(id)?;
     let mut channel: Option<Packet> = None;
     let outcome = async {
-        channel = Some(listener.accept(Duration::from_secs(10))?);
-        let channel = channel.as_ref().unwrap();
+        let channel = channel.insert(listener.accept(Duration::from_secs(10))?);
         let message = channel.receive(4096,0,Duration::from_secs(5))?;
         let invocation = owner.state.invocation.iter().map(|b| format!("{b:02x}")).collect::<String>();
         ready(&json::decode(&message.body,4096)?,&message.sender,id,owner.state.pid,&invocation)?;
@@ -120,7 +121,7 @@ pub async fn launch(
         if let Some(file) = inputs.temporary {descriptors.push(file.as_fd());}
         require(descriptors.len() == enzimos_policy::backup_worker_request::descriptors(&request)?,"backup caller handoff count changed")?;
         let frame = value!({"schema":enzimos_policy::backup_worker_request::FRAME_SCHEMA,"id":id,
-            "request_sha256":json::fingerprint(&request)?,"descriptor_numbers":descriptors.iter().map(|fd| fd.as_raw_fd()).collect::<Vec<_>>()});
+            "request_sha256":json::fingerprint(&request)?,"descriptor_numbers":descriptors.iter().map(std::os::fd::AsRawFd::as_raw_fd).collect::<Vec<_>>()});
         intent.recheck()?;owned.recheck()?;
         channel.send(&json::canonical(&frame)?,&descriptors,Duration::from_secs(2))?;
         let mut caller = Caller::new(intent,&owner,&kernel,&manager).await?;
@@ -154,8 +155,9 @@ pub async fn launch(
         return Err(error);
     }
     drop(channel.take());
+    let observation = outcome?;
     Ok(Finished {
         closed: kernel.close()?,
-        observation: outcome.unwrap(),
+        observation,
     })
 }

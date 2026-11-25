@@ -4,12 +4,19 @@ use enzimos_platform::{Error, Result, require};
 use enzimos_policy::update_worker_record as record;
 use std::collections::HashMap;
 use zbus::zvariant::{OwnedValue, Value};
+/// D-Bus properties of one systemd interface, by name.
 pub type Properties = HashMap<String, OwnedValue>;
+/// One systemd `ExecStart` entry: path, argv, ignore-failure flag, start and exit timestamps, PID,
+/// exit code and status.
 pub type Exec = (String, Vec<String>, bool, u64, u64, u64, u64, u32, i32, i32);
+/// Installed path of the installer package worker.
 pub const INSTALLER_EXECUTABLE: &str =
     "/usr/lib/enzimos-installer/enzimos-installer-package-worker";
+/// RuntimeMaxSec of the installer worker unit.
 pub const INSTALLER_RUNTIME_SECONDS: u64 = 1800;
+/// TimeoutStopSec of the installer worker unit.
 pub const INSTALLER_STOP_SECONDS: u64 = 10;
+/// Installed path of the backup worker.
 pub const BACKUP_EXECUTABLE: &str = "/usr/lib/enzimos-backend/enzimos-backup-worker";
 /// Backup worker unit lifetime (RuntimeMaxSec, and the caller deadlines that
 /// add 20 s to it): the longest worker job, the 25 h NAS copy workflow (12 h
@@ -28,6 +35,11 @@ pub struct Definition {
     pub(crate) stop_seconds: u64,
 }
 impl Definition {
+    /// Definition of the backup worker unit for job `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `id` is a valid worker identifier.
     pub fn backup(id: &str) -> Result<Self> {
         require(
             id.len() == 32
@@ -44,6 +56,11 @@ impl Definition {
             stop_seconds: 10,
         })
     }
+    /// Definition of the update worker unit for job `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `id` is a valid worker identifier.
     pub fn updater(id: &str) -> Result<Self> {
         Ok(Self {
             unit: record::unit(id)?,
@@ -53,6 +70,11 @@ impl Definition {
             stop_seconds: record::STOP_SECONDS,
         })
     }
+    /// Definition of the installer worker unit for job `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `id` is a valid worker identifier.
     pub fn installer(id: &str) -> Result<Self> {
         require(
             id.len() == 32
@@ -69,25 +91,40 @@ impl Definition {
             stop_seconds: INSTALLER_STOP_SECONDS,
         })
     }
+    /// Systemd unit name.
     pub fn unit(&self) -> &str {
         &self.unit
     }
+    /// Absolute path of the worker executable.
     pub fn executable(&self) -> &'static str {
         self.executable
     }
+    /// Command-line arguments after the executable.
     pub fn arguments(&self) -> &[String] {
         &self.arguments
     }
+    /// RuntimeMaxSec of the unit.
     pub fn runtime_seconds(&self) -> u64 {
         self.runtime_seconds
     }
+    /// TimeoutStopSec of the unit.
     pub fn stop_seconds(&self) -> u64 {
         self.stop_seconds
     }
 }
+/// Transient unit properties for the update worker of job `id`.
+///
+/// # Errors
+///
+/// Fails unless `id` is a valid worker identifier.
 pub fn properties(id: &str) -> Result<Vec<(&'static str, Value<'static>)>> {
     properties_for(&Definition::updater(id)?)
 }
+/// Transient unit properties that start `definition` as a confined Root service.
+///
+/// # Errors
+///
+/// Fails when a property value cannot be built.
 pub fn properties_for(definition: &Definition) -> Result<Vec<(&'static str, Value<'static>)>> {
     let starts = vec![(
         definition.executable.to_owned(),
@@ -162,15 +199,24 @@ fn field<T: TryFrom<OwnedValue>>(properties: &Properties, key: &str) -> Result<T
     )
     .map_err(|_| Error("worker unit property type".into()))
 }
+/// Observed unit state used to follow one worker instance.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Snapshot {
+    /// Unit ActiveState.
     pub active: String,
+    /// Main PID, or 0 when none.
     pub pid: u32,
+    /// Systemd invocation ID.
     pub invocation: Vec<u8>,
+    /// Control group path of the unit.
     pub group: String,
 }
 /// GetAll spans two interfaces. Bracket the service sample with Unit state
 /// reads so an observed transition is retried without replaying a mutation.
+///
+/// # Errors
+///
+/// Fails when either sample lacks a well-typed ActiveState or InvocationID.
 pub fn same_unit_epoch(before: &Properties, after: &Properties) -> Result<bool> {
     Ok(
         field::<String>(before, "ActiveState")? == field::<String>(after, "ActiveState")?
@@ -187,9 +233,19 @@ pub fn retained_or_terminal(state: &Snapshot, original: &Snapshot) -> bool {
         && (state.pid == original.pid || state.pid == 0)
         && (state.invocation == original.invocation || (terminal && state.invocation.is_empty()))
 }
+/// [`validate_for`] with the update worker definition of job `id`.
+///
+/// # Errors
+///
+/// Fails unless `id` is a valid worker identifier, or as [`validate_for`] does.
 pub fn validate(unit: &Properties, service: &Properties, id: &str) -> Result<Snapshot> {
     validate_for(unit, service, &Definition::updater(id)?)
 }
+/// Require that sampled unit and service properties match `definition` exactly.
+///
+/// # Errors
+///
+/// Fails when a property is missing, mistyped, or differs from the definition.
 pub fn validate_for(
     unit: &Properties,
     service: &Properties,

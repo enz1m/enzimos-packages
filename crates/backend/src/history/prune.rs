@@ -75,7 +75,11 @@ fn owners_in(root: &File) -> Vec<(Owner, File)> {
 ///
 /// # Errors
 /// Fails when the snapshot cannot be made writable.
-pub fn prune_snapshot(store: &Store, root: &File, homes: Vec<(Owner, File)>) -> Result<Outcome> {
+pub(crate) fn prune_snapshot(
+    store: &Store,
+    root: &File,
+    homes: Vec<(Owner, File)>,
+) -> Result<Outcome> {
     let mut plan = Vec::new();
     for (owner, home) in homes {
         let rules = store.rules(owner.uid);
@@ -137,7 +141,7 @@ pub fn prune_pending(store: &Store, snapshots: &File, list: &[Snapshot]) -> Resu
 ///
 /// # Errors
 /// Fails when a snapshot that holds one of them cannot be changed.
-pub fn forget(
+pub(crate) fn forget(
     owner: &Owner,
     snapshots: &File,
     list: &[Snapshot],

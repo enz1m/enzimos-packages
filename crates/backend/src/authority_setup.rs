@@ -3,8 +3,8 @@
 use super::{Authority, Peer, refused};
 use enzimos_platform::{Result, peer_lifetime::PeerLifetime, require};
 use std::time::{Duration, Instant};
-pub const ACTION: &str = "org.enzimos.system.backup-setup";
-pub struct SetupApproval {
+pub(crate) const ACTION: &str = "org.enzimos.system.backup-setup";
+pub(crate) struct SetupApproval {
     sender: String,
     peer: Peer,
     caller: PeerLifetime,
@@ -13,7 +13,7 @@ pub struct SetupApproval {
     polkit_owner: String,
 }
 impl Authority {
-    pub async fn approve_setup(
+    pub(crate) async fn approve_setup(
         &self,
         sender: &str,
         interaction: bool,
@@ -39,10 +39,7 @@ impl Authority {
     }
 }
 impl SetupApproval {
-    pub fn peer(&self) -> &Peer {
-        &self.peer
-    }
-    pub async fn recheck(&self, authority: &Authority) -> Result<()> {
+    pub(crate) async fn recheck(&self, authority: &Authority) -> Result<()> {
         require(
             Instant::now() < self.deadline
                 && authority.login_owner.as_str() == self.login_owner

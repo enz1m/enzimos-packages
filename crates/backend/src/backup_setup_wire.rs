@@ -2,12 +2,12 @@
 //! Existing setup control/input JSON. No client plan, pathname or command.
 use enzimos_platform::{Result, require};
 use serde_json::Value;
-pub struct Request {
+pub(crate) struct Request {
     body: Value,
     pub action: &'static str,
 }
 impl Request {
-    pub fn decode(bytes: &[u8], input: bool) -> Result<Self> {
+    pub(crate) fn decode(bytes: &[u8], input: bool) -> Result<Self> {
         let body = super::system_wire::decode(bytes, 1024)?;
         super::system_wire::fields(
             &body,
@@ -58,7 +58,7 @@ impl Request {
         }
         Ok(Self { body, action })
     }
-    pub fn body(&self) -> &Value {
+    pub(crate) fn body(&self) -> &Value {
         &self.body
     }
 }

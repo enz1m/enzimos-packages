@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use zbus::{fdo, message::Header, zvariant::OwnedFd};
 
 /// Bus name and object path.
-pub const NAME: &str = "org.enzimos.History1";
+pub(crate) const NAME: &str = "org.enzimos.History1";
 const PATH: &str = "/org/enzimos/History1";
 const IDLE: Duration = Duration::from_secs(60);
 const MEASURE_UNIT: &str = "enzimos-history-measure.service";

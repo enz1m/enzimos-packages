@@ -9,8 +9,8 @@ use enzimos_platform::{Error, Result, require};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tokio::sync::OwnedSemaphorePermit;
-pub type Guard = Box<dyn Fn() -> Result<()> + Send + Sync>;
-pub type Ledger = Arc<Mutex<JobStore<Guard>>>;
+pub(crate) type Guard = Box<dyn Fn() -> Result<()> + Send + Sync>;
+pub(crate) type Ledger = Arc<Mutex<JobStore<Guard>>>;
 fn lock(ledger: &Ledger) -> Result<std::sync::MutexGuard<'_, JobStore<Guard>>> {
     ledger
         .lock()
@@ -28,19 +28,18 @@ impl Drop for Attempt {
         if self.settled {
             return;
         }
-        if let Ok(mut store) = lock(&self.ledger) {
-            if let Ok(row) = store.status(&self.id, self.uid) {
-                if matches!(row["state"].as_str(), Some("prepared" | "running")) {
-                    let _ = store.phase(&self.id, self.uid, "uncertain", None);
-                }
-            }
+        if let Ok(mut store) = lock(&self.ledger)
+            && let Ok(row) = store.status(&self.id, self.uid)
+            && matches!(row["state"].as_str(), Some("prepared" | "running"))
+        {
+            let _ = store.phase(&self.id, self.uid, "uncertain", None);
         }
     }
 }
-pub fn status(ledger: &Ledger, id: &str, uid: u32) -> Result<Value> {
+pub(crate) fn status(ledger: &Ledger, id: &str, uid: u32) -> Result<Value> {
     jobs::public(&lock(ledger)?.status(id, uid)?)
 }
-pub fn run<P: Provider>(
+pub(crate) fn run<P: Provider>(
     ledger: &Ledger,
     shared: &Jobs<P>,
     provider: &P,
@@ -49,7 +48,8 @@ pub fn run<P: Provider>(
     commit: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Value> {
     commit()?;
-    match lock(ledger)?.status(id, uid) {
+    let existing = lock(ledger)?.status(id, uid);
+    match existing {
         Ok(row) => {
             require(
                 row["state"] == "completed",
@@ -67,7 +67,7 @@ pub fn run<P: Provider>(
         return jobs::public(&row);
     }
     let mut attempt = Attempt {
-        ledger: ledger.clone(),
+        ledger: std::sync::Arc::clone(ledger),
         _permit: permit,
         id: id.into(),
         uid,

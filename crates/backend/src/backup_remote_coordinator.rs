@@ -61,7 +61,7 @@ fn measure(
     context.recheck(authorize)?;
     Ok(result)
 }
-pub fn observe(guard: &Guard, role: &str, selected: &Value) -> Result<Value> {
+pub(crate) fn observe(guard: &Guard, role: &str, selected: &Value) -> Result<Value> {
     enzimos_policy::operation::root_only()?;
     enzimos_policy::namespaces::initial()?;
     let (direction, snapshot, receipt) = selection(role, selected)?;
@@ -80,7 +80,7 @@ pub fn observe(guard: &Guard, role: &str, selected: &Value) -> Result<Value> {
     )?;
     measure(&context, role, selected, &mut || Ok(()))
 }
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     role: &str,
     selected: &Value,

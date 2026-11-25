@@ -91,7 +91,12 @@ fn fixture(fail: bool) -> (tempfile::TempDir, Jobs<Fake>, Arc<Fake>, u32) {
         owner: AtomicUsize::new(usize::MAX),
         fail,
     });
-    (temp, Jobs::new(store, provider.clone()), provider, uid)
+    (
+        temp,
+        Jobs::new(store, std::sync::Arc::clone(&provider)),
+        provider,
+        uid,
+    )
 }
 fn planned(jobs: &Jobs<Fake>, id: &str, uid: u32) -> Value {
     jobs.plan(

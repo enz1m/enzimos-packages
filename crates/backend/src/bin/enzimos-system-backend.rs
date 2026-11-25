@@ -58,6 +58,8 @@ fn execute() -> enzimos_platform::Result<i32> {
     enzimos_policy::operation::root_only()?;
     std::env::set_current_dir("/")?;
     for (name, _) in std::env::vars_os() {
+        // SAFETY: The process is still single-threaded here, so no other thread reads the
+        // environment.
         unsafe {
             std::env::remove_var(name);
         }
@@ -68,6 +70,8 @@ fn execute() -> enzimos_platform::Result<i32> {
         ("LANG", "C.UTF-8"),
         ("LC_ALL", "C.UTF-8"),
     ] {
+        // SAFETY: The process is still single-threaded here, so no other thread reads the
+        // environment.
         unsafe {
             std::env::set_var(name, value);
         }
@@ -77,7 +81,9 @@ fn execute() -> enzimos_platform::Result<i32> {
         rlim_max: 0,
     };
     require(
+        // SAFETY: `core` is a valid rlimit that outlives the call.
         unsafe { libc::setrlimit(libc::RLIMIT_CORE, &core) } == 0
+            // SAFETY: prctl(PR_SET_DUMPABLE) takes no pointers.
             && unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "backend-service-confinement-unavailable",
     )?;
@@ -134,7 +140,7 @@ fn execute() -> enzimos_platform::Result<i32> {
     runtime
         .block_on(async {
             let path = Path::new("/run/dbus/system_bus_socket");
-            let parent = files::directory(path.parent().unwrap(), Some(0))?;
+            let parent = files::directory(Path::new("/run/dbus"), Some(0))?;
             let parent_shape = files::identity(&parent.metadata()?);
             let before = std::fs::symlink_metadata(path)?;
             require(
@@ -150,7 +156,7 @@ fn execute() -> enzimos_platform::Result<i32> {
                 .await
                 .map_err(|_| Error("backend-service-bus-unavailable".into()))?
                 .map_err(|_| Error("backend-service-bus-unavailable".into()))?;
-            let named_parent = files::directory(path.parent().unwrap(), Some(0))?;
+            let named_parent = files::directory(Path::new("/run/dbus"), Some(0))?;
             // Directory timestamps are not authority: the bus writes other names.
             let same_parent =
                 |m: &std::fs::Metadata| (m.dev(), m.ino(), m.uid(), m.gid(), m.mode());

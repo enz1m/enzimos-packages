@@ -270,7 +270,7 @@ pub fn measure(store: &Store, history: &[Snapshot], budget: std::time::Duration)
 /// The cached document as one caller may see it: totals, and only their own
 /// home's breakdown.
 #[must_use]
-pub fn for_caller(usage: Option<Value>, uid: u32) -> Value {
+pub(crate) fn for_caller(usage: Option<Value>, uid: u32) -> Value {
     let Some(mut usage) = usage else {
         return json!({"schema": 1, "time": null});
     };

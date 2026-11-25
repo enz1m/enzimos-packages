@@ -19,9 +19,7 @@ use std::{
 };
 impl<P: Provider> Api<P> {
     pub(super) async fn recovery(&self, call: Call) -> Result<Reply> {
-        let permit = self
-            .calls
-            .clone()
+        let permit = std::sync::Arc::clone(&self.calls)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let confirm = call.member == "BackupRecoveryConfirm";
@@ -38,7 +36,7 @@ impl<P: Provider> Api<P> {
             .authorize(
                 &call.sender,
                 action,
-                request["allow_interaction"].as_bool().unwrap(),
+                enzimos_platform::json::boolean(&request["allow_interaction"])?,
                 call.arrived,
                 150000,
             )
@@ -49,9 +47,9 @@ impl<P: Provider> Api<P> {
         let worker = self.jobs.worker_permit()?;
         let authority = self.authority.clone();
         let runtime = tokio::runtime::Handle::current();
-        let provider = self.provider.clone();
+        let provider = std::sync::Arc::clone(&self.provider);
         let alive = Alive(Arc::new(AtomicBool::new(true)));
-        let active = alive.0.clone();
+        let active = std::sync::Arc::clone(&alive.0);
         let (body, descriptor) = tokio::task::spawn_blocking(move || {
             let _permit = permit;
             let _worker = worker;
@@ -64,8 +62,8 @@ impl<P: Provider> Api<P> {
             let result = if confirm {
                 let result = provider.backup_recovery_confirm(
                     uid,
-                    request["ticket"].as_str().unwrap(),
-                    request["assertion"].as_str().unwrap(),
+                    enzimos_platform::json::string(&request["ticket"])?,
+                    enzimos_platform::json::string(&request["assertion"])?,
                     &check,
                 )?;
                 (result, None)

@@ -7,7 +7,7 @@ use std::{
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
 };
-pub const EXECUTABLE: &str = "/usr/lib/enzimos-backend/enzimos-system-backend";
+pub(crate) const EXECUTABLE: &str = "/usr/lib/enzimos-backend/enzimos-system-backend";
 pub trait Provider: Send + Sync + 'static {
     /// Whether this native provider serves the owner-bound appearance publisher.
     fn login_appearance_supported(&self) -> bool {
@@ -143,8 +143,18 @@ impl Native {
         enzimos_policy::namespaces::initial()?;
         enzimos_policy::operation::root_only()?;
         let path = Path::new(EXECUTABLE);
-        let directory = files::directory(path.parent().unwrap(), Some(0))?;
-        let image = files::open_relative(&directory, Path::new(path.file_name().unwrap()))?;
+        let directory = files::directory(
+            path.parent()
+                .ok_or_else(|| Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let image = files::open_relative(
+            &directory,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             image.metadata()?.gid() == 0 && image.metadata()?.mode() & 0o7777 == 0o755,
             "installed native backend image required",
@@ -456,7 +466,7 @@ impl Provider for Native {
             .ok_or_else(|| Error("job-request-invalid".into()))?;
         require(
             self.plan_referenced(
-                plan["operation"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["operation"])?,
                 &plan["selection"],
                 id,
                 0,
@@ -626,7 +636,7 @@ impl Provider for Native {
         };
         super::own_file_restore_coordinator::run(
             &self.guard,
-            plan["request_id"].as_str().unwrap(),
+            enzimos_platform::json::string(&plan["request_id"])?,
             &plan["selection"],
             &plan["observation"],
             owner,
@@ -659,7 +669,7 @@ impl Provider for Native {
             };
             return super::backup_remote_coordinator::run(
                 &self.guard,
-                plan["operation"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["operation"])?,
                 &plan["selection"],
                 &plan["observation"],
                 &authorize,
@@ -730,8 +740,8 @@ impl Provider for Native {
             };
             return super::backup_credential_coordinator::run(
                 &self.guard,
-                plan["operation"].as_str().unwrap(),
-                plan["request_id"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["operation"])?,
+                enzimos_platform::json::string(&plan["request_id"])?,
                 &plan["selection"],
                 &plan["observation"],
                 &authorize,
@@ -757,7 +767,7 @@ impl Provider for Native {
             };
             return runner(
                 &self.guard,
-                plan["request_id"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["request_id"])?,
                 &plan["selection"],
                 &plan["observation"],
                 &authorize,
@@ -777,7 +787,7 @@ impl Provider for Native {
             };
             return super::backup_create_coordinator::run(
                 &self.guard,
-                plan["request_id"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["request_id"])?,
                 &plan["observation"],
                 &authorize,
                 progress,
@@ -788,7 +798,7 @@ impl Provider for Native {
             let result = enzimos_policy::update_apply_runtime::apply_reviewed_backend(
                 &lock,
                 &plan["observation"],
-                plan["request_id"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["request_id"])?,
                 progress,
                 &mut || {
                     self.recheck()?;
@@ -820,7 +830,7 @@ impl Provider for Native {
         let out = match plan["operation"].as_str() {
             Some("recovery-prepare") => enzimos_policy::recovery_prepare::prepare(
                 selection,
-                plan["request_id"].as_str().unwrap(),
+                enzimos_platform::json::string(&plan["request_id"])?,
                 expected,
                 &mut preflight,
             )?,
@@ -834,13 +844,13 @@ impl Provider for Native {
                 enzimos_policy::delivery_cancel::cancel(selection, expected, &mut preflight)?
             }
             Some("network-trust-set") => enzimos_policy::network_trust::set(
-                selection["connection"].as_str().unwrap(),
-                selection["trusted"].as_bool().unwrap(),
+                enzimos_platform::json::string(&selection["connection"])?,
+                enzimos_platform::json::boolean(&selection["trusted"])?,
                 expected,
                 &mut preflight,
             )?,
             Some("home-history-set") => enzimos_policy::home_history_control::set(
-                selection["enabled"].as_bool().unwrap(),
+                enzimos_platform::json::boolean(&selection["enabled"])?,
                 expected,
                 &mut preflight,
             )?,
@@ -863,14 +873,14 @@ impl Provider for Native {
                 enzimos_policy::recovery_run_finish::finish(selection, expected, &mut preflight)?
             }
             Some("backup-schedule-set") => enzimos_policy::backup_schedule::set(
-                selection["enabled"].as_bool().unwrap(),
-                plan["request_id"].as_str().unwrap(),
+                enzimos_platform::json::boolean(&selection["enabled"])?,
+                enzimos_platform::json::string(&plan["request_id"])?,
                 expected,
                 &mut preflight,
             )?,
             Some("battery-action-set") => enzimos_policy::power::set_action(
-                selection["action"].as_str().unwrap(),
-                selection["risk_acknowledged"].as_bool().unwrap(),
+                enzimos_platform::json::string(&selection["action"])?,
+                enzimos_platform::json::boolean(&selection["risk_acknowledged"])?,
                 &mut preflight,
             )?,
             _ => return Err(Error("operation-unavailable".into())),

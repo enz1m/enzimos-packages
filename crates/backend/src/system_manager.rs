@@ -8,27 +8,35 @@ use zbus::{
     names::{BusName, OwnedUniqueName},
     zvariant::{DynamicDeserialize, DynamicType},
 };
+/// Object path of the systemd manager.
 pub const PATH: &str = "/org/freedesktop/systemd1";
-pub const MANAGER: &str = "org.freedesktop.systemd1.Manager";
+pub(crate) const MANAGER: &str = "org.freedesktop.systemd1.Manager";
 async fn bounded<T, F: Future<Output = zbus::Result<T>>>(future: F) -> Result<T> {
     tokio::time::timeout(Duration::from_secs(5), future)
         .await
         .map_err(|_| Error("update manager provider deadline; outcome may be uncertain".into()))?
         .map_err(|_| Error("update manager provider unavailable; no automatic retry".into()))
 }
+/// Systemd on the system bus, pinned to its current owner and process.
 pub struct Manager {
     connection: Connection,
     owner: OwnedUniqueName,
     process: process_identity::Retained,
 }
 impl Manager {
+    /// Connect to the system bus and pin systemd's owner and PID 1.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the bus or systemd is unavailable or its owner is not PID 1 running as Root.
     pub async fn new() -> Result<Self> {
         enzimos_policy::namespaces::initial()?;
         let connection = bounded(Connection::system()).await?;
         let daemon = DBusProxy::new(&connection)
             .await
             .map_err(|_| Error("system bus unavailable".into()))?;
-        let name = BusName::try_from("org.freedesktop.systemd1").unwrap();
+        let name = BusName::try_from("org.freedesktop.systemd1")
+            .map_err(|_| Error("system manager name".into()))?;
         let owner = tokio::time::timeout(Duration::from_secs(2), daemon.get_name_owner(name))
             .await
             .map_err(|_| Error("system manager owner deadline".into()))?
@@ -72,6 +80,11 @@ impl Manager {
         manager.recheck().await?;
         Ok(manager)
     }
+    /// Verify systemd still has its original owner and process.
+    ///
+    /// # Errors
+    ///
+    /// Fails when systemd's owner or process changed.
     pub async fn recheck(&self) -> Result<()> {
         self.process.recheck()?;
         let daemon = DBusProxy::new(&self.connection)
@@ -79,7 +92,10 @@ impl Manager {
             .map_err(|_| Error("system bus unavailable".into()))?;
         let owner = tokio::time::timeout(
             Duration::from_secs(2),
-            daemon.get_name_owner(BusName::try_from("org.freedesktop.systemd1").unwrap()),
+            daemon.get_name_owner(
+                BusName::try_from("org.freedesktop.systemd1")
+                    .map_err(|_| Error("system manager name".into()))?,
+            ),
         )
         .await
         .map_err(|_| Error("system manager owner deadline".into()))?
@@ -89,6 +105,11 @@ impl Manager {
             "system manager owner changed; no retry",
         )
     }
+    /// Call `method` on a systemd object, rechecking the owner before and after.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the owner changed, the call fails, or it times out.
     pub async fn call<B, R>(&self, path: &str, interface: &str, method: &str, body: &B) -> Result<R>
     where
         B: serde::Serialize + DynamicType,
@@ -106,6 +127,11 @@ impl Manager {
         self.recheck().await?;
         Ok(result)
     }
+    /// Object path of the loaded unit `name`, or `None` when systemd does not know it.
+    ///
+    /// # Errors
+    ///
+    /// Fails for a name that is not a plain service unit, or when the lookup fails.
     pub async fn unit(&self, name: &str) -> Result<Option<zbus::zvariant::OwnedObjectPath>> {
         require(
             name.ends_with(".service")
@@ -139,6 +165,11 @@ impl Manager {
     }
     /// A fresh explicit caller authorizes one fixed power target; an uncertain
     /// reply never causes this operation to be retried.
+    ///
+    /// # Errors
+    ///
+    /// Fails for targets other than `reboot.target` and `poweroff.target`, when the call fails, or
+    /// when systemd returns something other than a job path.
     pub async fn request_power_target(&self, target: &str) -> Result<String> {
         require(
             matches!(target, "reboot.target" | "poweroff.target"),

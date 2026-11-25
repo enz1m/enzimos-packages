@@ -7,7 +7,7 @@ use enzimos_policy::{
     storage_runtime::Guard,
 };
 use serde_json::Value;
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     id: &str,
     selection: &Value,
@@ -17,7 +17,7 @@ pub fn run(
 ) -> Result<Value> {
     run_kind(guard, id, selection, expected, authorize, progress, false)
 }
-pub fn run_tree(
+pub(crate) fn run_tree(
     guard: &Guard,
     id: &str,
     selection: &Value,

@@ -5,7 +5,7 @@ use enzimos_policy::{
     backup_remote_rotation_context::Context, backup_remote_rotation_review, storage_runtime::Guard,
 };
 use serde_json::{Value, json as value};
-pub fn review(
+pub(crate) fn review(
     guard: &Guard,
     input: &Value,
     expected: &Value,
@@ -37,7 +37,7 @@ pub fn review(
     )
 }
 
-pub fn advance(
+pub(crate) fn advance(
     guard: &Guard,
     input: &Value,
     expected: &Value,
@@ -66,8 +66,8 @@ pub fn advance(
     )?;
     progress("transferring")?;
     let result = context.advance(
-        input["review_sha256"].as_str().unwrap(),
-        input["action"].as_str().unwrap(),
+        enzimos_platform::json::string(&input["review_sha256"])?,
+        enzimos_platform::json::string(&input["action"])?,
         &mut permission,
     )?;
     permission()?;

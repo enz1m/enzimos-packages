@@ -3,8 +3,8 @@
 //! until the original live caller has completed its guarded source preparation.
 use enzimos_platform::{Result, fd_packet::Packet, process_identity::Retained};
 use std::time::Duration;
-pub const PREPARATION_LIMIT: Duration = Duration::from_secs(120);
-pub fn wait(
+pub(crate) const PREPARATION_LIMIT: Duration = Duration::from_secs(120);
+pub(crate) fn wait(
     channel: &Packet,
     caller: &Retained,
     timeout: Duration,

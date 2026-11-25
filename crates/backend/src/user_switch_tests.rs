@@ -33,8 +33,12 @@ impl Login {
     #[zbus(name = "GetSession")]
     fn by_id(&self, id: &str) -> zbus::fdo::Result<OwnedObjectPath> {
         match id {
-            "c1" => Ok(CALLER.try_into().unwrap()),
-            "g1" => Ok(GREETER.try_into().unwrap()),
+            "c1" => CALLER
+                .try_into()
+                .map_err(|_| zbus::fdo::Error::Failed("invalid fixture path".into())),
+            "g1" => GREETER
+                .try_into()
+                .map_err(|_| zbus::fdo::Error::Failed("invalid fixture path".into())),
             _ => Err(zbus::fdo::Error::Failed("unknown session".into())),
         }
     }
@@ -139,7 +143,9 @@ impl Systemd {
             POOL.iter()
                 .any(|vt| unit == format!("enzimos-greetd@{vt}.service"))
         );
-        Ok("/org/freedesktop/systemd1/unit/test".try_into().unwrap())
+        "/org/freedesktop/systemd1/unit/test"
+            .try_into()
+            .map_err(|_| zbus::fdo::Error::Failed("invalid fixture path".into()))
     }
     #[zbus(name = "StartUnit")]
     fn start(&self, unit: &str, mode: &str) -> OwnedObjectPath {

@@ -18,9 +18,7 @@ impl<P: Provider> Api<P> {
             self.provider.login_appearance_supported(),
             "operation-unavailable",
         )?;
-        let permit = self
-            .calls
-            .clone()
+        let permit = std::sync::Arc::clone(&self.calls)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let request = system_wire::decode(

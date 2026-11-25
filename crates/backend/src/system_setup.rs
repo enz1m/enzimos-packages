@@ -17,9 +17,7 @@ use std::{
 };
 impl<P: Provider> Api<P> {
     pub(super) async fn setup(&self, call: Call) -> Result<Reply> {
-        let permit = self
-            .calls
-            .clone()
+        let permit = std::sync::Arc::clone(&self.calls)
             .try_acquire_owned()
             .map_err(|_| Error("service-busy".into()))?;
         let input_call = call.member == "BackupSetupInput";
@@ -59,17 +57,17 @@ impl<P: Provider> Api<P> {
         };
         let authority = self.authority.clone();
         let runtime = tokio::runtime::Handle::current();
-        let provider = self.provider.clone();
+        let provider = std::sync::Arc::clone(&self.provider);
         let sender = call.sender;
         let arrived = call.arrived;
         let alive = Alive(Arc::new(AtomicBool::new(true)));
-        let active = alive.0.clone();
+        let active = std::sync::Arc::clone(&alive.0);
         let (response, ticket) = tokio::task::spawn_blocking(move || {
             let _permit = permit;
             require(active.load(Ordering::Acquire), "sender-disconnected")?;
             runtime.block_on(authority.recheck(&grant))?;
             let body = request.body();
-            let id = body["request_id"].as_str().unwrap();
+            let id = enzimos_platform::json::string(&body["request_id"])?;
             let sha = body["plan_sha256"].as_str().unwrap_or("");
             let response = match request.action {
                 "status" => {
@@ -89,26 +87,26 @@ impl<P: Provider> Api<P> {
                 "plan" => Ticket::review(
                     ledger,
                     provider,
-                    worker.unwrap(),
+                    worker.ok_or_else(|| Error("job-worker-unavailable".into()))?,
                     id,
-                    body["selection_id"].as_str().unwrap(),
-                    body["mode"].as_str().unwrap(),
+                    enzimos_platform::json::string(&body["selection_id"])?,
+                    enzimos_platform::json::string(&body["mode"])?,
                     peer,
                     sender,
-                    body["allow_interaction"].as_bool().unwrap(),
+                    enzimos_platform::json::boolean(&body["allow_interaction"])?,
                     arrived,
                 )?,
                 "submit" => {
                     let (response, ticket) = Ticket::input(
                         ledger,
                         provider,
-                        worker.unwrap(),
+                        worker.ok_or_else(|| Error("job-worker-unavailable".into()))?,
                         id,
                         sha,
                         peer,
                         sender,
-                        body["allow_interaction"].as_bool().unwrap(),
-                        input.unwrap(),
+                        enzimos_platform::json::boolean(&body["allow_interaction"])?,
+                        input.ok_or_else(|| Error("wire-signature".into()))?,
                         arrived,
                     )?;
                     (response, Some(ticket))

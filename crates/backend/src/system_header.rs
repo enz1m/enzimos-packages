@@ -4,7 +4,7 @@ use enzimos_platform::{Error, Result, require};
 // zvariant's parsed Signature merges a top-level argument list and a single
 // structure. Read the bounded header's original signature text before comparing
 // this closed service contract. The body remains deserialized by zbus.
-pub fn signature(data: &zbus::zvariant::serialized::Data<'_, '_>) -> Result<String> {
+pub(crate) fn signature(data: &zbus::zvariant::serialized::Data<'_, '_>) -> Result<String> {
     let bytes = data.bytes();
     let bad = || Error("wire-signature".into());
     require(
@@ -63,7 +63,7 @@ pub fn signature(data: &zbus::zvariant::serialized::Data<'_, '_>) -> Result<Stri
                 .slice(at + 1..end)
                 .deserialize::<zbus::zvariant::OwnedValue>()
                 .map_err(|_| bad())?;
-            require(used > 0 && used <= end - at - 1, "wire-signature")?;
+            require(used > 0 && used < end - at, "wire-signature")?;
             at += 1 + used;
         }
     }

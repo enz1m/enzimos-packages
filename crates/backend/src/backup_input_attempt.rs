@@ -17,15 +17,15 @@ use enzimos_policy::{
 use serde_json::{Value, json};
 use std::fs::File;
 
-pub enum Outcome<'g, 'i> {
+pub(crate) enum Outcome<'g, 'i> {
     Authenticated(Authenticated<'g, 'i>),
     IncorrectPassword(Rejected<'g>),
 }
-pub struct Rejected<'g> {
+pub(crate) struct Rejected<'g> {
     intent: Completed<'g>,
 }
 impl Outcome<'_, '_> {
-    pub fn retry_result(&self) -> Result<Value> {
+    pub(crate) fn retry_result(&self) -> Result<Value> {
         let Self::IncorrectPassword(rejected) = self else {
             return Err(enzimos_platform::Error(
                 "retry requires a completed probe with incorrect password".into(),
@@ -46,7 +46,7 @@ impl Outcome<'_, '_> {
 }
 /// Call on the blocking coordinator thread. An uncertain attempt is retained,
 /// never retried here; confirmation failure cannot become a password retry.
-pub fn authenticate<'g, 'i>(
+pub(crate) fn authenticate<'g, 'i>(
     plan: &'g Plan<'_, '_, '_>,
     input: &'i Validated,
     restic: &Image,

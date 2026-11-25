@@ -13,7 +13,7 @@ fn lock() -> Result<files::Lock> {
     files::Lock::try_acquire(Path::new("/run/enzimos/operation.lock"), 0)?
         .ok_or_else(|| enzimos_platform::Error("service-busy".into()))
 }
-pub fn review(
+pub(crate) fn review(
     initial: &Value,
     authorize: &dyn Fn() -> Result<()>,
     publish: &mut dyn FnMut(&Plan<'_, '_, '_>) -> Result<()>,
@@ -37,7 +37,7 @@ pub fn review(
     authorize()?;
     publish(&plan)
 }
-pub fn run(
+pub(crate) fn run(
     original: &Value,
     sha: &str,
     input: &enzimos_platform::secret::Retained,
@@ -48,19 +48,19 @@ pub fn run(
     enzimos_policy::backup_setup_plan::validate(original)?;
     let operation = lock()?;
     let discovery = Discovery::observe()?;
-    let selection = discovery.select(original["selection_id"].as_str().unwrap())?;
+    let selection = discovery.select(enzimos_platform::json::string(&original["selection_id"])?)?;
     let review = Review::open(
         &selection,
-        original["review_id"].as_str().unwrap(),
+        enzimos_platform::json::string(&original["review_id"])?,
         &operation,
         authorize,
     )?;
-    let uid = original["owner_uid"].as_u64().unwrap() as u32;
+    let uid = enzimos_platform::json::unsigned(&original["owner_uid"])? as u32;
     let plan = Plan::observe(
         &review,
-        original["id"].as_str().unwrap(),
+        enzimos_platform::json::string(&original["id"])?,
         uid,
-        Mode::parse(original["mode"].as_str().unwrap())?,
+        Mode::parse(enzimos_platform::json::string(&original["mode"])?)?,
         &operation,
         authorize,
     )?;

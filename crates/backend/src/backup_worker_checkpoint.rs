@@ -35,11 +35,11 @@ fn challenge(message: &Message, id: &str, sha: &str, worker: u32, sequence: u64)
     )?;
     Ok(v)
 }
-pub enum Event {
+pub(crate) enum Event {
     Checkpoint,
     Observation(enzimos_policy::backup_worker_observation::Observation),
 }
-pub struct Caller<'i, 'g> {
+pub(crate) struct Caller<'i, 'g> {
     intent: &'i Intent<'g>,
     worker: &'i Owner,
     scope: &'i enzimos_platform::backup_worker_scope::Scope,
@@ -52,7 +52,7 @@ pub struct Caller<'i, 'g> {
     failed: bool,
 }
 impl<'i, 'g> Caller<'i, 'g> {
-    pub async fn new(
+    pub(crate) async fn new(
         intent: &'i Intent<'g>,
         worker: &'i Owner,
         scope: &'i enzimos_platform::backup_worker_scope::Scope,
@@ -65,7 +65,7 @@ impl<'i, 'g> Caller<'i, 'g> {
             "only original native caller's starting intent may acknowledge a worker",
         )?;
         enzimos_policy::backup_worker_request::executable(&v["request"])?;
-        let id = v["id"].as_str().unwrap().to_owned();
+        let id = enzimos_platform::json::string(&v["id"])?.to_owned();
         let definition = Definition::backup(&id)?;
         native_worker_manager::recheck_for(manager, &definition, worker).await?;
         let captured = scope.binding()?;
@@ -84,7 +84,7 @@ impl<'i, 'g> Caller<'i, 'g> {
             manager,
             definition,
             id,
-            sha: v["request_sha256"].as_str().unwrap().into(),
+            sha: enzimos_platform::json::string(&v["request_sha256"])?.into(),
             sequence: 0,
             nonces: BTreeSet::new(),
             failed: false,
@@ -92,7 +92,7 @@ impl<'i, 'g> Caller<'i, 'g> {
     }
     /// No positive reply is sent after approval/source/lock/provider loss. A
     /// partial or failed exchange permanently retires this original supervisor.
-    pub async fn next(&mut self, channel: &Packet) -> Result<Event> {
+    pub(crate) async fn next(&mut self, channel: &Packet) -> Result<Event> {
         require(
             !self.failed && self.sequence < 10000,
             "backup caller checkpoint retired or bounded",
@@ -136,7 +136,8 @@ impl<'i, 'g> Caller<'i, 'g> {
             self.sequence + 1,
         )?;
         require(
-            self.nonces.insert(v["nonce"].as_str().unwrap().into()),
+            self.nonces
+                .insert(enzimos_platform::json::string(&v["nonce"])?.into()),
             "worker checkpoint nonce replayed",
         )?;
         self.intent.recheck()?;

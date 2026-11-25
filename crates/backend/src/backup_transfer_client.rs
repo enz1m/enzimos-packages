@@ -26,7 +26,7 @@ use std::{
 
 /// A reported transfer and actual closed worker/source descriptions. This does
 /// not authorize snapshot deletion or publish a completed backup.
-pub struct Finished {
+pub(crate) struct Finished {
     observation: Observation,
     request: ClosedRequest,
     sources: ReleasedDescriptors,
@@ -34,10 +34,10 @@ pub struct Finished {
 impl Finished {
     /// Transfer only the three actual original actors to the cleanup owner.
     /// Their typed pairing still requires Observation::close; no JSON adoption.
-    pub fn into_parts(self) -> (Observation, ClosedRequest, ReleasedDescriptors) {
+    pub(crate) fn into_parts(self) -> (Observation, ClosedRequest, ReleasedDescriptors) {
         (self.observation, self.request, self.sources)
     }
-    pub fn evidence(&self) -> Result<Value> {
+    pub(crate) fn evidence(&self) -> Result<Value> {
         self.observation
             .closed_evidence(&self.request, &self.sources)
     }
@@ -58,6 +58,7 @@ fn readable(channel: &enzimos_platform::fd_packet::Packet) -> Result<bool> {
         events: libc::POLLIN,
         revents: 0,
     };
+    // SAFETY: `poll` is one writable pollfd and the count is 1.
     let rc = unsafe { libc::poll(&mut poll, 1, 0) };
     require(
         rc >= 0
@@ -71,11 +72,13 @@ fn readable(channel: &enzimos_platform::fd_packet::Packet) -> Result<bool> {
 fn directory(id: &str) -> Result<(File, Listener, Listener)> {
     let run = files::directory(Path::new("/run/enzimos"), Some(0))?;
     let m = run.metadata()?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         m.uid() == 0
             && m.gid() == 0
             && m.mode() & 0o7777 == 0o700
+            // SAFETY: `fs` is a writable `libc::statfs` and `run` keeps the descriptor open.
             && unsafe { libc::fstatfs(run.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x01021994,
         "transfer IPC requires original Root-private tmpfs",
@@ -106,7 +109,7 @@ fn directory(id: &str) -> Result<(File, Listener, Listener)> {
 /// Run on an owned blocking thread, outside an entered Tokio runtime. The fresh
 /// authorization callback is invoked on the owning thread, never cached as a
 /// Boolean grant. Original process and file actors stay on that thread.
-pub fn launch<'a, 'b, 'c, 's, 'cfg, 'g>(
+pub(crate) fn launch<'a, 'b, 'c, 's, 'cfg, 'g>(
     context: &Context<'a, 'b, 'c, 's, 'cfg, 'g>,
     trees: Prepared<'a, 'b, 'c, 's, 'cfg, 'g>,
     authorize: &dyn Fn() -> Result<()>,
@@ -122,7 +125,7 @@ pub fn launch<'a, 'b, 'c, 's, 'cfg, 'g>(
             && sources["receipt"]["input_sha256"] == original["input_sha256"],
         "original detached sources differ from actual transfer context",
     )?;
-    let id = original["id"].as_str().unwrap().to_owned();
+    let id = enzimos_platform::json::string(&original["id"])?.to_owned();
     let definition = Definition::backup(&id)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -224,11 +227,9 @@ pub fn launch<'a, 'b, 'c, 's, 'cfg, 'g>(
                         )?;
                     }
                 }
-                if !sent {
-                    if let Some(data) = source_channel.as_ref() {
-                        // Each bounded chunk is interleaved with control service.
-                        sent = offer.send_next(data, &mut boundary)?;
-                    }
+                if !sent && let Some(data) = source_channel.as_ref() {
+                    // Each bounded chunk is interleaved with control service.
+                    sent = offer.send_next(data, &mut boundary)?;
                 }
                 runtime.block_on(async { tokio::time::sleep(Duration::from_millis(5)).await });
             }
@@ -257,7 +258,12 @@ pub fn launch<'a, 'b, 'c, 's, 'cfg, 'g>(
             // Deliberately retain these actual descriptors until daemon exit if
             // whole-scope death cannot be proved. Durable intents forbid replay;
             // dropping them here would incorrectly retire a live reservation.
+            #[expect(clippy::mem_forget, reason = "The offer must outlive this error path.")]
             std::mem::forget(offer);
+            #[expect(
+                clippy::mem_forget,
+                reason = "The reservation must outlive this error path."
+            )]
             std::mem::forget(reserved);
             return Err(error);
         }

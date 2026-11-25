@@ -170,6 +170,8 @@ impl<G: Fn() -> Result<()>> Store<G> {
         let c_name =
             std::ffi::CString::new(name).map_err(|_| Error("job-store-needs-review".into()))?;
         require(
+            // SAFETY: `c_name` is a NUL-terminated CString and `self.directory` keeps the
+            // descriptor open.
             unsafe { libc::unlinkat(self.directory.as_raw_fd(), c_name.as_ptr(), 0) } == 0,
             "job-store-needs-review",
         )?;
@@ -215,6 +217,7 @@ impl<G: Fn() -> Result<()>> Store<G> {
             "job-storage-unsafe",
         )?;
         enzimos_platform::flock_identity::exclusive(held)?;
+        // SAFETY: flock takes no pointers and `named` keeps the descriptor open.
         let rc = unsafe { libc::flock(named.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
         let error = std::io::Error::last_os_error();
         require(
@@ -298,8 +301,7 @@ impl<G: Fn() -> Result<()>> Store<G> {
         }
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs() as i64);
         let mut finished = Vec::new();
         let mut abandoned = Vec::new();
         for (id, epoch) in &self.epochs {
@@ -323,6 +325,8 @@ impl<G: Fn() -> Result<()>> Store<G> {
             let name = std::ffi::CString::new(format!("{id}.json"))
                 .map_err(|_| Error("job-record-invalid".into()))?;
             require(
+                // SAFETY: `name` is a NUL-terminated CString and `self.directory` keeps the
+                // descriptor open.
                 unsafe { libc::unlinkat(self.directory.as_raw_fd(), name.as_ptr(), 0) } == 0,
                 "job-storage-unsafe",
             )?;
@@ -468,7 +472,7 @@ mod tests;
 /// Only the original held ledger creates this observation. Decoded records do
 /// not grant exemption, mutation, receipt completion or filesystem retirement.
 #[cfg(feature = "update-worker")]
-pub struct References {
+pub(crate) struct References {
     directory: File,
     shape: (u64, u64, u32, u32, u32),
     mount: u64,
@@ -481,7 +485,7 @@ pub struct References {
 }
 #[cfg(feature = "update-worker")]
 impl References {
-    pub fn recheck<G: Fn() -> Result<()>>(&self, store: &Store<G>) -> Result<()> {
+    pub(crate) fn recheck<G: Fn() -> Result<()>>(&self, store: &Store<G>) -> Result<()> {
         store.recheck_all()?;
         require(
             store.kind == Kind::Operations
@@ -551,7 +555,7 @@ impl References {
         Ok(())
     }
     /// Return observed data only, after rechecking actual original ledger actors.
-    pub fn records<G: Fn() -> Result<()>>(&self, store: &Store<G>) -> Result<Value> {
+    pub(crate) fn records<G: Fn() -> Result<()>>(&self, store: &Store<G>) -> Result<Value> {
         self.recheck(store)?;
         Ok(value!(
             self.epochs
@@ -560,7 +564,7 @@ impl References {
                 .collect::<BTreeMap<_, _>>()
         ))
     }
-    pub fn evidence<G: Fn() -> Result<()>>(&self, store: &Store<G>) -> Result<Value> {
+    pub(crate) fn evidence<G: Fn() -> Result<()>>(&self, store: &Store<G>) -> Result<Value> {
         self.recheck(store)?;
         Ok(
             value!({"directory":self.shape,"mount":self.mount,"lock":self.lock_identity,"epochs":self.epochs.iter().map(|(id,e)| (id.clone(),e.identity)).collect::<BTreeMap<_,_>>(),"own_request":self.own.as_ref().map(|(id,_)| id)}),
@@ -569,7 +573,7 @@ impl References {
 
     /// Compare a Root target against the actual immutable server-owned request.
     /// This supplies no deletion authority and does not exempt any other row.
-    pub fn require_root_target<G: Fn() -> Result<()>>(
+    pub(crate) fn require_root_target<G: Fn() -> Result<()>>(
         &self,
         store: &Store<G>,
         filesystem_uuid: &str,
@@ -600,14 +604,14 @@ impl References {
         }
         self.recheck(store)
     }
-    pub fn require_unmentioned<G: Fn() -> Result<()>>(
+    pub(crate) fn require_unmentioned<G: Fn() -> Result<()>>(
         &self,
         store: &Store<G>,
         generation: &str,
     ) -> Result<()> {
         self.require_unmentioned_inner(store, generation, None)
     }
-    pub fn require_unmentioned_with_conclusions<G: Fn() -> Result<()>>(
+    pub(crate) fn require_unmentioned_with_conclusions<G: Fn() -> Result<()>>(
         &self,
         store: &Store<G>,
         generation: &str,

@@ -11,22 +11,39 @@ use enzimos_platform::{Error, Result, files};
 use enzimos_policy::{identity, operation, storage_runtime::Guard};
 use serde_json::{Value, json as value};
 use std::ffi::OsString;
+/// Closed Root maintenance commands accepted on the command line.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
+    /// `--provision-plan`: review provisioning of the selected backup drive.
     ProvisionPlan(Value),
+    /// `--provision-apply`: provision the reviewed drive whose plan has the given digest, reading
+    /// the password from an inherited descriptor.
     ProvisionApply(Value, String, i32),
+    /// `--file-export-review` or `--tree-export-review` (`true`): review a selected-file export.
     ExportReview(bool, Value),
+    /// `--file-export` or `--tree-export`: run the reviewed export with the given digest.
     Export(bool, Value, String),
+    /// `--delivery-review`: review a delivery for a granted selection.
     DeliveryReview(Value),
+    /// `--delivery-deliver`: run the reviewed delivery with the given digest.
     Delivery(Value, String),
+    /// `--credential-review`: review a backup credential change.
     CredentialReview(String),
+    /// `--credential-complete`: complete the reviewed credential change with the given digest.
     CredentialComplete(String, String),
+    /// `--remote-replicate`: copy one local snapshot to the network share.
     Replicate(String),
+    /// `--remote-retrieve`: copy one share snapshot into the local repository.
     Retrieve(String, String),
+    /// `--backup-enable` (`true`) or `--backup-disable`: switch scheduled backups.
     Schedule(bool),
+    /// `--rotation-review`: review a backup drive rotation.
     RotationReview(String),
+    /// `--rotation-advance`: apply the reviewed rotation step (`abandon`, `switch` or `discard`).
     RotationAdvance(String, String, String),
+    /// `--remote-rotation-review`: review the network share rotation.
     RemoteRotationReview,
+    /// `--remote-rotation-advance`: apply the reviewed share rotation step.
     RemoteRotationAdvance(String, String),
     /// Test/maintenance: the exact System1 `backup-create` provider sequence.
     SystemBackupCreate,
@@ -48,6 +65,11 @@ fn action(s: &str) -> Result<String> {
     )?;
     Ok(s.into())
 }
+/// Parse Root command-line arguments, returning `None` when none were given.
+///
+/// # Errors
+///
+/// Fails for arguments that are not one exact closed command with valid identifiers and digests.
 pub fn parse(args: &[OsString]) -> Result<Option<Command>> {
     let Some(first) = args.get(1) else {
         return Ok(None);
@@ -159,6 +181,12 @@ pub fn parse(args: &[OsString]) -> Result<Option<Command>> {
     };
     Ok(Some(command))
 }
+/// Run a Root command and return its JSON result.
+///
+/// # Errors
+///
+/// Fails unless the caller is Root in the initial namespaces, or when the command's review,
+/// authorization or execution fails.
 pub fn execute(command: Command) -> Result<Value> {
     operation::root_only()?;
     enzimos_policy::namespaces::initial()?;
@@ -392,8 +420,9 @@ fn provision(
     };
     let lock = enzimos_policy::operation::lock()?;
     let discovery = Discovery::observe()?;
-    let candidate = discovery.select(selection["selection_id"].as_str().unwrap())?;
-    let id = selection["id"].as_str().unwrap();
+    let candidate =
+        discovery.select(enzimos_platform::json::string(&selection["selection_id"])?)?;
+    let id = enzimos_platform::json::string(&selection["id"])?;
     let permission = || {
         lock.recheck()?;
         discovery.recheck()?;
@@ -409,21 +438,24 @@ fn provision(
     let plan = Plan::observe(
         &review,
         id,
-        selection["owner_uid"].as_u64().unwrap() as u32,
-        Mode::parse(selection["mode"].as_str().unwrap())?,
+        enzimos_platform::json::unsigned(&selection["owner_uid"])? as u32,
+        Mode::parse(enzimos_platform::json::string(&selection["mode"])?)?,
         &lock,
         &permission,
     )?;
     if let Some((digest, input)) = apply {
         enzimos_platform::require(plan.digest()? == digest, "standalone setup review changed")?;
         enzimos_platform::require(
+            // SAFETY: F_GETFD takes no pointers; it only checks that the inherited number is open.
             unsafe { libc::fcntl(input, libc::F_GETFD) } >= 0,
             "setup input descriptor unavailable",
         )?;
+        // SAFETY: The caller handed this inherited descriptor to this process alone, and it is
+        // adopted once.
         let input = unsafe { File::from_raw_fd(input) };
         let validated = Validated::retain(
             input.as_fd(),
-            selection["owner_uid"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&selection["owner_uid"])? as u32,
             &permission,
         )?;
         let finished =

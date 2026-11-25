@@ -160,7 +160,7 @@ pub(crate) fn validate(schema: u64, v: &Value) -> Result<()> {
         }
         30 => {
             fields(v, "hourly daily weekly monthly yearly manual")?;
-            let rows = v.as_object().unwrap();
+            let rows = enzimos_platform::json::object(v)?;
             rows.values().all(|v| v.as_u64().is_some_and(|n| n <= 1000))
                 && v["manual"].as_u64().is_some_and(|n| n > 0)
                 && (1..=1000).contains(

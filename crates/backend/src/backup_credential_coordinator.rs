@@ -7,7 +7,7 @@ use enzimos_policy::{
     backup_credential_review, backup_destination::Destination, storage_runtime::Guard,
 };
 use serde_json::Value;
-pub fn run(
+pub(crate) fn run(
     guard: &Guard,
     operation: &str,
     id: &str,

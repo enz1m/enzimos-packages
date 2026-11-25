@@ -6,7 +6,7 @@ use enzimos_policy::{
     storage_runtime::Guard,
 };
 use serde_json::{Value, json as value};
-pub fn review(
+pub(crate) fn review(
     guard: &Guard,
     selection: &Value,
     expected: &Value,
@@ -45,7 +45,7 @@ pub fn review(
     Ok(result)
 }
 
-pub fn advance(
+pub(crate) fn advance(
     guard: &Guard,
     selection: &Value,
     expected: &Value,

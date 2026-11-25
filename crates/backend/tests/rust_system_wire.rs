@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Wire admission of System1 requests.
 use enzimos_platform::{Error, json};
 use enzimos_system_backend::system_wire as wire;
 use serde_json::{Value, json as v};
@@ -51,7 +52,7 @@ fn request(schema: u64, action: &str) -> Value {
     body
 }
 fn admitted(body: &Value) -> bool {
-    wire::Operation::decode(&json::canonical(body).unwrap()).is_ok()
+    wire::Operation::decode(&json::canonical(body).expect("canonical fixture")).is_ok()
 }
 #[test]
 fn malformed_wire_and_restore_or_risk_boundary_inputs_never_become_operations() {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Validates a sealed secret in a confined, unprivileged process.
 use enzimos_system_backend::secret;
 use std::os::fd::BorrowedFd;
 #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
@@ -12,6 +13,8 @@ fn run() -> Result<(), ()> {
     if fd < 3 {
         return Err(());
     }
+    // SAFETY: The supervisor passes this inherited descriptor, which nothing in this process
+    // closes.
     let retained = secret::retain(unsafe { BorrowedFd::borrow_raw(fd) }, uid).map_err(|_| ())?;
     secret::constrain_consumer(retained.fd().map_err(|_| ())?).map_err(|_| ())?;
     retained.validate_in_consumer().map_err(|_| ())
