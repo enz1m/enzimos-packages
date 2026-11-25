@@ -1,0 +1,31 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# release: unload the Marvell Wi-Fi driver and stop iptsd before sleep.
+# restore: reload the driver and let udev start iptsd again after resume.
+set -u
+state=/run/enzimos/sleep-devices
+case "${1:-}" in
+release)
+    mkdir -p -m 0700 "$state"
+    if [ -d /sys/module/mwifiex_pcie ] && modprobe -r mwifiex_pcie mwifiex; then
+        : > "$state/wifi"
+    fi
+    if systemctl list-units --state=active --no-legend 'iptsd@*' | grep -q .; then
+        systemctl --no-ask-password stop 'iptsd@*' && : > "$state/iptsd"
+    fi
+    ;;
+restore)
+    if [ -e "$state/wifi" ]; then
+        modprobe mwifiex_pcie
+    fi
+    if [ -e "$state/iptsd" ]; then
+        udevadm trigger --subsystem-match=hidraw --action=add
+    fi
+    rm -rf "$state"
+    ;;
+*)
+    echo "usage: sleep-devices release|restore" >&2
+    exit 2
+    ;;
+esac
+exit 0

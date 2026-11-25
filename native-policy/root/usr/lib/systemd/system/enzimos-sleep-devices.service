@@ -1,0 +1,18 @@
+[Unit]
+Description=Release devices that keep the system from sleeping deeply
+# With its driver loaded, the Marvell 88W8897 Wi-Fi (Surface Pro 4-6, Laptop
+# 1-2, Book 1-2) keeps the chip out of S0ix for almost the whole suspend; with
+# the driver unloaded it stays there about 98% of the time. An open IPTS
+# touchscreen (iptsd) adds 4-6 s to the kernel's task freeze before sleep.
+# Pulled in by sleep.target (drop-in); the stop at resume restores both.
+Before=sleep.target
+StopWhenUnneeded=yes
+ConditionPathExists=|/sys/module/mwifiex_pcie
+ConditionPathExists=|/sys/module/ipts
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/enzimos/sleep-devices release
+ExecStop=/usr/lib/enzimos/sleep-devices restore
+TimeoutSec=20
