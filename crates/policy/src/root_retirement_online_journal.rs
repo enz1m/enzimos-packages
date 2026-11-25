@@ -109,7 +109,7 @@ impl<'a> Journal<'a> {
             catalog::MAX_CATALOG,
             guard.control_mount_id(),
         )?;
-        let folder_flags = unsafe { libc::fcntl(folder.as_raw_fd(), libc::F_GETFL) };
+        let folder_flags = enzimos_platform::files::status_flags(&folder);
         let record_flags = unsafe { libc::fcntl(record.descriptor()?.as_raw_fd(), libc::F_GETFL) };
         require(
             folder_flags >= 0
@@ -178,7 +178,7 @@ impl<'a> Journal<'a> {
         )?;
         self.record.recheck()?;
         require(
-            unsafe { libc::fcntl(self.folder.as_raw_fd(), libc::F_GETFL) } == self.folder_flags
+            enzimos_platform::files::status_flags(&self.folder) == self.folder_flags
                 && unsafe { libc::fcntl(self.record.descriptor()?.as_raw_fd(), libc::F_GETFL) }
                     == self.record_flags,
             "original online Root receipt description flags changed",
@@ -279,7 +279,7 @@ impl<'a> Journal<'a> {
             original.recheck()?;
         }
         let old_epoch = self.epoch;
-        let old_flags = unsafe { libc::fcntl(self.folder.as_raw_fd(), libc::F_GETFL) };
+        let old_flags = enzimos_platform::files::status_flags(&self.folder);
         require(
             old_flags >= 0 && old_flags & libc::O_ACCMODE == libc::O_RDONLY,
             "original Root receipt directory read-only description required",
@@ -303,7 +303,7 @@ impl<'a> Journal<'a> {
                 old_epoch.9,
                 old_epoch.10,
             ) == (after.0, after.1, after.7, after.8, after.9, after.10)
-                && unsafe { libc::fcntl(self.folder.as_raw_fd(), libc::F_GETFL) } == old_flags,
+                && enzimos_platform::files::status_flags(&self.folder) == old_flags,
             "owned staging changed original directory identity/protection/description",
         )?;
         self.epoch = after;
@@ -371,7 +371,6 @@ pub struct Published<'a> {
     transition: Transition,
 }
 impl Published<'_> {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub(crate) fn require_original_directory(
         &self,
         parent: &File,
@@ -383,8 +382,7 @@ impl Published<'_> {
                 && files::identity(&parent.metadata()?) == self.journal.epoch
                 && mount_identity::id(parent.as_fd(), true)?
                     == self.journal.guard.control_mount_id()
-                && unsafe { libc::fcntl(parent.as_raw_fd(), libc::F_GETFL) }
-                    == self.directory_flags,
+                && enzimos_platform::files::status_flags(&parent) == self.directory_flags,
             "staging producer differs from original registry directory",
         )?;
         self.recheck()
@@ -408,11 +406,9 @@ impl Published<'_> {
         self.recheck()?;
         Ok(&self.before)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn recheck(&self) -> Result<()> {
         require(
-            unsafe { libc::fcntl(self.journal.folder.as_raw_fd(), libc::F_GETFL) }
-                == self.directory_flags,
+            enzimos_platform::files::status_flags(&self.journal.folder) == self.directory_flags,
             "owned staging original directory description flags changed",
         )?;
         self.predecessor.recheck()?;

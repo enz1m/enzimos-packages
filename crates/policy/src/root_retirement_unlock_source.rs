@@ -29,9 +29,8 @@ fn one(bytes: &[u8]) -> Result<&str> {
     )?;
     Ok(value)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(source: &Block) -> Result<i32> {
-    let value = unsafe { libc::fcntl(source.file.as_raw_fd(), libc::F_GETFL) };
+    let value = enzimos_platform::files::status_flags(&source.file);
     require(
         value >= 0 && value & libc::O_ACCMODE == libc::O_RDONLY,
         "original retirement source read-only descriptor",

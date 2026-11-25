@@ -187,10 +187,9 @@ fn public_only(path: &Path, owner: u32) -> Result<()> {
     }
     Ok(())
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 pub fn build(current: &Path, keyring: &Path, work: &Path, owner: u32) -> Result<Prepared> {
     require(
-        unsafe { libc::geteuid() } == owner,
+        enzimos_platform::process_identity::effective_uid() == owner,
         "authority build owner mismatch",
     )?;
     public_only(current, owner)?;
@@ -403,7 +402,6 @@ mod tests {
         }
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn isolated_public_ring_import_and_direct_trust_match_real_gnupg_without_live_authority() {
         let work = Path::new(
             &std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -415,7 +413,7 @@ mod tests {
             .permissions(std::fs::Permissions::from_mode(0o700))
             .tempdir_in(work)
             .unwrap();
-        let owner = unsafe { libc::geteuid() };
+        let owner = enzimos_platform::process_identity::effective_uid();
         let private = temporary.path().join("signer");
         files::create_directory(&private, 0o700, owner).unwrap();
         let _agent = FixtureAgent(private.clone());

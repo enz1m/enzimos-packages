@@ -538,12 +538,11 @@ fn greeter_uid() -> Result<u32> {
     require(uid > 0 && uid < u32::MAX, "greeter account unavailable")?;
     Ok(uid)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, getuid).")]
 pub async fn serve() -> Result<()> {
     require(
         std::env::args_os().count() == 1
-            && unsafe { libc::getuid() } == 0
-            && unsafe { libc::geteuid() } == 0,
+            && enzimos_platform::process_identity::real_uid() == 0
+            && enzimos_platform::process_identity::effective_uid() == 0,
         "system activation required",
     )?;
     let greeter = greeter_uid()?;

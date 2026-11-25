@@ -11,6 +11,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+/// A member of a retained directory, held open without following it.
 pub struct Entry {
     parent: File,
     parent_identity: files::FileIdentity,
@@ -29,6 +30,7 @@ fn open(parent: &File, name: &Path) -> Result<File> {
     )?;
     let name = CString::new(name.as_os_str().as_bytes())
         .map_err(|_| Error("directory member encoding".into()))?;
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -39,10 +41,15 @@ fn open(parent: &File, name: &Path) -> Result<File> {
     if raw < 0 {
         return Err(std::io::Error::last_os_error().into());
     }
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw) })
 }
 impl Entry {
     /// No owner, file type, executable, or write authority follows from this observation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `parent` is not a directory or the member cannot be opened.
     pub fn observe(parent: &File, name: &Path) -> Result<Self> {
         require(
             parent.metadata()?.is_dir(),
@@ -63,6 +70,11 @@ impl Entry {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the member still has its original name, inode and mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it was replaced, changed or remounted.
     pub fn recheck(&self) -> Result<()> {
         let named = open(&self.parent, &self.name)?;
         require(
@@ -75,6 +87,11 @@ impl Entry {
             "original directory member changed, replaced or remounted",
         )
     }
+    /// The member's metadata, rechecked against its original epoch.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the member changed.
     pub fn metadata(&self) -> Result<Metadata> {
         self.recheck()?;
         let metadata = self.file.metadata()?;
@@ -84,6 +101,11 @@ impl Entry {
         )?;
         Ok(metadata)
     }
+    /// The target of a symlink member.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the member is not a symlink, its target exceeds `maximum` bytes, or it changed.
     #[allow(unsafe_code, reason = "Linux syscall ABI (readlinkat).")]
     pub fn read_link(&self, maximum: usize) -> Result<PathBuf> {
         require((1..=65536).contains(&maximum), "original link length bound")?;
@@ -93,6 +115,8 @@ impl Entry {
         )?;
         let mut bytes = vec![0u8; maximum + 1];
         // Linux readlinkat supports an empty pathname for O_PATH|O_NOFOLLOW links.
+        // SAFETY: The empty path is a NUL-terminated literal and the buffer pointer and length
+        // describe `bytes`.
         let length = unsafe {
             libc::readlinkat(
                 self.file.as_raw_fd(),
@@ -112,6 +136,11 @@ impl Entry {
         self.recheck()?;
         Ok(PathBuf::from(std::ffi::OsStr::from_bytes(&bytes)))
     }
+    /// Require that `file` is the same inode on the same mount as this member.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it differs or the member changed.
     pub fn matches(&self, file: &File) -> Result<()> {
         self.recheck()?;
         require(

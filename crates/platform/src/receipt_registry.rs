@@ -52,6 +52,7 @@ struct Original {
     epoch: files::FileIdentity,
     sha: String,
 }
+/// A directory of receipts in which this caller owns one leaf and retains every other member.
 pub struct Registry {
     parent: File,
     path: PathBuf,
@@ -67,6 +68,11 @@ pub struct Registry {
 impl Registry {
     /// Caller independently validates the fixed registry schemas and source
     /// before admitting this actual original directory. Existing own rows refuse.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `parent` is not the directory at `path`, the own leaf already exists, a member is
+    /// unprotected or on another mount, or the byte budget is exceeded.
     pub fn observe(path: &Path, parent: &File, own_leaf: &str, owner: u32) -> Result<Self> {
         leaf(own_leaf)?;
         let parent = parent.try_clone()?;
@@ -167,12 +173,22 @@ impl Registry {
         }
         Ok(())
     }
+    /// Verify the directory, retained members and own publication are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         self.inspect(true)?;
         self.inspect(true)
     }
     /// Fresh callback checks independent original source/authorization barriers;
     /// this actor itself validates its known pending/committed transition.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `bytes` exceeds its bound, `authorize` or a recheck fails, or the publication
+    /// fails.
     pub fn publish(
         &mut self,
         bytes: &[u8],
@@ -204,6 +220,10 @@ impl Registry {
     }
     /// Join this actor to the caller's original directory description and
     /// fixed leaf. This is an actual descriptor comparison, not an evidence grant.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the directory or leaf differ, or on [`Registry::recheck`].
     pub fn require_directory(&self, original: &File, own_leaf: &str) -> Result<()> {
         self.recheck()?;
         require(
@@ -217,6 +237,10 @@ impl Registry {
     }
     /// Join this retained registry to the caller's independently held original
     /// records. An equal-byte replacement cannot satisfy the descriptor epochs.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the members differ from `original`, or on [`Registry::recheck`].
     pub fn require_original_members(&self, original: &BTreeMap<String, &File>) -> Result<()> {
         self.recheck()?;
         require(
@@ -232,6 +256,11 @@ impl Registry {
         }
         self.recheck()
     }
+    /// The published own receipt.
+    ///
+    /// # Errors
+    ///
+    /// Fails before the first publish, or on [`Registry::recheck`].
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         self.own
@@ -239,6 +268,11 @@ impl Registry {
             .ok_or_else(|| Error("original receipt not yet published".into()))?
             .file()
     }
+    /// JSON evidence with the directory, mount, own leaf and the identity of every member.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Registry::recheck`].
     pub fn evidence(&self) -> Result<serde_json::Value> {
         self.recheck()?;
         Ok(
@@ -255,18 +289,16 @@ mod tests {
     fn fixture() -> tempfile::TempDir {
         tempfile::Builder::new()
             .permissions(std::fs::Permissions::from_mode(0o700))
-            .tempdir_in(
-                std::env::var_os("ENZIMOS_TEST_TMPDIR")
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(|| std::env::current_dir().unwrap()),
-            )
+            .tempdir_in(std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(
+                || std::env::current_dir().unwrap(),
+                std::path::PathBuf::from,
+            ))
             .unwrap()
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn original_registry_refuses_unrelated_writer_and_interrupted_pending_members() {
         let temp = fixture();
-        let uid = unsafe { libc::geteuid() };
+        let uid = crate::process_identity::effective_uid();
         let other = temp.path().join("other.json");
         std::fs::write(&other, b"old").unwrap();
         std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o600)).unwrap();

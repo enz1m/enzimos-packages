@@ -14,11 +14,10 @@ fn protected_temp() -> tempfile::TempDir {
 }
 const ID: &str = "11111111111111111111111111111111";
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn restart_preserves_uncertainty_and_never_queues_the_original_plan_again() {
     let _fork_guard = crate::LOCK_FIXTURE_GUARD.lock().unwrap();
     let temp = protected_temp();
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let mut store = Store::open_owned(temp.path(), owner, || Ok(())).unwrap();
     let planned = store
         .plan(ID, owner, "backup-create", || Ok(value!({"server":"made"})))

@@ -61,9 +61,8 @@ fn directory_identity(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
     let m = file.metadata()?;
     Ok((m.dev(), m.ino(), m.uid(), m.gid(), m.mode()))
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 pub fn verify(archive: &File, signature: &File, home: &Path) -> Result<String> {
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let directory = files::directory(home, Some(owner))?;
     let identity = directory_identity(&directory)?;
     let mount = mount_identity::id(directory.as_fd(), true)?;

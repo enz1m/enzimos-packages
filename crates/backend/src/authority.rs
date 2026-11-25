@@ -148,10 +148,9 @@ impl Drop for PendingAuthorization {
     }
 }
 impl Authority {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     pub async fn system() -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == 0,
+            enzimos_platform::process_identity::effective_uid() == 0,
             "root authorization required",
         )?;
         let c = bounded(Connection::system(), 5).await?;

@@ -191,7 +191,7 @@ struct Registry {
     selected: String,
 }
 impl Registry {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, unlinkat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
     fn open(guard: &Guard, id: &str) -> Result<Self> {
         let directory = files::ensure_directory_relative(
             guard.control(),
@@ -206,7 +206,7 @@ impl Registry {
             m.mode() & 0o7777 == 0o700 && mount == guard.control_mount_id(),
             "retention registry protection/mount",
         )?;
-        let flags = unsafe { libc::fcntl(directory.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&directory);
         require(flags >= 0, "retention registry status")?;
         let mut previous: BTreeMap<String, Observation> = BTreeMap::new();
         for name in files::directory_names(&directory, 32)? {
@@ -291,7 +291,6 @@ impl Registry {
         this.names(false)?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self, guard: &Guard) -> Result<()> {
         guard.recheck()?;
         let named =
@@ -305,7 +304,7 @@ impl Registry {
             )?;
         }
         require(
-            unsafe { libc::fcntl(self.directory.as_raw_fd(), libc::F_GETFL) } == self.flags,
+            enzimos_platform::files::status_flags(&self.directory) == self.flags,
             "retention registry shared flags changed",
         )?;
         for original in self.previous.values() {

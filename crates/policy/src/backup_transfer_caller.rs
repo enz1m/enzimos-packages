@@ -48,13 +48,12 @@ impl Caller {
     pub fn metadata_migration_current() -> Result<Self> {
         Self::current_role(true)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getegid, getgid, getuid).")]
     fn current_role(metadata_migration: bool) -> Result<Self> {
         crate::operation::root_only()?;
         require(
-            unsafe { libc::getuid() } == 0
-                && unsafe { libc::getgid() } == 0
-                && unsafe { libc::getegid() } == 0,
+            enzimos_platform::process_identity::real_uid() == 0
+                && enzimos_platform::process_identity::real_gid() == 0
+                && enzimos_platform::process_identity::effective_gid() == 0,
             "original native backend Root IDs required",
         )?;
         crate::namespaces::initial()?;

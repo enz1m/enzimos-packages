@@ -14,7 +14,7 @@ struct Metadata {
     flags: i32,
 }
 impl Metadata {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, openat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     fn observe(parent: &File, name: &str) -> Result<Self> {
         let leaf =
             CString::new(name).map_err(|_| enzimos_platform::Error("EFI basename".into()))?;
@@ -28,7 +28,7 @@ impl Metadata {
         require(fd >= 0, "original EFI metadata descriptor unavailable")?;
         let file = unsafe { File::from_raw_fd(fd) };
         let epoch = files::identity(&file.metadata()?);
-        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&file);
         require(
             file.metadata()?.is_file()
                 && file.metadata()?.uid() == 0
@@ -40,13 +40,12 @@ impl Metadata {
         )?;
         Ok(Self { file, epoch, flags })
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self, parent: &File, name: &str, mount: u64) -> Result<()> {
         let named = Self::observe(parent, name)?;
         require(
             files::identity(&self.file.metadata()?) == self.epoch
                 && named.epoch == self.epoch
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&self.file) == self.flags
                 && mount_identity::id(self.file.as_fd(), true)? == mount
                 && mount_identity::id(named.file.as_fd(), true)? == mount,
             "original EFI metadata changed/replaced/covered",
@@ -206,7 +205,7 @@ impl<'a> Original<'a> {
             serde_json::json!({"directory_epoch":self.epoch,"directory_flags":self.directory_flags,"mount":self.mount,"members":metadata,"one_shot_sha256":self.one_shot.as_ref().map(|row|enzimos_platform::json::sha256(&row.bytes)),"clear_owned_one_shot":self.owned,"deletion_authorized":false}),
         )
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, openat, write).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat, write).")]
     pub fn clear(
         mut self,
         inventory: &Inventory<'_>,
@@ -244,7 +243,7 @@ impl<'a> Original<'a> {
         };
         require(fd >= 0, "actual owned EFI writer unavailable")?;
         let writer = unsafe { File::from_raw_fd(fd) };
-        let writer_flags = unsafe { libc::fcntl(writer.as_raw_fd(), libc::F_GETFL) };
+        let writer_flags = enzimos_platform::files::status_flags(&writer);
         require(
             writer_flags >= 0 && writer_flags & libc::O_ACCMODE == libc::O_WRONLY,
             "actual EFI writer status required",
@@ -275,7 +274,7 @@ impl<'a> Original<'a> {
             "one attributes-only EFI deletion write failed/partial; no retry",
         )?;
         require(
-            unsafe { libc::fcntl(writer.as_raw_fd(), libc::F_GETFL) } == writer_flags,
+            enzimos_platform::files::status_flags(&writer) == writer_flags,
             "EFI writer status changed during single write",
         )?;
         require(
@@ -337,7 +336,6 @@ impl Completed<'_> {
     ) -> Result<()> {
         self.recheck_inner(Some(receipt), authorize)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck_inner(
         &self,
         completed: Option<&crate::root_retirement_online_journal::Completed<'_>>,
@@ -376,7 +374,7 @@ impl Completed<'_> {
             if name == &leaf {
                 require(
                     files::identity(&row.file.metadata()?) == epoch
-                        && unsafe { libc::fcntl(row.file.as_raw_fd(), libc::F_GETFL) } == row.flags,
+                        && enzimos_platform::files::status_flags(&row.file) == row.flags,
                     "retired original EFI metadata changed",
                 )?;
             } else {

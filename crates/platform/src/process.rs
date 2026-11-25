@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Bounded execution of fixed-path programs, with captured output and an owned process group.
 use crate::{Error, Result, require};
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
@@ -42,9 +43,13 @@ pub fn refusal(program: &str, output: &Output) -> String {
         tail.trim()
     ))
 }
+/// Result of a finished child process.
 pub struct Output {
+    /// Exit status.
     pub status: ExitStatus,
+    /// Captured standard output.
     pub stdout: Vec<u8>,
+    /// Captured standard error.
     pub stderr: Vec<u8>,
     /// Child-local aliases assigned to explicit inherited descriptors. These
     /// are observations of a retired command, not usable parent descriptors.
@@ -56,6 +61,8 @@ impl Drop for OwnedChild {
     fn drop(&mut self) {
         // A descendant holding a pipe cannot outlive the bounded command scope.
         if !self.1 {
+            // SAFETY: kill takes no pointers; the child called setsid, so the negative ID names
+            // only its own group.
             unsafe {
                 libc::kill(-(self.0.id() as i32), libc::SIGKILL);
             }
@@ -101,8 +108,10 @@ impl Watchdog {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn nonblocking(fd: i32) -> Result<()> {
+    // SAFETY: F_GETFL takes no pointers; `fd` is a pipe end the caller owns.
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
     require(
+        // SAFETY: F_SETFL takes no pointers; `fd` is a pipe end the caller owns.
         flags >= 0 && unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == 0,
         "pipe setup failed",
     )
@@ -110,6 +119,7 @@ fn nonblocking(fd: i32) -> Result<()> {
 // Called only between fork and exec, with no allocation or parent mutation.
 #[allow(unsafe_code, reason = "Linux syscall ABI (prctl, syscall, unshare).")]
 unsafe fn offline_namespace() -> std::io::Result<()> {
+    // SAFETY: unshare takes no pointers and affects only this pre_exec child.
     if unsafe { libc::unshare(libc::CLONE_NEWNET) } != 0 {
         return Err(std::io::Error::last_os_error());
     }
@@ -134,12 +144,14 @@ unsafe fn offline_namespace() -> std::io::Result<()> {
         permitted: 0,
         inheritable: 0,
     }; 2];
+    // SAFETY: `header` and the two-element `data` array match the kernel capability ABI version.
     if unsafe { libc::syscall(libc::SYS_capget, &header, data.as_mut_ptr()) } != 0 {
         return Err(std::io::Error::last_os_error());
     }
     // Linux CAP_NET_ADMIN, CAP_NET_RAW, CAP_SYS_ADMIN. Prevent exec from
     // regaining route/link mutation or setns authority in this owned child.
     for capability in [12u32, 13, 21] {
+        // SAFETY: prctl(PR_CAPBSET_DROP) takes no pointers.
         if unsafe { libc::prctl(libc::PR_CAPBSET_DROP, capability, 0, 0, 0) } != 0 {
             return Err(std::io::Error::last_os_error());
         }
@@ -149,7 +161,9 @@ unsafe fn offline_namespace() -> std::io::Result<()> {
         row.permitted &= mask;
         row.inheritable &= mask;
     }
+    // SAFETY: `header` and the two-element `data` array match the kernel capability ABI version.
     if unsafe { libc::syscall(libc::SYS_capset, &header, data.as_ptr()) } != 0
+        // SAFETY: prctl(PR_SET_NO_NEW_PRIVS) takes no pointers.
         || unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0
     {
         return Err(std::io::Error::last_os_error());
@@ -159,7 +173,7 @@ unsafe fn offline_namespace() -> std::io::Result<()> {
 /// Diagnostics never share a caller's tight stdout bound: a command whose
 /// stdout is a number may still explain a failure on stderr, and that must
 /// surface as its real exit status, not as an output-bound violation.
-pub const STDERR_MINIMUM: usize = 64 * 1024;
+pub(crate) const STDERR_MINIMUM: usize = 64 * 1024;
 fn stderr_limit(limit: usize) -> usize {
     limit.max(STDERR_MINIMUM)
 }
@@ -192,6 +206,13 @@ fn drain(
     Ok(false)
 }
 
+/// Run a fixed-path program with `input` on stdin and capture its output.
+///
+/// # Errors
+///
+/// Fails when `program` is not a registered fixed path, the input, output or descriptor bounds are
+/// invalid, the child cannot be spawned, or it outlives `timeout` or writes more than `limit`
+/// bytes. A nonzero exit is returned in the output.
 pub fn run(
     program: &str,
     args: &[&str],
@@ -205,6 +226,12 @@ pub fn run(
 /// /proc/self/fd path for descriptor N; `@fd-dir:N` selects its directory contents.
 /// Duplicates stay above stdio and Rust's
 /// exec-error pipe; no low descriptor is reassigned inside pre_exec.
+///
+/// # Errors
+///
+/// Fails when `program` is not a registered fixed path, the input, output or descriptor bounds are
+/// invalid, the child cannot be spawned, or it outlives `timeout` or writes more than `limit`
+/// bytes. A nonzero exit is returned in the output.
 pub fn run_with_fds(
     program: &str,
     args: &[&str],
@@ -226,6 +253,10 @@ pub fn run_with_fds(
 }
 /// Execute reviewed native bytes from their retained read-only descriptor.
 /// The logical program still passes the same fixed-path registry and sets argv0.
+///
+/// # Errors
+///
+/// Fails when `image` is not the reviewed executable for `program`, or as [`run`] does.
 pub fn run_pinned(
     program: &str,
     image: &std::fs::File,
@@ -252,6 +283,10 @@ pub fn run_pinned(
 /// Fixed target commands with a fresh, empty child-only network namespace.
 /// The caller and its watchers retain their original namespaces. Namespace
 /// creation failure has no execution fallback.
+///
+/// # Errors
+///
+/// Fails when the child network namespace cannot be created, or as [`run_pinned`] does.
 pub fn run_pinned_offline(
     image: &std::fs::File,
     args: &[&str],
@@ -276,6 +311,14 @@ pub fn run_pinned_offline(
 }
 /// Observe bounded stdout chunks while the original owned child is still alive.
 /// Observer failure keeps the same owned process-group termination semantics.
+///
+/// # Errors
+///
+/// Fails when `observer` fails, or as [`run_pinned`] does.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Shares the parameter list of the other pinned `run_*` entry points."
+)]
 pub fn run_pinned_stream(
     program: &str,
     image: &std::fs::File,
@@ -303,6 +346,14 @@ pub fn run_pinned_stream(
 /// Check the original caller while a bounded pinned-image child is alive.
 /// A refused checkpoint retires that owned process group and preserves caller
 /// transaction evidence; it never reruns the command.
+///
+/// # Errors
+///
+/// Fails when `checkpoint` fails, or as [`run_pinned`] does.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Shares the parameter list of the other pinned `run_*` entry points."
+)]
 pub fn run_pinned_with_checkpoint(
     program: &str,
     image: &std::fs::File,
@@ -331,6 +382,11 @@ pub fn run_pinned_with_checkpoint(
     Ok(output)
 }
 /// Closed restored-system tool in an original owned cgroup and child namespaces.
+///
+/// # Errors
+///
+/// Fails when the caller cannot protect its descriptors, `image` is not the restored native chroot,
+/// `checkpoint` fails, or the tool cannot be run in `group`.
 #[allow(unsafe_code, reason = "Linux syscall ABI (prctl).")]
 pub fn recovery_boot_tool(
     image: &std::fs::File,
@@ -341,6 +397,7 @@ pub fn recovery_boot_tool(
 ) -> Result<Output> {
     use std::os::unix::fs::MetadataExt;
     require(
+        // SAFETY: prctl(PR_SET_DUMPABLE) takes no pointers.
         unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "complete boot caller cannot protect its original descriptions",
     )?;
@@ -391,6 +448,7 @@ pub fn recovery_boot_tool(
 /// When set, pinned children's diagnostics are also written to this process's stderr as
 /// they arrive (the journal, for a systemd worker), so a long job can be followed live.
 static ECHO_CHILD_OUTPUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Echo pinned children's plain-text stderr to this process's stderr as it arrives.
 pub fn echo_child_output(on: bool) {
     ECHO_CHILD_OUTPUT.store(on, std::sync::atomic::Ordering::Relaxed);
 }
@@ -417,7 +475,10 @@ fn echo(program: &str, bytes: &[u8]) {
     }
     let _ = std::io::Write::write_all(&mut std::io::stderr(), bytes);
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid).")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Private core shared by the pinned `run_*` entry points."
+)]
 fn run_pinned_observed(
     program: &str,
     image: &std::fs::File,
@@ -426,7 +487,7 @@ fn run_pinned_observed(
     timeout: Duration,
     limit: usize,
     descriptors: &[BorrowedFd<'_>],
-    observer: Option<&mut dyn FnMut(&[u8]) -> Result<()>>,
+    observer: Option<execution::Observer<'_>>,
     isolated_network: bool,
     local_restic: Option<crate::local_restic::Consumer>,
     boundary: Option<&mut dyn FnMut() -> Result<()>>,
@@ -435,11 +496,10 @@ fn run_pinned_observed(
     let before = crate::files::identity(&image.metadata()?);
     let m = image.metadata()?;
     require(
-        m.uid() == unsafe { libc::geteuid() }
+        m.uid() == crate::process_identity::effective_uid()
             && m.mode() & 0o022 == 0
             && m.mode() & 0o111 != 0
-            && unsafe { libc::fcntl(image.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
-                == libc::O_RDONLY,
+            && crate::files::status_flags(&image) & libc::O_ACCMODE == libc::O_RDONLY,
         "pinned executable ownership, mode or open-description flags",
     )?;
     require(
@@ -532,6 +592,10 @@ pub(crate) fn remote_restic(
 }
 /// Independent recovery has no udev rules for encrypted storage. This fixed
 /// context cannot inject arbitrary environment variables into privileged tools.
+///
+/// # Errors
+///
+/// As [`run_with_fds`].
 pub fn recovery_cryptsetup(
     args: &[&str],
     input: &[u8],
@@ -549,6 +613,11 @@ pub fn recovery_cryptsetup(
         None,
     )
 }
+/// Run a program and return its stdout as text when its exit code is one of `codes`.
+///
+/// # Errors
+///
+/// Fails as [`run`] does, when the exit code is not in `codes`, or when stdout is not UTF-8.
 pub fn output(
     program: &str,
     args: &[&str],

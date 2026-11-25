@@ -75,7 +75,6 @@ struct Destination {
     protected: Vec<Protected>,
 }
 impl Destination {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn open(path: &Path, backup_uuid: &str) -> Result<Self> {
         require(
             path.is_absolute() && std::fs::canonicalize(path)? == path,
@@ -84,7 +83,7 @@ impl Destination {
         let file = files::directory(path, None)?;
         let m = file.metadata()?;
         require(
-            m.uid() == unsafe { libc::geteuid() } && m.mode() & 0o022 == 0,
+            m.uid() == enzimos_platform::process_identity::effective_uid() && m.mode() & 0o022 == 0,
             "private account-owned recovery folder required",
         )?;
         let shape = shape(&file)?;
@@ -179,14 +178,14 @@ fn shape_fn(f: &File) -> Result<(u64, u64, u32, u32, u32)> {
 fn row_fn(f: &File) -> Result<mountinfo::Row> {
     row(f)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn source(file: &File) -> Result<files::FileIdentity> {
     let m = file.metadata()?;
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     let seals = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GET_SEALS) };
     require(
         m.is_file()
-            && m.uid() == unsafe { libc::geteuid() }
+            && m.uid() == enzimos_platform::process_identity::effective_uid()
             && m.mode() & 0o7777 == 0o600
             && m.nlink() == 0
             && (1..=4096).contains(&m.len())
@@ -198,7 +197,7 @@ fn source(file: &File) -> Result<files::FileIdentity> {
     )?;
     Ok(files::identity(&m))
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, openat, sendfile).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (openat, sendfile).")]
 pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Result<Value> {
     crate::identity::uuid(backup_uuid)?;
     filename(name)?;
@@ -222,7 +221,7 @@ pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Res
         let m = output.metadata()?;
         require(
             m.is_file()
-                && m.uid() == unsafe { libc::geteuid() }
+                && m.uid() == enzimos_platform::process_identity::effective_uid()
                 && m.mode() & 0o7777 == 0o600
                 && m.nlink() == 1
                 && m.dev() == destination.shape.0

@@ -61,7 +61,7 @@ pub(crate) fn descriptors(directory: &File) -> Result<BTreeSet<i32>> {
     // inode/owner/mode/mount, with a fresh cursor; ordinary directory scans keep
     // their stricter full metadata guarantee.
     let metadata = directory.metadata()?;
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     require(
         metadata.is_dir() && metadata.uid() == owner && metadata.mode() & 0o022 == 0,
         "original own-process descriptor directory required",
@@ -168,7 +168,7 @@ impl DescriptorSnapshot {
             }
             let held = unsafe { File::from_raw_fd(raw) };
             let metadata = held.metadata()?;
-            let flags = unsafe { libc::fcntl(held.as_raw_fd(), libc::F_GETFL) };
+            let flags = enzimos_platform::files::status_flags(&held);
             require(flags >= 0, "original descriptor flags unavailable")?;
             if metadata.is_file() {
                 entries.insert(fd, (flags & libc::O_ACCMODE, files::identity(&metadata)));
@@ -211,8 +211,7 @@ fn original_lock(
         }
         let original = unsafe { File::from_raw_fd(raw) };
         if !before.existed(fd, &original, libc::O_WRONLY)?
-            && unsafe { libc::fcntl(original.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
-                == libc::O_WRONLY
+            && enzimos_platform::files::status_flags(&original) & libc::O_ACCMODE == libc::O_WRONLY
             && files::identity(&original.metadata()?) == epoch
         {
             require(

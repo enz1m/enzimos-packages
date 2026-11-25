@@ -40,10 +40,10 @@ fn decode(bytes: &[u8], alias: &str, expected_uuid: &str) -> Result<Value> {
         json!({"filesystem_uuid":expected_uuid,"device_uuid":device,"content":"btrfs-signature","filesystem_verified":false}),
     )
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, lseek).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (lseek).")]
 fn offset(fd: BorrowedFd<'_>) -> Result<i64> {
     require(
-        unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE == libc::O_RDONLY,
+        enzimos_platform::files::status_flags(&fd) & libc::O_ACCMODE == libc::O_RDONLY,
         "read-only backup signature descriptor required",
     )?;
     let position = unsafe { libc::lseek(fd.as_raw_fd(), 0, libc::SEEK_CUR) };

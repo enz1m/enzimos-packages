@@ -45,7 +45,7 @@ pub fn arguments(targets: &BTreeSet<String>) -> Result<Vec<String>> {
 }
 /// Folders skipped by rule (build output, caches, games, Trash, a person's
 /// exclusions), listed in the inventory of every backup.
-pub const SKIPPED: &str = "/backup-source/inventory/skipped.txt";
+pub(crate) const SKIPPED: &str = "/backup-source/inventory/skipped.txt";
 /// The fixed `--exclude-file` operand pair that follows the exclusions.
 #[must_use]
 pub fn skipped_arguments() -> [String; 2] {

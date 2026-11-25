@@ -21,10 +21,10 @@ impl PacmanLock {
         crate::storage_runtime::initial_namespace()?;
         Self::under(Path::new("/var/lib/pacman"), 0)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, geteuid, openat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, openat).")]
     fn under(path: &Path, owner: u32) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == owner,
+            enzimos_platform::process_identity::effective_uid() == owner,
             "package lock owner mismatch",
         )?;
         let parent = files::directory(path, Some(owner))?;

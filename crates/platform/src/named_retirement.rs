@@ -39,6 +39,8 @@ fn renamed(before: files::FileIdentity, after: files::FileIdentity) -> bool {
         && before.9 == after.9
         && before.10 == after.10
 }
+/// A file or directory renamed to a quarantine name in its parent, retained until
+/// [`Quarantined::unlink`].
 pub struct Quarantined {
     parent: File,
     parent_shape: Shape,
@@ -58,6 +60,12 @@ pub struct Quarantined {
 impl Quarantined {
     /// Caller must durably enter retirement and retain its original transaction
     /// lock/authority before invoking. A mismatched rename is retained untouched.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is `owner`, when `name` is not one component, when
+    /// `original` is not an owned single-link file or directory, when the rename fails, or when
+    /// `authorize` fails.
     pub fn enter(
         parent: &File,
         original: &File,
@@ -68,6 +76,10 @@ impl Quarantined {
         Self::enter_bounded(parent, original, name, owner, 65536, authorize)
     }
     /// Fixed-role callers provide an independently reviewed upper byte bound.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`Quarantined::enter`] does, or when the member exceeds `maximum` bytes.
     pub fn enter_bounded(
         parent: &File,
         original: &File,
@@ -80,6 +92,11 @@ impl Quarantined {
     }
     /// The caller's independently retained original epoch is a precondition,
     /// checked before any rename and after all fresh bounded hash callbacks.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`Quarantined::enter_bounded`] does, or when the member's epoch differs from
+    /// `expected`.
     pub fn enter_original(
         parent: &File,
         original: &File,
@@ -99,7 +116,7 @@ impl Quarantined {
             authorize,
         )
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid, syscall).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     fn enter_checked(
         parent: &File,
         original: &File,
@@ -115,7 +132,7 @@ impl Quarantined {
         )?;
         authorize()?;
         require(
-            unsafe { libc::geteuid() } == owner,
+            crate::process_identity::effective_uid() == owner,
             "retirement writer authority",
         )?;
         let old = single(name)?;
@@ -135,7 +152,7 @@ impl Quarantined {
             expected.is_none_or(|before| before == epoch),
             "caller original retirement epoch changed before quarantine",
         )?;
-        let flags = unsafe { libc::fcntl(original.as_raw_fd(), libc::F_GETFL) };
+        let flags = crate::files::status_flags(&original);
         require(
             flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
             "original retirement description must remain read-only",
@@ -191,6 +208,8 @@ impl Quarantined {
             "retirement original name changed before quarantine",
         )?;
         require(
+            // SAFETY: Both names are NUL-terminated CStrings and `parent` keeps the descriptor
+            // open.
             unsafe {
                 libc::syscall(
                     libc::SYS_renameat2,
@@ -228,10 +247,14 @@ impl Quarantined {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the parent, quarantined member and its content are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any retained description, mount or digest changed.
     pub fn recheck(&self) -> Result<()> {
         self.recheck_authorized(&mut || Ok(()))
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck_authorized(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         require(
@@ -241,7 +264,7 @@ impl Quarantined {
         )?;
         require(
             files::identity(&self.file.metadata()?) == self.epoch
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && crate::files::status_flags(&self.file) == self.flags
                 && mount_identity::id(self.file.as_fd(), true)? == self.mount,
             "original quarantined member changed",
         )?;
@@ -296,16 +319,23 @@ impl Quarantined {
         )
     }
     /// Explicit owned unlink only; no recursive deletion or destructor cleanup.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, unlinkat).")]
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is the owner, when `authorize` fails, or when the
+    /// unlink is uncertain or changed the member beyond its own effect.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
     pub fn unlink(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Removed> {
         authorize()?;
         self.recheck_authorized(authorize)?;
         require(
-            unsafe { libc::geteuid() } == self.owner,
+            crate::process_identity::effective_uid() == self.owner,
             "retirement unlink writer authority",
         )?;
         let name = single(&self.name)?;
         require(
+            // SAFETY: `name` is a NUL-terminated CString and `self.parent` keeps the descriptor
+            // open.
             unsafe {
                 libc::unlinkat(
                     self.parent.as_raw_fd(),
@@ -339,6 +369,7 @@ impl Quarantined {
         Ok(removed)
     }
 }
+/// Proof of an owned unlink, retaining the removed description and its parent.
 pub struct Removed {
     original: Quarantined,
     epoch: files::FileIdentity,
@@ -346,23 +377,46 @@ pub struct Removed {
 impl Removed {
     /// Original caller file before either owned rename or unlink, for comparison
     /// with its already-held inventory. No decoded identity creates this actor.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Removed::recheck`].
     pub fn before_epoch(&self) -> Result<files::FileIdentity> {
         self.recheck()?;
         Ok(self.original.before_epoch)
     }
+    /// Original name of the removed member.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Removed::recheck`].
     pub fn original_name(&self) -> Result<&Path> {
         self.recheck()?;
         Ok(&self.original.original)
     }
+    /// The removed member's description.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Removed::recheck`].
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.original.file)
     }
+    /// The retained parent directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Removed::recheck`].
     pub fn parent(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.original.parent)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
+    /// Verify the removed member, its parent and mount are unchanged and neither name reappeared.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         let q = &self.original;
         require(
@@ -370,7 +424,7 @@ impl Removed {
                 && mount_identity::id(q.parent.as_fd(), true)? == q.parent_mount
                 && files::identity(&q.file.metadata()?) == self.epoch
                 && self.epoch.10 == 0
-                && unsafe { libc::fcntl(q.file.as_raw_fd(), libc::F_GETFL) } == q.flags
+                && crate::files::status_flags(&q.file) == q.flags
                 && mount_identity::id(q.file.as_fd(), true)? == q.mount
                 && files::optional_relative(&q.parent, &q.name)?.is_none()
                 && files::optional_relative(&q.parent, &q.original)?.is_none(),
@@ -386,18 +440,16 @@ mod tests {
         tempfile::Builder::new()
             .prefix("retire-")
             .permissions(std::fs::Permissions::from_mode(0o700))
-            .tempdir_in(
-                std::env::var_os("ENZIMOS_TEST_TMPDIR")
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(|| std::env::current_dir().unwrap()),
-            )
+            .tempdir_in(std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(
+                || std::env::current_dir().unwrap(),
+                std::path::PathBuf::from,
+            ))
             .unwrap()
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn revocation_replacement_and_unknown_directory_members_preserve_data() {
         let d = fixture();
-        let uid = unsafe { libc::geteuid() };
+        let uid = crate::process_identity::effective_uid();
         let parent = files::directory(d.path(), Some(uid)).unwrap();
         std::fs::write(d.path().join("info"), b"captured").unwrap();
         let file = files::open_relative(&parent, Path::new("info")).unwrap();

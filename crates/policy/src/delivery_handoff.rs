@@ -65,7 +65,6 @@ pub(crate) fn verify_output(request: &Request, home: &File, file: &File) -> Resu
 /// No grant is accepted from this data-only request. Callers retain their original
 /// grant, lock, account and export, and recheck them through `authorize` at each gate.
 /// Every failure keeps the entered intent and any final output; this never retries.
-#[allow(unsafe_code, reason = "Linux syscall ABI (getpid).")]
 pub fn copy<F: FnMut() -> Result<()>>(
     approved: &crate::delivery_child::Image,
     body: &[u8],
@@ -79,7 +78,7 @@ pub fn copy<F: FnMut() -> Result<()>>(
     let request = Request::decode(body)?;
     require(
         request.group_nonce == group.nonce()?
-            && request.supervisor_pid == unsafe { libc::getpid() } as u32
+            && request.supervisor_pid == enzimos_platform::process_identity::current_pid() as u32
             && request.boot_id == crate::operation::boot_id()?,
         "delivery supervisor request differs",
     )?;

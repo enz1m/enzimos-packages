@@ -43,9 +43,13 @@ fn parse(bytes: &[u8], inode: u64) -> Result<()> {
         "original flock inode differs",
     )
 }
+/// Require that `file`'s open description holds an exclusive flock on its inode.
 /// No LOCK_EX, conversion or repair occurs here. Callers also retain their
 /// original inode/parent/mount checks and independent rival-open exclusion.
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
+///
+/// # Errors
+///
+/// Fails when the lock is absent or shared, the file changed, or its fdinfo cannot be read.
 pub fn exclusive(file: &File) -> Result<()> {
     let before = file.metadata()?;
     let identity = files::identity(&before);
@@ -54,7 +58,7 @@ pub fn exclusive(file: &File) -> Result<()> {
         std::process::id(),
         file.as_raw_fd()
     ));
-    let bytes = files::read_kernel_owned(&path, 8192, unsafe { libc::geteuid() })?;
+    let bytes = files::read_kernel_owned(&path, 8192, crate::process_identity::effective_uid())?;
     parse(&bytes, before.ino())?;
     require(
         files::identity(&file.metadata()?) == identity,
@@ -90,23 +94,28 @@ mod tests {
             .unwrap();
         assert!(exclusive(&held).is_err());
         assert_eq!(
+            // SAFETY: flock takes no pointers and `held` keeps the descriptor open.
             unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
             0
         );
         exclusive(&held).unwrap();
         exclusive(&duplicate).unwrap();
         assert!(exclusive(&rival).is_err());
+        // SAFETY: flock takes no pointers and `held` keeps the descriptor open.
         assert_eq!(unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_UN) }, 0);
         assert_eq!(
+            // SAFETY: flock takes no pointers and `rival` keeps the descriptor open.
             unsafe { libc::flock(rival.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
             0
         );
         assert!(exclusive(&held).is_err());
         assert!(exclusive(&duplicate).is_err());
         exclusive(&rival).unwrap();
+        // SAFETY: flock takes no pointers and `rival` keeps the descriptor open.
         assert_eq!(unsafe { libc::flock(rival.as_raw_fd(), libc::LOCK_UN) }, 0);
         assert!(exclusive(&held).is_err());
         assert_eq!(
+            // SAFETY: flock takes no pointers and `rival` keeps the descriptor open.
             unsafe { libc::flock(rival.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
             0
         );

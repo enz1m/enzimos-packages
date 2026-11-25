@@ -33,7 +33,6 @@ pub struct Source<'a> {
     uuid: String,
 }
 impl<'a> Source<'a> {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -47,7 +46,7 @@ impl<'a> Source<'a> {
         let uuid = crate::recovery_run_stage::luks_uuid(guard)?;
         let block = Block::by_uuid(&uuid, false)?;
         let epoch = files::identity(&block.file.metadata()?);
-        let flags = unsafe { libc::fcntl(block.file.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&block.file);
         require(
             flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
             "online original LUKS source read-only description required",
@@ -79,7 +78,6 @@ impl<'a> Source<'a> {
         )?;
         self.verify(authorize)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -90,7 +88,7 @@ impl<'a> Source<'a> {
         self.command.recheck()?;
         require(
             files::identity(&self.block.file.metadata()?) == self.epoch
-                && unsafe { libc::fcntl(self.block.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&self.block.file) == self.flags
                 && crate::block::observe(self.block.file.as_fd())? == self.identity,
             "original online LUKS source identity/description changed",
         )?;

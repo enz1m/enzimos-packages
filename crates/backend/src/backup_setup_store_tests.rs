@@ -13,11 +13,10 @@ fn fixture() -> tempfile::TempDir {
         .unwrap()
 }
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn interrupted_original_setup_jobs_become_uncertain_and_never_replay() {
     let _fork_guard = crate::LOCK_FIXTURE_GUARD.lock().unwrap();
     let dir = fixture();
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let id = record::tests::ID;
     let mut store = SetupStore::open_owned(dir.path(), owner, || Ok(())).unwrap();
     let (review, created) = store

@@ -7,13 +7,10 @@ use std::{
     os::fd::{AsRawFd, FromRawFd},
     path::Path,
 };
-#[allow(
-    unsafe_code,
-    reason = "Linux syscall ABI (fstat, fstatfs, geteuid, open)."
-)]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fstat, fstatfs, open).")]
 pub fn direct_ram_pid1() -> Result<()> {
     require(
-        std::process::id() == 1 && unsafe { libc::geteuid() } == 0,
+        std::process::id() == 1 && enzimos_platform::process_identity::effective_uid() == 0,
         "independent recovery requires direct Root PID1",
     )?;
     let root = unsafe {

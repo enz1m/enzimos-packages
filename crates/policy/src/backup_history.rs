@@ -562,7 +562,6 @@ mod tests {
         owner: u32,
     }
     const BOOT: &str = "11111111-2222-3333-4444-555555555555";
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
     fn control() -> Control {
         use std::os::unix::fs::PermissionsExt;
         let base =
@@ -572,7 +571,7 @@ mod tests {
             .tempdir_in(base)
             .unwrap();
         // SAFETY: getuid has no preconditions.
-        let owner = unsafe { libc::getuid() };
+        let owner = enzimos_platform::process_identity::real_uid();
         let file = files::directory(dir.path(), Some(owner)).unwrap();
         let mount =
             enzimos_platform::mount_identity::id(std::os::fd::AsFd::as_fd(&file), true).unwrap();

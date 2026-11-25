@@ -32,9 +32,8 @@ fn named(path: &Path) -> Result<File> {
     let parent = files::directory(path.parent().unwrap(), Some(0))?;
     files::open_relative(&parent, Path::new(path.file_name().unwrap()))
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 pub(crate) fn readonly(file: &File) -> Result<()> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "worker borrowed authority must be read-only",

@@ -54,12 +54,12 @@ fn renamed(a: files::FileIdentity, b: files::FileIdentity) -> bool {
         && a.9 == b.9
         && a.10 == b.10
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn description_flags(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = crate::files::status_flags(&file);
     require(flags >= 0, "original copy description flags unavailable")?;
     Ok(flags)
 }
+/// An exclusively created, measured copy that retains its source, parent and created descriptions.
 pub struct Copy {
     source: File,
     source_epoch: files::FileIdentity,
@@ -84,7 +84,15 @@ pub struct Copy {
     moves: u8,
 }
 impl Copy {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, openat).")]
+    /// Copy `bytes` bytes of `input` into a new file named `destination` in `parent` and verify its
+    /// SHA-256 equals `digest`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is `owner`, when the size or digest is out of bounds
+    /// or differs, when `destination` exists, when any retained description changes, or when
+    /// `authorize` fails.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn create(
         input: &mut File,
         parent: &File,
@@ -105,7 +113,10 @@ impl Copy {
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
             "copy measured size/digest bounds",
         )?;
-        require(unsafe { libc::geteuid() } == owner, "original copy writer")?;
+        require(
+            crate::process_identity::effective_uid() == owner,
+            "original copy writer",
+        )?;
         let parent_shape = shape(parent, owner)?;
         let mount = mount_identity::id(parent.as_fd(), true)?;
         let m = input.metadata()?;
@@ -134,6 +145,7 @@ impl Copy {
                 && description_flags(parent)? == parent_flags,
             "original copy inputs changed before create",
         )?;
+        // SAFETY: `temp` is a NUL-terminated CString and `parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -143,6 +155,7 @@ impl Copy {
             )
         };
         require(raw >= 0, "exclusive copy pending; retain uncertainty")?;
+        // SAFETY: `raw` was just returned by openat and is owned by nothing else.
         let mut written = unsafe { File::from_raw_fd(raw) };
         let written_flags = description_flags(&written)?;
         let created = file(&written, owner, mount, bytes)?;
@@ -225,7 +238,6 @@ impl Copy {
     fn light(&self) -> Result<()> {
         self.light_at(self.source_epoch)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn light_at(&self, source_epoch: files::FileIdentity) -> Result<()> {
         require(
             description_flags(&self.source)? == self.source_flags
@@ -235,7 +247,7 @@ impl Copy {
             "original copy description flags changed",
         )?;
         require(
-            unsafe { libc::geteuid() } == self.owner
+            crate::process_identity::effective_uid() == self.owner
                 && shape(&self.parent, self.owner)? == self.shape
                 && mount_identity::id(self.parent.as_fd(), true)? == self.mount
                 && files::identity(&self.source.metadata()?) == source_epoch
@@ -277,15 +289,30 @@ impl Copy {
     }
     /// Cheap fresh checkpoint of the original measured descriptions. A content
     /// mutation changes the full kernel epoch; no new file or epoch is adopted.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `authorize` fails or a retained description changed.
     pub fn checkpoint(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         self.light()?;
         authorize()
     }
+    /// The copied file after a [`Copy::checkpoint`].
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Copy::checkpoint`].
     pub fn descriptor(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&File> {
         self.checkpoint(authorize)?;
         Ok(&self.readonly)
     }
+    /// [`Copy::checkpoint`] that accepts the source having been replaced by `replacement`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the source was not replaced by exactly `replacement`, `authorize` fails, or a
+    /// retained description changed.
     pub fn checkpoint_after_source_replacement(
         &self,
         replacement: &Copy,
@@ -303,6 +330,11 @@ impl Copy {
         replacement.light()?;
         authorize()
     }
+    /// Checkpoint and reread the copy to verify its size and SHA-256.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `authorize` fails, a retained description changed, or the readback differs.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         let mut check = || {
             authorize()?;
@@ -323,6 +355,10 @@ impl Copy {
     }
     /// A live actual replacement can attest only its own source unlink transition.
     /// No epoch is adopted or stored, and the replacement is rechecked each chunk.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `authorize` fails, a retained description changed, or the readback differs.
     pub fn recheck_after_source_replacement(
         &self,
         replacement: &Copy,
@@ -392,6 +428,8 @@ impl Copy {
         let from = name(&self.name)?;
         let to = name(destination)?;
         require(
+            // SAFETY: Both names are NUL-terminated CStrings and `self.parent` keeps the descriptor
+            // open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),
@@ -443,6 +481,11 @@ impl Copy {
     /// replacement boundary. A caller must retain its original target beforehand
     /// and perform fresh post-mutation checks with this actual actor before
     /// completing any receipt. The old target may no longer have its old name.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the copy was already renamed, `authorize` fails, or the rename cannot be
+    /// completed exactly.
     pub fn replace(
         self,
         destination: &str,
@@ -455,13 +498,24 @@ impl Copy {
         )?;
         self.rename(destination, original, authorize)
     }
+    /// The copied file after a [`Copy::recheck`].
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Copy::recheck`].
     pub fn file(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&File> {
         self.recheck(authorize)?;
         Ok(&self.readonly)
     }
+    /// Lowercase hex SHA-256 of the copied bytes.
     pub fn sha256(&self) -> &str {
         &self.sha
     }
+    /// Whether this copy's rename replaced `original`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a retained description changed or metadata cannot be read.
     pub fn replaced(&self, original: &File) -> Result<bool> {
         self.light()?;
         if let Some((file, _, _)) = &self.removed {
@@ -472,6 +526,10 @@ impl Copy {
     }
     /// The original input name may have been replaced only through this actual
     /// retained actor; its pre-rename epoch remains bound rather than decoded.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a retained description changed or metadata cannot be read.
     pub fn original_epoch(&self, original: &File) -> Result<Option<files::FileIdentity>> {
         self.light()?;
         if self.replaced(original)? {
@@ -490,28 +548,26 @@ mod tests {
         tempfile::Builder::new()
             .prefix("owned-copy-")
             .permissions(std::fs::Permissions::from_mode(0o700))
-            .tempdir_in(
-                std::env::var_os("ENZIMOS_TEST_TMPDIR")
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(|| std::env::current_dir().unwrap()),
-            )
+            .tempdir_in(std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(
+                || std::env::current_dir().unwrap(),
+                std::path::PathBuf::from,
+            ))
             .unwrap()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn source(d: &tempfile::TempDir) -> File {
         std::fs::write(d.path().join("source"), b"original").unwrap();
         files::open_relative(
-            &files::directory(d.path(), Some(unsafe { libc::geteuid() })).unwrap(),
+            &files::directory(d.path(), Some(crate::process_identity::effective_uid())).unwrap(),
             Path::new("source"),
         )
         .unwrap()
     }
 
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn actual_created_copy_replaces_only_caller_original_and_never_replays() {
         let d = fixture();
-        let uid = unsafe { libc::geteuid() };
+        let uid = crate::process_identity::effective_uid();
         let parent = files::directory(d.path(), Some(uid)).unwrap();
         let mut input = source(&d);
         std::fs::write(d.path().join("target"), b"old").unwrap();
@@ -537,6 +593,7 @@ mod tests {
             b"original"
         );
         assert_eq!(
+            // SAFETY: F_GETFL takes no pointers and the borrowed File keeps the descriptor open.
             unsafe {
                 libc::fcntl(
                     copy.file(&mut || Ok(())).unwrap().as_raw_fd(),

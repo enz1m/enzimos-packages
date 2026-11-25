@@ -814,12 +814,15 @@ mod tests {
             .tempdir_in(work)
             .unwrap()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
     fn store(dir: &tempfile::TempDir) -> Store<'static> {
-        let f = files::directory(dir.path(), Some(unsafe { libc::getuid() })).unwrap();
+        let f = files::directory(
+            dir.path(),
+            Some(enzimos_platform::process_identity::real_uid()),
+        )
+        .unwrap();
         Store::retained_setup(
             dir.path(),
-            unsafe { libc::getuid() },
+            enzimos_platform::process_identity::real_uid(),
             mount_identity::id(f.as_fd(), true).unwrap(),
             Box::new(|| Ok(())),
         )

@@ -5,6 +5,7 @@
 //! never carry credential contents. This still bounds length and strips control
 //! characters so a hostile filename or label cannot forge journal lines.
 const LIMIT: usize = 400;
+/// `text` with control characters replaced by spaces, cut to 400 characters plus `...`.
 pub fn bounded(text: &str) -> String {
     let mut out = String::with_capacity(text.len().min(LIMIT + 3));
     for (count, c) in text.chars().enumerate() {

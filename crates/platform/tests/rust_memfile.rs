@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
+//! Sealed read-only memfds.
 use enzimos_platform::memfile;
 use std::io::{Seek, SeekFrom};
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn sealed_request_reader_refuses_wrong_owner_regular_files_and_excess_length() {
-    let uid = unsafe { libc::geteuid() };
+    let uid = enzimos_platform::process_identity::effective_uid();
     let mut file = memfile::sealed("request-reader", b"sealed request").unwrap();
     file.seek(SeekFrom::Start(3)).unwrap();
     assert_eq!(

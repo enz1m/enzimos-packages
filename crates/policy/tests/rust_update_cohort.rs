@@ -92,11 +92,10 @@ fn directory() -> tempfile::TempDir {
         .unwrap()
 }
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn original_cohort_requires_exact_database_kernels_and_preserves_replacement_refusal() {
     let root = directory();
     let document = fixture(root.path());
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let source = Cohort::at(root.path(), owner).unwrap();
     assert_eq!(source.document(), &document);
     assert_eq!(source.packages_metadata().len(), 2);

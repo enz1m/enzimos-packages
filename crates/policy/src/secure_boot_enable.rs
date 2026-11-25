@@ -379,7 +379,7 @@ impl Mask {
         this.recheck()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, openat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     fn retain_link(&mut self) -> Result<()> {
         let leaf = CString::new(MASK).unwrap();
         let fd = unsafe {
@@ -400,7 +400,7 @@ impl Mask {
                 && mount_identity::id(file.as_fd(), true)? == self.mount,
             "original updater mask ownership/mount",
         )?;
-        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&file);
         require(flags >= 0, "mask description status unavailable")?;
         self.link = Some((file, files::identity(&m), flags));
         Ok(())
@@ -417,10 +417,7 @@ impl Mask {
         }
         Ok(())
     }
-    #[allow(
-        unsafe_code,
-        reason = "Linux syscall ABI (fcntl, fstatat, readlinkat)."
-    )]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (fstatat, readlinkat).")]
     fn recheck(&self) -> Result<()> {
         self.parent()?;
         if self.ready {
@@ -441,7 +438,7 @@ impl Mask {
                 } == 0
                     && (status.st_dev, status.st_ino) == (epoch.0, epoch.1)
                     && files::identity(&held.metadata()?) == *epoch
-                    && unsafe { libc::fcntl(held.as_raw_fd(), libc::F_GETFL) } == *flags
+                    && enzimos_platform::files::status_flags(&held) == *flags
                     && mount_identity::id(held.as_fd(), true)? == self.mount,
                 "original updater mask replaced/changed",
             )?;

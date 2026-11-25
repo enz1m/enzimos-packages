@@ -74,7 +74,6 @@ fn request(id: &str, action: &str, digest: Value, selection: Value) -> Operation
     )
     .unwrap()
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn fixture(fail: bool) -> (tempfile::TempDir, Jobs<Fake>, Arc<Fake>, u32) {
     let work = std::path::PathBuf::from(
         std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -84,7 +83,7 @@ fn fixture(fail: bool) -> (tempfile::TempDir, Jobs<Fake>, Arc<Fake>, u32) {
         .permissions(std::fs::Permissions::from_mode(0o700))
         .tempdir_in(work)
         .unwrap();
-    let uid = unsafe { libc::geteuid() };
+    let uid = enzimos_platform::process_identity::effective_uid();
     let guard: Guard = Box::new(|| Ok(()));
     let store = Store::open_owned(temp.path(), uid, guard).unwrap();
     let provider = Arc::new(Fake {

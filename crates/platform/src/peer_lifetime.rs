@@ -6,6 +6,7 @@ use std::{
     os::fd::{AsRawFd, FromRawFd},
     path::PathBuf,
 };
+/// A caller process held by pidfd and its start time.
 pub struct PeerLifetime {
     pid: u32,
     uid: u32,
@@ -43,6 +44,11 @@ fn observe(pid: u32, uid: u32) -> Result<u64> {
     Ok(stat.start_ticks)
 }
 impl PeerLifetime {
+    /// Retain process `pid`, owned by `uid`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the identity is out of bounds or the process cannot be observed or opened.
     #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     pub fn capture(pid: u32, uid: u32) -> Result<Self> {
         require(
@@ -50,12 +56,14 @@ impl PeerLifetime {
             "caller process identity bounds",
         )?;
         let start = observe(pid, uid)?;
+        // SAFETY: pidfd_open takes no pointers.
         let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) as i32 };
         require(fd >= 0, "caller process pidfd unavailable")?;
         let this = Self {
             pid,
             uid,
             start,
+            // SAFETY: `fd` was just returned by pidfd_open and is owned by nothing else.
             pidfd: unsafe { File::from_raw_fd(fd) },
         };
         this.recheck()?;
@@ -69,10 +77,16 @@ impl PeerLifetime {
             revents: 0,
         };
         require(
+            // SAFETY: `descriptor` is one writable pollfd and the count is 1.
             unsafe { libc::poll(&mut descriptor, 1, 0) } == 0 && descriptor.revents == 0,
             "original caller process no longer alive",
         )
     }
+    /// Verify the process is alive with its original PID and start time.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it exited or changed.
     pub fn recheck(&self) -> Result<()> {
         self.alive()?;
         require(

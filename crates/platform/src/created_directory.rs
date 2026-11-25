@@ -16,6 +16,7 @@ fn shape(file: &File, owner: u32) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
+/// A directory this caller created exclusively and keeps empty until handed on.
 pub struct Created {
     parent: File,
     parent_shape: Shape,
@@ -26,6 +27,12 @@ pub struct Created {
     owner: u32,
 }
 impl Created {
+    /// Create the directory `name` in `parent`, owned by `owner`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `name` is not one component or exists, `authorize` fails, or the parent or
+    /// created directory is unsafe.
     pub fn create(
         parent: &File,
         name: &Path,
@@ -54,6 +61,11 @@ impl Created {
         authorize()?;
         Ok(this)
     }
+    /// Verify the directory is unchanged, still at its name, and empty.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed, was covered, or is not empty.
     pub fn recheck(&self) -> Result<()> {
         let named = files::directory_relative(&self.parent, &self.name, Some(self.owner))?;
         require(
@@ -68,6 +80,11 @@ impl Created {
             "original newly created directory changed/covered/nonempty",
         )
     }
+    /// Require that `parent` and `name` are this directory's own parent and leaf.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they differ, or on [`Created::recheck`].
     pub fn require_parent(&self, parent: &File, name: &Path) -> Result<()> {
         self.recheck()?;
         require(
@@ -80,6 +97,11 @@ impl Created {
     }
     /// Consume the empty exclusive creation witness into a new-row registry
     /// before any receipt publication. The registry retains this actual inode.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `path` does not name this directory, `authorize` or a recheck fails, or the
+    /// registry cannot be observed.
     pub fn into_receipt_registry(
         self,
         path: &Path,

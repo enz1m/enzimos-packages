@@ -14,6 +14,7 @@ fn idle_child_observes_revocation_and_retires_original_process() {
     std::fs::copy("/usr/bin/sleep", &path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
     let image = File::open(&path).unwrap();
+    // SAFETY: gettid takes no arguments and cannot fail.
     let tid = unsafe { libc::syscall(libc::SYS_gettid) };
     let mut original = None;
     let mut boundary = || -> Result<()> {
@@ -24,8 +25,10 @@ fn idle_child_observes_revocation_and_retires_original_process() {
                 &std::fs::read_to_string(format!("/proc/{pid}/stat"))?,
                 pid,
             )?;
+            // SAFETY: pidfd_open takes no pointers.
             let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
             require(raw >= 0, "owned fixture pidfd unavailable")?;
+            // SAFETY: `raw` was just returned by pidfd_open and is owned by nothing else.
             let retained = unsafe { File::from_raw_fd(raw as i32) };
             require(
                 crate::process_identity::pidfd_target(std::os::fd::AsFd::as_fd(&retained))? == pid,
@@ -65,6 +68,7 @@ fn idle_child_observes_revocation_and_retires_original_process() {
         events: libc::POLLIN,
         revents: 0,
     };
+    // SAFETY: `poll` is one writable pollfd and the count is 1.
     assert_eq!(unsafe { libc::poll(&mut poll, 1, 0) }, 1);
     assert!(poll.revents & libc::POLLIN != 0);
 }

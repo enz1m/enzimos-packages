@@ -197,7 +197,6 @@ impl Target {
     ) -> Result<Self> {
         Self::observe_at_state(guard, uuid, path, expected, empty, false)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn observe_at_state(
         guard: &Source<'_>,
         uuid: &str,
@@ -219,7 +218,7 @@ impl Target {
             "private new restore subvolume required",
         )?;
         let shape = (m.dev(), m.ino(), m.mode(), m.uid(), m.gid());
-        let flags = unsafe { libc::fcntl(directory.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&directory);
         require(
             flags >= 0 && flags & (libc::O_ACCMODE | libc::O_PATH) == libc::O_RDONLY,
             "restore descriptor role",
@@ -295,7 +294,6 @@ impl Target {
         this.recheck(guard)?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self, guard: &Source<'_>) -> Result<()> {
         guard.recheck()?;
         let path = self.path;
@@ -321,7 +319,7 @@ impl Target {
             )?;
         }
         require(
-            unsafe { libc::fcntl(self.directory.as_raw_fd(), libc::F_GETFL) } == self.flags,
+            enzimos_platform::files::status_flags(&self.directory) == self.flags,
             "restore shared description flags changed",
         )?;
         let rows = storage_runtime::rows()?;

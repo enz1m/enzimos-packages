@@ -44,7 +44,6 @@ impl Credential {
         crate::namespaces::initial()?;
         Self::retained(Path::new("/etc/enzimos/backup.next-password"), 0)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn retained(path: &Path, owner: u32) -> Result<Self> {
         let parent = files::directory(
             path.parent().ok_or_else(|| {
@@ -67,8 +66,8 @@ impl Credential {
                 && (1..=4096).contains(&m.len()),
             "private single-link backup credential required",
         )?;
-        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
-        let parent_flags = unsafe { libc::fcntl(parent.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&file);
+        let parent_flags = enzimos_platform::files::status_flags(&parent);
         require(
             flags >= 0
                 && flags & libc::O_ACCMODE == libc::O_RDONLY
@@ -91,16 +90,14 @@ impl Credential {
         this.recheck()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn recheck(&self) -> Result<()> {
         let parent = files::directory(self.path.parent().unwrap(), Some(self.owner))?;
         let named = files::open_relative(&self.parent, Path::new(self.path.file_name().unwrap()))?;
         require(
             shape(&parent, self.owner)? == self.parent_shape
                 && shape(&self.parent, self.owner)? == self.parent_shape
-                && unsafe { libc::fcntl(self.parent.as_raw_fd(), libc::F_GETFL) }
-                    == self.parent_flags
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&self.parent) == self.parent_flags
+                && enzimos_platform::files::status_flags(&self.file) == self.flags
                 && mount_identity::id(parent.as_fd(), true)? == self.parent_mount
                 && mount_identity::id(self.parent.as_fd(), true)? == self.parent_mount
                 && files::identity(&self.file.metadata()?) == self.identity

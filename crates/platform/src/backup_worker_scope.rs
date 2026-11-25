@@ -18,28 +18,27 @@ use std::{
 };
 const IMAGE: &str = "/usr/lib/enzimos-backend/enzimos-backup-worker";
 const KINDS: &[&str] = &["mnt", "pid", "user", "net", "uts", "ipc", "cgroup"];
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn initial() -> Result<()> {
     require(
-        unsafe { libc::geteuid() } == 0,
+        crate::process_identity::effective_uid() == 0,
         "Root worker closure authority required",
     )?;
     let body = files::read_kernel(Path::new("/proc/2/stat"), 8192)?;
     let body =
         std::str::from_utf8(&body).map_err(|_| Error("kernel namespace anchor encoding".into()))?;
     process_identity::parse_stat(body, 2)?;
-    let begin = body
-        .find('(')
-        .ok_or_else(|| Error("missing kernel process name".into()))?;
-    let end = body
-        .rfind(')')
+    let (head, rest) = body
+        .rsplit_once(')')
         .ok_or_else(|| Error("unterminated kernel process name".into()))?;
-    let fields = body[end + 1..].split_whitespace().collect::<Vec<_>>();
+    let (_, name) = head
+        .split_once('(')
+        .ok_or_else(|| Error("missing kernel process name".into()))?;
+    let fields = rest.split_whitespace().collect::<Vec<_>>();
     let flags = fields[6]
         .parse::<u64>()
         .map_err(|_| Error("kernel namespace anchor flags".into()))?;
     require(
-        &body[begin + 1..end] == "kthreadd" && flags & 0x00200000 != 0,
+        name == "kthreadd" && flags & 0x00200000 != 0,
         "actual initial kernel thread required",
     )?;
     for kind in KINDS {
@@ -52,6 +51,12 @@ fn initial() -> Result<()> {
     }
     Ok(())
 }
+/// Systemd unit name of the backup worker with the 32-digit hex uid=1000(userm) gid=1000(userm)
+/// groups=1000(userm),959(docker),986(uucp),998(wheel).
+///
+/// # Errors
+///
+/// Fails unless `id` is 32 lowercase hex digits.
 pub fn unit(id: &str) -> Result<String> {
     require(
         id.len() == 32
@@ -69,8 +74,10 @@ fn shape(file: &File) -> Result<Value> {
         m.is_dir() && m.uid() == 0 && m.gid() == 0 && m.mode() & 0o022 == 0,
         "protected original cgroup required",
     )?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `fs` is a writable `libc::statfs` and `file` keeps the descriptor open.
         unsafe { libc::fstatfs(file.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x63677270,
         "actual cgroup v2 required",
     )?;
@@ -185,6 +192,7 @@ fn observe_remains(binding: &Value) -> Result<Remains> {
     };
     Ok(judge(alive, cgroup, &binding["cgroup"]))
 }
+/// A live backup worker bound to its cgroup, namespaces and executable.
 pub struct Scope {
     process: Retained,
     directory: File,
@@ -195,6 +203,11 @@ pub struct Scope {
 impl Scope {
     /// Capture while the measured original task is alive and belongs to this
     /// exact cgroup. The backend separately verifies the registered PID1 unit.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the process is not the expected Root worker, is in another cgroup or namespace,
+    /// or the cgroup directory differs.
     pub fn capture(id: &str, process: &Retained, directory: &File) -> Result<Self> {
         initial()?;
         let unit = unit(id)?;
@@ -249,6 +262,11 @@ impl Scope {
             "captured original cgroup changed",
         )
     }
+    /// Recorded binding after checking the worker is still in its original cgroup.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the cgroup or the worker's membership changed.
     pub fn binding(&self) -> Result<&Value> {
         self.process.recheck()?;
         self.original()?;
@@ -280,6 +298,10 @@ impl Scope {
     }
     /// Verify a received descriptor against the original still-live worker's
     /// advertised open file description, while the worker awaits caller receipt.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the binding changed or the descriptor is not the advertised open description.
     pub fn require_description(&self, file: BorrowedFd<'_>, number: u32) -> Result<()> {
         self.binding()?;
         self.process.require_description(file, number)?;
@@ -287,6 +309,10 @@ impl Scope {
         Ok(())
     }
     /// Observability only; immutable original metadata grants no execution or cleanup.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the original scope changed.
     pub fn original_binding(&self) -> Result<&Value> {
         self.original()?;
         Ok(&self.binding)
@@ -340,10 +366,20 @@ impl Scope {
             }
         }
     }
+    /// Whether the worker exited and its cgroup has no remaining processes.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the scope changed or cannot be observed.
     pub fn exited_and_empty(&self) -> Result<bool> {
         self.original()?;
         Ok(self.process.exited()? && self.empty()?)
     }
+    /// Close the scope once the worker and all descendants are gone.
+    ///
+    /// # Errors
+    ///
+    /// Fails while the worker or a descendant is still live.
     pub fn close(self) -> Result<Closed> {
         require(
             self.exited_and_empty()?,
@@ -352,16 +388,27 @@ impl Scope {
         Ok(Closed { scope: self })
     }
 }
+/// A worker scope proven empty.
 pub struct Closed {
     scope: Scope,
 }
 impl Closed {
+    /// Verify the scope is still empty.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a process reappeared or the scope changed.
     pub fn recheck(&self) -> Result<()> {
         require(
             self.scope.exited_and_empty()?,
             "original closed worker scope no longer empty",
         )
     }
+    /// Recorded binding after a [`Closed::recheck`].
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Closed::recheck`].
     pub fn binding(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.scope.binding)

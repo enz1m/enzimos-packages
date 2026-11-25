@@ -33,11 +33,11 @@ fn relative(target: &str) -> Result<&str> {
     )?;
     Ok(relative)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, fstatvfs).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 fn protections(file: &File) -> Result<()> {
     let m = file.metadata()?;
     // SAFETY: `file` owns an open descriptor.
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = crate::files::status_flags(&file);
     // SAFETY: `statvfs` is plain old data; all-zero is a valid value.
     let mut status: libc::statvfs = unsafe { std::mem::zeroed() };
     let required = libc::ST_RDONLY | libc::ST_NOSUID | libc::ST_NODEV | libc::ST_NOEXEC;
@@ -226,9 +226,9 @@ impl Prepared {
     /// creator's namespace, or a source or the placeholder changed.
     #[allow(
         unsafe_code,
-        reason = "Linux syscall ABI (close, fstat, fstatfs, geteuid and others)."
+        reason = "Linux syscall ABI (close, fstat, fstatfs and others)."
     )]
-    pub unsafe fn enter_child(&self) -> std::io::Result<()> {
+    pub(crate) unsafe fn enter_child(&self) -> std::io::Result<()> {
         // SAFETY: the caller's contract is this function's own.
         unsafe { self.owned_child(true) }?;
         // SAFETY: unshare affects only this owned child.
@@ -264,9 +264,9 @@ impl Prepared {
     /// creator's namespace, or a source or the placeholder changed.
     #[allow(
         unsafe_code,
-        reason = "Linux syscall ABI (getpid, open, poll and others)."
+        reason = "Linux syscall ABI (close, fstat, fstatfs and others)."
     )]
-    pub unsafe fn enter_private_child(&self) -> std::io::Result<()> {
+    pub(crate) unsafe fn enter_private_child(&self) -> std::io::Result<()> {
         // SAFETY: the caller's contract is this function's own.
         unsafe { self.owned_child(false) }?;
         // SAFETY: as above.
@@ -298,7 +298,7 @@ impl Prepared {
         // SAFETY: sets this child's own death signal.
         if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) } != 0
             // SAFETY: an identity query without arguments.
-            || unsafe { libc::getppid() } != self.creator as i32
+            || crate::process_identity::parent_pid() != self.creator as i32
         {
             return Err(denied());
         }

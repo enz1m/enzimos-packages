@@ -139,7 +139,7 @@ impl Child {
     /// There is no fork/PID/migration or alternate-image fallback.
     #[allow(
         unsafe_code,
-        reason = "Linux syscall ABI (_exit, dup2, fcntl, getpid and others)."
+        reason = "Linux syscall ABI (_exit, dup2, fcntl and others)."
     )]
     pub fn spawn(
         approved: &Image,
@@ -188,7 +188,7 @@ impl Child {
         let null_alias = unsafe { libc::fcntl(null.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(null_alias >= 64, "original null device alias unavailable")?;
         let null_alias = unsafe { File::from_raw_fd(null_alias) };
-        let parent = unsafe { libc::getpid() };
+        let parent = enzimos_platform::process_identity::current_pid();
         let socket = socket_alias.as_raw_fd();
         let exec = image.as_raw_fd();
         let null_fd = null_alias.as_raw_fd();

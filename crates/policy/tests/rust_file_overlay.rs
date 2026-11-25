@@ -40,7 +40,6 @@ fn archive(path: &Path, duplicate: bool, link: Option<&str>) -> File {
     File::open(path).unwrap()
 }
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn reviews_complete_archive_then_streams_executable_and_internal_link_into_owned_target() {
     let temp = tempfile::Builder::new()
         .permissions(std::fs::Permissions::from_mode(0o700))
@@ -54,7 +53,7 @@ fn reviews_complete_archive_then_streams_executable_and_internal_link_into_owned
     let review = file_overlay::review(&input, &declared).unwrap();
     let target = temp.path().join("target");
     std::fs::create_dir(&target).unwrap();
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let root = files::directory(&target, Some(owner)).unwrap();
     let receipt =
         file_overlay::extract(&input, &declared, &review, &root, owner, &mut || Ok(())).unwrap();

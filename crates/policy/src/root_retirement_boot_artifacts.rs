@@ -17,9 +17,8 @@ use std::{
     os::{fd::AsRawFd, unix::fs::MetadataExt},
     path::Path,
 };
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let value = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let value = enzimos_platform::files::status_flags(&file);
     require(
         value >= 0 && value & libc::O_ACCMODE == libc::O_RDONLY,
         "original ESP artifact read-only descriptor",
@@ -90,12 +89,11 @@ impl BootText {
             TextState::Replaced(artifact) => artifact.file(),
         }
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self) -> Result<()> {
         let file = self.file()?;
         require(
             flags(&self.original_description)? == self.original_flags
-                && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } == self.current_flags
+                && enzimos_platform::files::status_flags(&file) == self.current_flags
                 && files::read_file(file, boot_entries::MAX_TEXT, Some(0), true)?
                     == self.body.as_bytes(),
             "original or actual owned loader text/descriptor flags changed",

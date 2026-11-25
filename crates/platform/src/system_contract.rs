@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 //! Stable System1 operation ordering shared by wire admission and protection ledgers.
+/// System operation names in their stable wire order.
 pub const OPERATIONS: [&str; 31] = [
     "backup-create",
     "recovery-prepare",

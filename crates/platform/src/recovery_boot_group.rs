@@ -28,12 +28,14 @@ fn epoch(file: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, mkdirat, openat).")]
 fn directory(parent: &File, name: &str, exclusive: bool) -> Result<File> {
     let name = CString::new(name).map_err(|_| Error("invalid cgroup member name".into()))?;
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let rc = unsafe { libc::mkdirat(parent.as_raw_fd(), name.as_ptr(), 0o700) };
     require(
         rc == 0
             || (!exclusive && std::io::Error::last_os_error().raw_os_error() == Some(libc::EEXIST)),
         "complete boot cgroup directory collision/failure",
     )?;
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -45,9 +47,11 @@ fn directory(parent: &File, name: &str, exclusive: bool) -> Result<File> {
         fd >= 0,
         "original complete boot cgroup directory unavailable",
     )?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(fd) };
     if rc == 0 {
         require(
+            // SAFETY: fchmod takes no pointers and `file` keeps the descriptor open.
             unsafe { libc::fchmod(file.as_raw_fd(), 0o700) } == 0,
             "new complete boot cgroup mode failed",
         )?;
@@ -62,6 +66,7 @@ fn directory(parent: &File, name: &str, exclusive: bool) -> Result<File> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn member(parent: &File, name: &str, write: bool) -> Result<File> {
     let name = CString::new(name).map_err(|_| Error("invalid cgroup member name".into()))?;
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -76,8 +81,10 @@ fn member(parent: &File, name: &str, write: bool) -> Result<File> {
         )
     };
     require(raw >= 0, "original complete boot cgroup member unavailable")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(raw) })
 }
+/// A new cgroup for complete-boot tools, with a device policy and kill control.
 pub struct Group {
     path: PathBuf,
     parent: File,
@@ -94,15 +101,23 @@ pub struct Group {
     statuses: [i32; 3],
 }
 impl Group {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, fstatfs, geteuid).")]
+    /// Create a uniquely named cgroup below the root of the unified hierarchy.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller is Root, when the hierarchy is not writable cgroup v2, the group
+    /// already has members, or the device policy cannot be attached.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
     pub fn create() -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == 0,
+            crate::process_identity::effective_uid() == 0,
             "Root complete boot cgroup required",
         )?;
         let base = files::directory(Path::new("/sys/fs/cgroup"), Some(0))?;
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `fs` is a writable `libc::statfs` and `base` keeps the descriptor open.
             unsafe { libc::fstatfs(base.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x63677270,
             "unified writable recovery cgroup hierarchy required; no execution fallback",
         )?;
@@ -116,8 +131,7 @@ impl Group {
         let kill = member(&directory, "cgroup.kill", true)?;
         let events = member(&directory, "cgroup.events", false)?;
         let epochs = [epoch(&procs)?, epoch(&kill)?, epoch(&events)?];
-        let statuses =
-            [&procs, &kill, &events].map(|f| unsafe { libc::fcntl(f.as_raw_fd(), libc::F_GETFL) });
+        let statuses = [&procs, &kill, &events].map(|f| crate::files::status_flags(&f));
         require(
             statuses.iter().all(|f| *f >= 0),
             "original cgroup description flags unavailable",
@@ -153,8 +167,11 @@ impl Group {
                 && shape(&self.directory)? == self.directory_shape,
             "original held complete boot cgroup changed",
         )?;
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `fs` is a writable `libc::statfs` and `self.directory` keeps the descriptor
+            // open.
             unsafe { libc::fstatfs(self.directory.as_raw_fd(), &mut fs) } == 0
                 && fs.f_type == 0x63677270,
             "original cgroup kernel filesystem changed",
@@ -163,12 +180,12 @@ impl Group {
             require(
                 epoch(file)? == self.epochs[index]
                     && mount_identity::id(file.as_fd(), true)? == self.mount
-                    && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) }
-                        == self.statuses[index],
+                    && crate::files::status_flags(&file) == self.statuses[index],
                 "original held cgroup member/flags changed",
             )?;
         }
         require(
+            // SAFETY: F_GETFD takes no pointers and `self.device_policy` keeps the descriptor open.
             unsafe { libc::fcntl(self.device_policy.as_raw_fd(), libc::F_GETFD) }
                 & libc::FD_CLOEXEC
                 != 0,
@@ -176,6 +193,11 @@ impl Group {
         )?;
         Ok(())
     }
+    /// Verify the cgroup and its held control files are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the group was retired, replaced or remounted, or a control file changed.
     pub fn recheck(&self) -> Result<()> {
         self.recheck_held()?;
         require(!self.closed, "complete boot cgroup already retired")?;
@@ -246,10 +268,12 @@ impl Group {
         Ok(lines[0] == "1")
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (write).")]
-    pub fn kill_and_wait(&self) -> Result<()> {
+    pub(crate) fn kill_and_wait(&self) -> Result<()> {
         self.recheck_held()?;
         if self.populated()? {
             require(
+                // SAFETY: The buffer is a 2-byte static literal and `self.kill` keeps the
+                // descriptor open.
                 unsafe { libc::write(self.kill.as_raw_fd(), b"1\n".as_ptr().cast(), 2) } == 2,
                 "complete boot descendant kill failed; original cgroup retained",
             )?;
@@ -264,6 +288,11 @@ impl Group {
         }
         self.recheck_held()
     }
+    /// Kill any remaining members and remove the empty cgroup.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the group changed or cannot be emptied or removed.
     #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
     pub fn close(&mut self) -> Result<()> {
         self.kill_and_wait()?;
@@ -276,6 +305,8 @@ impl Group {
         )
         .map_err(|_| Error("invalid cgroup filename".into()))?;
         require(
+            // SAFETY: `name` is a NUL-terminated CString and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
                 == 0,
             "original empty complete boot cgroup removal failed",

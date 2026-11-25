@@ -130,10 +130,9 @@ fn handshake(
 impl Signer {
     /// A fresh directory only. The installer supplies its retained live/target
     /// guard around each call; unprivileged fixtures can use their own directory.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     pub fn create(home: &Path, owner: u32) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == owner
+            enzimos_platform::process_identity::effective_uid() == owner
                 && home.is_absolute()
                 && home.as_os_str().as_encoded_bytes().len() + 16 < 108,
             "ephemeral signer owner or local socket path bound",
@@ -193,7 +192,7 @@ impl Signer {
         self.recheck()?;
         Ok(bytes)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, openat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn sign(&self, archive: &File, destination: &Path) -> Result<()> {
         self.recheck()?;
         let before = archive.metadata()?;
@@ -203,7 +202,7 @@ impl Signer {
                 && before.nlink() == 1
                 && before.mode() & 0o022 == 0
                 && (1..=enzimos_platform::stream_copy::STREAM_BOUND).contains(&before.len())
-                && unsafe { libc::fcntl(archive.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
+                && enzimos_platform::files::status_flags(&archive) & libc::O_ACCMODE
                     == libc::O_RDONLY,
             "development signing requires a retained protected read-only archive",
         )?;

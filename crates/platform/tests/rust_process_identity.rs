@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
+//! Process stat parsing and open-description identity checks.
 use enzimos_platform::process_identity::parse_stat;
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn retained_pidfd_detects_owned_child_exit_and_refuses_wrong_start_time() {
-    let uid = unsafe { libc::geteuid() };
+    let uid = enzimos_platform::process_identity::effective_uid();
     assert!(
         (1000..u32::MAX).contains(&uid),
         "run native host tests as the ordinary workspace account"
@@ -85,7 +85,7 @@ fn root_batched_handoff_requires_every_original_open_description_and_live_actor(
         process::{Child, Command, Stdio},
         time::{Duration, Instant},
     };
-    assert_eq!(unsafe { libc::geteuid() }, 0);
+    assert_eq!(enzimos_platform::process_identity::effective_uid(), 0);
     assert!(
         std::fs::read_to_string("/proc/cmdline")
             .unwrap()
@@ -131,6 +131,7 @@ fn root_batched_handoff_requires_every_original_open_description_and_live_actor(
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    // SAFETY: The pre_exec closure only calls dup2, which is async-signal-safe.
     unsafe {
         command.pre_exec(move || {
             if libc::dup2(a, 64) != 64 || libc::dup2(b, 65) != 65 {

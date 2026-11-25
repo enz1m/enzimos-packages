@@ -41,7 +41,6 @@ pub struct Inputs {
     binding: Value,
 }
 impl Inputs {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn observe(guard: &Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -106,7 +105,7 @@ impl Inputs {
         let binding = value!({"configuration_sha256":json::sha256(&configuration_bytes),"credentials":credentials});
         let mut flags = [0; 3];
         for (i, file) in files.iter().enumerate() {
-            flags[i] = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+            flags[i] = enzimos_platform::files::status_flags(&file);
             require(
                 flags[i] >= 0
                     && flags[i] & libc::O_ACCMODE == libc::O_RDONLY
@@ -129,7 +128,6 @@ impl Inputs {
         original.recheck(guard)?;
         Ok(original)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn recheck(&self, guard: &Guard) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -149,7 +147,7 @@ impl Inputs {
             require(
                 files::identity(&file.metadata()?) == self.epochs[i]
                     && files::identity(&named.metadata()?) == self.epochs[i]
-                    && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } == self.flags[i]
+                    && enzimos_platform::files::status_flags(&file) == self.flags[i]
                     && mount_identity::id(file.as_fd(), true)? == self.mount
                     && mount_identity::id(named.as_fd(), true)? == self.mount,
                 "original remote input replaced/changed; no adoption",

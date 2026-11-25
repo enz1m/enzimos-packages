@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Path-bound packet socket listeners and connections.
 use enzimos_platform::{memfile, packet_socket};
 use std::{os::fd::AsFd, path::Path, time::Duration};
 fn work() -> tempfile::TempDir {
@@ -11,16 +12,16 @@ fn work() -> tempfile::TempDir {
     let directory = tempfile::Builder::new()
         .prefix("ps-")
         .tempdir_in(root)
-        .unwrap();
-    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        .expect("test directory");
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+        .expect("private test directory");
     directory
 }
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn named_listener_delivers_early_packets_with_actual_credentials_and_never_replaces_a_path() {
     let directory = work();
     let path = directory.path().join("request.sock");
-    let uid = unsafe { libc::geteuid() };
+    let uid = enzimos_platform::process_identity::effective_uid();
     let listener = packet_socket::Listener::bind(&path, uid).unwrap();
     assert!(packet_socket::Listener::bind(&path, uid).is_err());
     let client = packet_socket::connect(&path, uid, Duration::from_secs(1)).unwrap();

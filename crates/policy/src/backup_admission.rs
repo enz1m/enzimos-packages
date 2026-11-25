@@ -488,11 +488,10 @@ mod tests {
             .unwrap()
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
     fn actual_opt_in_refuses_dangling_links_and_same_bytes_replacement() {
         let dir = fixture();
         let path = dir.path().join("backup.enabled");
-        let owner = unsafe { libc::getuid() };
+        let owner = enzimos_platform::process_identity::real_uid();
         assert!(OptIn::retained(&path, owner).unwrap().is_none());
         symlink("absent", &path).unwrap();
         assert!(OptIn::retained(&path, owner).is_err());

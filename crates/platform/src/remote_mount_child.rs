@@ -149,17 +149,16 @@ impl Prepared {
     )]
     pub fn prepare(endpoint: &Endpoint, credential: &File) -> Result<Self> {
         require(
-            unsafe {
-                libc::getuid() == 0
-                    && libc::geteuid() == 0
-                    && libc::getgid() == 0
-                    && libc::getegid() == 0
-            },
+            crate::process_identity::real_uid() == 0
+                && crate::process_identity::effective_uid() == 0
+                && crate::process_identity::real_gid() == 0
+                && crate::process_identity::effective_gid() == 0,
             "Root SMB attachment preparation",
         )?;
         let namespace = File::open("/proc/self/ns/mnt")?;
         let initial = File::open("/proc/1/ns/mnt")?;
         require(
+            // SAFETY: Both descriptors are owned by live Files for the duration of the call.
             unsafe {
                 crate::backup_mount_child::same_inode(namespace.as_raw_fd(), initial.as_raw_fd())
             },
@@ -179,7 +178,7 @@ impl Prepared {
             "protected empty /backup-remote mount point on the root file system",
         )?;
         let c = credential.metadata()?;
-        let flags = unsafe { libc::fcntl(credential.as_raw_fd(), libc::F_GETFL) };
+        let flags = crate::files::status_flags(&credential);
         require(
             c.is_file()
                 && c.uid() == 0
@@ -211,8 +210,10 @@ impl Prepared {
             strings.push((c"domain", text(domain)?));
         }
         let creator = std::process::id();
+        // SAFETY: pidfd_open takes no pointers.
         let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, creator, 0) };
         require(fd >= 0, "original SMB creator pidfd")?;
+        // SAFETY: `fd` was just returned by pidfd_open and is owned by nothing else.
         let creator_pidfd = unsafe { File::from_raw_fd(fd as i32) };
         let this = Self {
             creator,
@@ -245,6 +246,7 @@ impl Prepared {
         )?;
         let current = File::open("/proc/self/ns/mnt")?;
         require(
+            // SAFETY: Both descriptors are owned by live Files for the duration of the call.
             unsafe {
                 crate::backup_mount_child::same_inode(
                     current.as_raw_fd(),
@@ -281,14 +283,11 @@ impl Prepared {
         unsafe_code,
         reason = "Linux syscall ABI (alarm, fsopen, fsconfig, fsmount, move_mount and others)."
     )]
-    // Every unsafe call below is a raw syscall on descriptors this child owns
-    // or on the creator's prepared files, with NUL-terminated `CStr`/`CString`
-    // pointers owned by `self` that outlive each call.
-    pub unsafe fn enter_child(&self) -> std::io::Result<()> {
+    pub(crate) unsafe fn enter_child(&self) -> std::io::Result<()> {
         let denied = || std::io::Error::from_raw_os_error(libc::EPERM);
-        if unsafe { libc::getpid() } == self.creator as i32
-            || unsafe { libc::getppid() } != self.creator as i32
-            || unsafe { libc::geteuid() } != 0
+        if crate::process_identity::current_pid() == self.creator as i32
+            || crate::process_identity::parent_pid() != self.creator as i32
+            || crate::process_identity::effective_uid() != 0
         {
             return Err(denied());
         }
@@ -297,14 +296,17 @@ impl Prepared {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         if unsafe { libc::poll(&mut poll, 1, 0) } != 0 {
             return Err(denied());
         }
+        // SAFETY: prctl(PR_SET_PDEATHSIG) takes no pointers.
         if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) } != 0
-            || unsafe { libc::getppid() } != self.creator as i32
+            || crate::process_identity::parent_pid() != self.creator as i32
         {
             return Err(denied());
         }
+        // SAFETY: The path is a NUL-terminated C string literal.
         let ns = unsafe {
             libc::open(
                 c"/proc/self/ns/mnt".as_ptr(),
@@ -314,14 +316,18 @@ impl Prepared {
         if ns < 0 {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: `ns` was just opened above and `self.namespace` is a live File.
         let same = unsafe { crate::backup_mount_child::same_inode(ns, self.namespace.as_raw_fd()) };
+        // SAFETY: `ns` is owned by this function and closed exactly once.
         unsafe { libc::close(ns) };
         if !same {
             return Err(denied());
         }
+        // SAFETY: unshare takes no pointers and affects only this pre_exec child.
         if unsafe { libc::unshare(libc::CLONE_NEWNS) } != 0 {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: All non-null pointers are NUL-terminated C string literals.
         if unsafe {
             libc::mount(
                 std::ptr::null(),
@@ -334,6 +340,7 @@ impl Prepared {
         {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: The path is a NUL-terminated C string literal.
         let target = unsafe {
             libc::open(
                 c"/backup-remote".as_ptr(),
@@ -345,13 +352,19 @@ impl Prepared {
         }
         // The new namespace has new mount IDs; the inode epoch identifies the
         // prepared mount point.
+        // SAFETY: `target` was just opened above and is still open.
         if !unsafe { crate::backup_mount_child::exact(target, self.anchor_epoch, None) } {
+            // SAFETY: `target` is owned by this function and closed exactly once.
             unsafe { libc::close(target) };
             return Err(denied());
         }
+        // SAFETY: This is the pre_exec child required by `mount`, and `target` is an open directory
+        // descriptor.
         let mounted = unsafe { self.mount(target) };
+        // SAFETY: `target` is owned by this function and closed exactly once.
         unsafe { libc::close(target) };
         let mount = mounted?;
+        // SAFETY: The path is a NUL-terminated C string literal.
         let root = unsafe {
             libc::open(
                 c"/backup-remote".as_ptr(),
@@ -360,13 +373,18 @@ impl Prepared {
         };
         if root < 0 {
             let error = std::io::Error::last_os_error();
+            // SAFETY: `mount` came from `self.mount` and is closed exactly once.
             unsafe { libc::close(mount) };
             return Err(error);
         }
+        // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::statfs = unsafe { std::mem::zeroed() };
+        // SAFETY: `root` is open and `status` is a writable `libc::statfs`.
         let valid = unsafe { libc::fstatfs(root, &mut status) } == 0
             && status.f_type as i64 == SMB2_SUPER_MAGIC
+            // SAFETY: `root` and `mount` are both open descriptors owned by this function.
             && unsafe { same_mount(root, mount) };
+        // SAFETY: Both descriptors are owned by this function and not used after this point.
         unsafe {
             libc::close(root);
             libc::close(mount)
@@ -383,24 +401,36 @@ impl Prepared {
         reason = "Linux syscall ABI (alarm, fsopen, fsconfig, fsmount, move_mount and others)."
     )]
     unsafe fn mount(&self, target: i32) -> std::io::Result<i32> {
+        // SAFETY: `libc::sigaction` is a plain C struct, for which all-zero bytes are a valid
+        // value.
         let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
         action.sa_sigaction = libc::SIG_DFL;
+        // SAFETY: `libc::sigset_t` is a plain C struct, for which all-zero bytes are a valid value.
         let mut alarm: libc::sigset_t = unsafe { std::mem::zeroed() };
+        // SAFETY: `action` is a fully initialized sigaction and the old-action pointer may be null.
         if unsafe { libc::sigaction(libc::SIGALRM, &action, std::ptr::null_mut()) } != 0
+            // SAFETY: `alarm` is a writable sigset_t.
             || unsafe { libc::sigemptyset(&mut alarm) } != 0
+            // SAFETY: `alarm` was initialized by sigemptyset.
             || unsafe { libc::sigaddset(&mut alarm, libc::SIGALRM) } != 0
+            // SAFETY: `alarm` is an initialized sigset_t and the old-mask pointer may be null.
             || unsafe { libc::sigprocmask(libc::SIG_UNBLOCK, &alarm, std::ptr::null_mut()) } != 0
         {
             return Err(std::io::Error::last_os_error());
         }
+        // SAFETY: alarm takes no pointers.
         unsafe { libc::alarm(MOUNT_SECONDS) };
         let context =
+            // SAFETY: The filesystem name is a NUL-terminated C string literal.
             unsafe { libc::syscall(libc::SYS_fsopen, c"cifs".as_ptr(), FSOPEN_CLOEXEC) } as i32;
         if context < 0 {
             let error = std::io::Error::last_os_error();
+            // SAFETY: alarm takes no pointers.
             unsafe { libc::alarm(0) };
             return Err(error);
         }
+        // SAFETY: Callers pass NUL-terminated keys and values (or null where fsconfig allows it)
+        // that outlive the call.
         let set = |command: u32, key: *const libc::c_char, value: *const libc::c_char| unsafe {
             libc::syscall(libc::SYS_fsconfig, context, command, key, value, 0) == 0
         };
@@ -418,6 +448,7 @@ impl Prepared {
                 .all(|flag| set(FSCONFIG_SET_FLAG, flag.as_ptr(), std::ptr::null()));
         configured = configured && set(FSCONFIG_CMD_CREATE, std::ptr::null(), std::ptr::null());
         let mount = if configured {
+            // SAFETY: fsmount takes no pointers and `context` is the open fsopen descriptor.
             (unsafe {
                 libc::syscall(
                     libc::SYS_fsmount,
@@ -430,6 +461,7 @@ impl Prepared {
             -1
         };
         let error = std::io::Error::last_os_error();
+        // SAFETY: alarm takes no pointers and `context` is owned here and closed exactly once.
         unsafe {
             libc::alarm(0);
             libc::close(context)
@@ -437,6 +469,7 @@ impl Prepared {
         if mount < 0 {
             return Err(error);
         }
+        // SAFETY: The empty paths are NUL-terminated literals and both descriptors are open.
         if unsafe {
             libc::syscall(
                 libc::SYS_move_mount,
@@ -449,6 +482,7 @@ impl Prepared {
         } != 0
         {
             let error = std::io::Error::last_os_error();
+            // SAFETY: `mount` is owned by this function and closed exactly once on this path.
             unsafe { libc::close(mount) };
             return Err(error);
         }
@@ -459,8 +493,12 @@ impl Prepared {
 // to the mount this child just attached rather than to something else.
 #[allow(unsafe_code, reason = "Linux syscall ABI (statx).")]
 unsafe fn same_mount(left: i32, right: i32) -> bool {
+    // SAFETY: `libc::statx` is a plain C struct, for which all-zero bytes are a valid value.
     let mut a: libc::statx = unsafe { std::mem::zeroed() };
+    // SAFETY: `libc::statx` is a plain C struct, for which all-zero bytes are a valid value.
     let mut b: libc::statx = unsafe { std::mem::zeroed() };
+    // SAFETY: Both paths are NUL-terminated literals, `a` and `b` are writable, and the caller
+    // passes open descriptors.
     unsafe {
         libc::statx(
             left,

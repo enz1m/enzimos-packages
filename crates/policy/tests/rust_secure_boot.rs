@@ -3,7 +3,6 @@ use enzimos_platform::files;
 use enzimos_policy::secure_boot::{self, Material};
 use std::{os::unix::fs::PermissionsExt, path::Path};
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn owner_key_roundtrip_preserves_private_permissions_and_refuses_mismatch_and_replacement() {
     let work = Path::new(
         &std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -15,7 +14,7 @@ fn owner_key_roundtrip_preserves_private_permissions_and_refuses_mismatch_and_re
         .permissions(std::fs::Permissions::from_mode(0o700))
         .tempdir_in(work)
         .unwrap();
-    let uid = unsafe { libc::geteuid() };
+    let uid = enzimos_platform::process_identity::effective_uid();
     let material = Material::generate().unwrap();
     let certificate = openssl::x509::X509::from_der(&material.der).unwrap();
     assert_eq!(certificate.public_key().unwrap().rsa().unwrap().size(), 384);

@@ -22,7 +22,7 @@ fn shape(parent: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
 }
 #[allow(
     unsafe_code,
-    reason = "Linux syscall ABI (fchmod, fremovexattr, geteuid, openat)."
+    reason = "Linux syscall ABI (fchmod, fremovexattr, openat)."
 )]
 pub(crate) fn write(
     parent: &File,
@@ -32,7 +32,7 @@ pub(crate) fn write(
     authorize: &mut dyn FnMut() -> Result<()>,
 ) -> Result<File> {
     require(
-        unsafe { libc::geteuid() } == owner
+        enzimos_platform::process_identity::effective_uid() == owner
             && data.len() <= crate::backup_selective_result::MAX_FILE as usize
             && enzimos_platform::json::sha256(data) == digest,
         "original export writer identity/bytes",

@@ -331,7 +331,9 @@ pub fn exclude_file(prefix: &str, homes: &[(String, File, Rules)]) -> Vec<u8> {
     }
     let mut out = String::from("# enzimOS: folders skipped by rule; restic --exclude-file\n");
     for (reason, patterns) in groups {
-        out.push_str(&format!("# {reason}\n"));
+        out.push_str("# ");
+        out.push_str(reason);
+        out.push('\n');
         for pattern in patterns {
             out.push_str(&pattern);
             out.push('\n');

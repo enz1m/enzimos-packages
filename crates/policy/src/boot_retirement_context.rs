@@ -450,7 +450,6 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
             authorize,
         )
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn observe_inner(
         guard: &'g Guard,
         lock: &'a files::Lock,
@@ -636,7 +635,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
                 .iter()
                 .find(|d| d.relative == "loader/entries")
                 .ok_or_else(|| Error("original Root loader directory missing".into()))?;
-            let flags = unsafe { libc::fcntl(directory.file.as_raw_fd(), libc::F_GETFL) };
+            let flags = enzimos_platform::files::status_flags(&directory.file);
             require(
                 flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
                 "original Root loader directory read-only description required",
@@ -669,7 +668,6 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
         this.recheck(authorize)?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck_root_loader_directory(&self) -> Result<()> {
         if let Some((epoch, flags)) = self.root_loader_directory {
             let original = self
@@ -681,7 +679,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
             require(
                 files::identity(&original.file.metadata()?) == epoch
                     && files::identity(&named.metadata()?) == epoch
-                    && unsafe { libc::fcntl(original.file.as_raw_fd(), libc::F_GETFL) } == flags
+                    && enzimos_platform::files::status_flags(&original.file) == flags
                     && mount_identity::id(original.file.as_fd(), true)? == self.volume.unique
                     && mount_identity::id(named.as_fd(), true)? == self.volume.unique,
                 "original Root loader directory epoch/description changed",

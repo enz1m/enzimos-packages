@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Parsing of pacman database sections.
 use enzimos_platform::alpm_sections::parse;
 #[test]
 fn duplicate_sections_malformed_headers_and_control_bytes_are_refused() {

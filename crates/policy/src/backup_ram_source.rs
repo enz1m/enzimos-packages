@@ -21,9 +21,8 @@ fn shape(file: &File) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let f = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let f = enzimos_platform::files::status_flags(&file);
     require(
         f >= 0 && f & (libc::O_ACCMODE | libc::O_PATH) == libc::O_RDONLY,
         "original RAM source description flags",

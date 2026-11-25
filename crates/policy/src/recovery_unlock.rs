@@ -253,10 +253,9 @@ impl ClosedDescription<'_> {
         self.scope.recheck()
     }
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn original_flags(file: &File) -> Result<i32> {
     use std::os::fd::AsRawFd;
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "original offline mapping observation flags",

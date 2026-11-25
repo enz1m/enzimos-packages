@@ -65,19 +65,16 @@ pub fn evaluate(nr: u32, arch: u32, arg1: u64) -> Result<u32> {
     }
     Err(Error("unterminated filter".into()))
 }
-#[allow(
-    unsafe_code,
-    reason = "Linux syscall ABI (geteuid, getpid, getppid, prctl)."
-)]
+#[allow(unsafe_code, reason = "Linux syscall ABI (prctl).")]
 pub fn install() -> Result<()> {
     require(
         cfg!(target_arch = "x86_64") && std::mem::size_of::<usize>() == 8,
         "exact x86-64 ABI required",
     )?;
     require(
-        unsafe { libc::getpid() } == 1
-            && unsafe { libc::getppid() } == 0
-            && unsafe { libc::geteuid() } == 0,
+        enzimos_platform::process_identity::current_pid() == 1
+            && enzimos_platform::process_identity::parent_pid() == 0
+            && enzimos_platform::process_identity::effective_uid() == 0,
         "guest direct PID1 only",
     )?;
     require(
@@ -99,7 +96,7 @@ pub fn install() -> Result<()> {
     // numeric directory before using the protected pseudo-file reader.
     let status = files::read_kernel(
         &std::path::Path::new("/proc")
-            .join(unsafe { libc::getpid() }.to_string())
+            .join(enzimos_platform::process_identity::current_pid().to_string())
             .join("status"),
         16384,
     )?;

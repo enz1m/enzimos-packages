@@ -41,9 +41,8 @@ impl Role {
         }
     }
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let n = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let n = enzimos_platform::files::status_flags(&file);
     require(
         n >= 0 && n & libc::O_ACCMODE == libc::O_RDONLY,
         "original offline origin descriptor flags",

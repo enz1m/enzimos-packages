@@ -85,11 +85,10 @@ pub fn reports(body: &[u8], uid: u32) -> Result<Value> {
     }
     Ok(value!({"schema":1,"reports":reports,"raw_core_access":false}))
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, getuid).")]
 pub fn read() -> Result<Value> {
-    let uid = unsafe { libc::getuid() };
+    let uid = enzimos_platform::process_identity::real_uid();
     require(
-        uid == unsafe { libc::geteuid() },
+        uid == enzimos_platform::process_identity::effective_uid(),
         "unprivileged real UID journal query required",
     )?;
     let user = format!("COREDUMP_UID={uid}");

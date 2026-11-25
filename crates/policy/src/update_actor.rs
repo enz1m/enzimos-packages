@@ -25,14 +25,13 @@ pub(crate) struct Actor {
     sha: String,
 }
 impl Actor {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getegid, getgid, getuid).")]
     pub(crate) fn current() -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         require(
-            unsafe { libc::getuid() } == 0
-                && unsafe { libc::getgid() } == 0
-                && unsafe { libc::getegid() } == 0,
+            enzimos_platform::process_identity::real_uid() == 0
+                && enzimos_platform::process_identity::real_gid() == 0
+                && enzimos_platform::process_identity::effective_gid() == 0,
             "native update coordinator Root IDs",
         )?;
         let actual = std::fs::read_link("/proc/self/exe")?;

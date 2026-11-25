@@ -356,7 +356,7 @@ impl RetiredTree {
         Ok(())
     }
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, mkdirat).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (mkdirat).")]
 fn create_directory(parent: &File, name: &str) -> Result<File> {
     let component =
         std::ffi::CString::new(name).map_err(|_| Error("boot directory component".into()))?;
@@ -368,7 +368,11 @@ fn create_directory(parent: &File, name: &str) -> Result<File> {
         "exclusive boot directory creation failed; intent retained",
     )?;
     parent.sync_all()?;
-    files::directory_relative(parent, Path::new(name), Some(unsafe { libc::geteuid() }))
+    files::directory_relative(
+        parent,
+        Path::new(name),
+        Some(enzimos_platform::process_identity::effective_uid()),
+    )
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (futimens).")]
 fn preserve_mtime(file: &File, epoch: &files::FileIdentity) -> Result<()> {

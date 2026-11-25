@@ -295,7 +295,7 @@ impl Retired<'_> {
 // No Drop removal, plaintext reads or password hashing.
 /// Read-only validation of the original caller-owned temporary received by SCM.
 /// This does not acquire cleanup authority or recreate a typed Temporary.
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, fstatfs).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
 pub(crate) fn borrowed(v: &serde_json::Value, id: &str, length: u64, file: &File) -> Result<()> {
     crate::namespaces::initial()?;
     crate::backup_worker_request::consumer(v, id, length)?;
@@ -303,7 +303,7 @@ pub(crate) fn borrowed(v: &serde_json::Value, id: &str, length: u64, file: &File
     let name = v["name"].as_str().unwrap();
     let folder = files::directory_relative(&parent, Path::new(name), Some(0))?;
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x01021994

@@ -221,7 +221,7 @@ pub fn render(input: File, output: File) -> Result<Value> {
     for m in [&source, &target] {
         require(
             m.is_file()
-                && m.uid() == unsafe { libc::geteuid() }
+                && m.uid() == enzimos_platform::process_identity::effective_uid()
                 && m.mode() & 0o7777 == 0o600
                 && m.nlink() == 0,
             "account-owned private RAM files required",
@@ -235,7 +235,7 @@ pub fn render(input: File, output: File) -> Result<Value> {
         "distinct bounded source and empty document required",
     )?;
     let seals = unsafe { libc::fcntl(input.as_raw_fd(), libc::F_GET_SEALS) };
-    let flags = unsafe { libc::fcntl(output.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&output);
     require(
         seals >= 0
             && seals & SEALS == SEALS

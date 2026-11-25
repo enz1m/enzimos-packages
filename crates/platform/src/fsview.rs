@@ -150,7 +150,7 @@ pub fn child_directory(directory: &File, name: &OsStr) -> Result<Option<File>> {
 
 /// Whether a small regular file `name` exists directly in `directory`.
 #[must_use]
-pub fn has_file(directory: &File, name: &str) -> bool {
+pub(crate) fn has_file(directory: &File, name: &str) -> bool {
     stat_at(directory, OsStr::new(name)).is_ok_and(|m| m.is_file())
 }
 

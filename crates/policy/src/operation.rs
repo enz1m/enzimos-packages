@@ -4,10 +4,9 @@ use std::path::Path;
 pub const STATE: &str = "/var/lib/enzimos";
 pub const CONTROL: &str = "/var/lib/enzimos-control";
 pub const BUSY: &str = "service-busy";
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 pub fn root_only() -> Result<()> {
     require(
-        unsafe { libc::geteuid() } == 0,
+        enzimos_platform::process_identity::effective_uid() == 0,
         "root authorization required",
     )
 }

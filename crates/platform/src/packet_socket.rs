@@ -14,6 +14,7 @@ use std::{
 #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
 fn address(path: &Path) -> Result<libc::sockaddr_un> {
     let body = path.as_os_str().as_bytes();
+    // SAFETY: `libc::sockaddr_un` is a plain C struct, for which all-zero bytes are a valid value.
     let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
     require(
         path.is_absolute() && !body.contains(&0) && body.len() < address.sun_path.len(),
@@ -27,6 +28,7 @@ fn address(path: &Path) -> Result<libc::sockaddr_un> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (setsockopt, socket).")]
 fn socket() -> Result<OwnedFd> {
+    // SAFETY: socket takes no pointers.
     let fd = unsafe {
         libc::socket(
             libc::AF_UNIX,
@@ -35,9 +37,11 @@ fn socket() -> Result<OwnedFd> {
         )
     };
     require(fd >= 0, "local packet socket unavailable")?;
+    // SAFETY: `fd` was just returned by socket and is owned by nothing else.
     let socket = unsafe { OwnedFd::from_raw_fd(fd) };
     let yes: i32 = 1;
     require(
+        // SAFETY: The option value points at `yes` with its exact size, and `socket` is open.
         unsafe {
             libc::setsockopt(
                 socket.as_raw_fd(),
@@ -66,6 +70,7 @@ fn wait(fd: i32, timeout: Duration, event: i16) -> Result<()> {
             events: event,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let rc = unsafe {
             libc::poll(
                 &mut poll,
@@ -110,6 +115,7 @@ fn parent(path: &Path, owner: u32) -> Result<File> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn inode(parent: &File, name: &CString, owner: u32) -> Result<File> {
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -118,6 +124,7 @@ fn inode(parent: &File, name: &CString, owner: u32) -> Result<File> {
         )
     };
     require(fd >= 0, "packet socket inode unavailable")?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(fd) };
     let metadata = file.metadata()?;
     require(
@@ -172,18 +179,22 @@ impl PathIdentity {
         )
     }
 }
+/// A listening packet socket bound at a path owned by its creator.
 pub struct Listener {
     socket: OwnedFd,
     path: PathIdentity,
 }
 impl Listener {
-    #[allow(
-        unsafe_code,
-        reason = "Linux syscall ABI (bind, fchmodat, geteuid, listen)."
-    )]
+    /// Bind and listen at a new socket path, mode 0600, in a directory owned by `owner`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is `owner`, when the path exists or its parent is
+    /// unsafe or changes, or when bind or listen fails.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (bind, fchmodat, listen).")]
     pub fn bind(path: &Path, owner: u32) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == owner,
+            crate::process_identity::effective_uid() == owner,
             "packet socket writer authority refused",
         )?;
         let held_parent = parent(path, owner)?;
@@ -191,6 +202,8 @@ impl Listener {
         let address = address(path)?;
         let socket = socket()?;
         require(
+            // SAFETY: `address` is a complete sockaddr_un passed with its size, and `socket` is
+            // open.
             unsafe {
                 libc::bind(
                     socket.as_raw_fd(),
@@ -207,6 +220,8 @@ impl Listener {
         )
         .map_err(|_| Error("invalid socket filename".into()))?;
         require(
+            // SAFETY: `name` is a NUL-terminated CString and `held_parent` keeps the descriptor
+            // open.
             unsafe { libc::fchmodat(held_parent.as_raw_fd(), name.as_ptr(), 0o600, 0) } == 0,
             "packet socket mode publication failed",
         )?;
@@ -217,6 +232,7 @@ impl Listener {
             "packet socket parent changed during bind",
         )?;
         require(
+            // SAFETY: listen takes no pointers and `socket` keeps the descriptor open.
             unsafe { libc::listen(socket.as_raw_fd(), 1) } == 0,
             "packet socket listen failed",
         )?;
@@ -226,6 +242,10 @@ impl Listener {
         })
     }
     /// Nonblocking readiness; no descriptor or pathname authority is exported.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the socket path changed or polling fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (poll).")]
     pub fn pending(&self) -> Result<bool> {
         self.path.recheck()?;
@@ -234,6 +254,7 @@ impl Listener {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let rc = unsafe { libc::poll(&mut poll, 1, 0) };
         require(
             rc >= 0 && poll.revents & (libc::POLLERR | libc::POLLNVAL | libc::POLLHUP) == 0,
@@ -242,10 +263,17 @@ impl Listener {
         self.path.recheck()?;
         Ok(poll.revents & libc::POLLIN != 0)
     }
+    /// Accept one connection within `timeout` as a [`Packet`].
+    ///
+    /// # Errors
+    ///
+    /// Fails when the socket path changed, the deadline passes, or the accepted socket is not a
+    /// valid packet socket.
     #[allow(unsafe_code, reason = "Linux syscall ABI (accept4).")]
     pub fn accept(&self, timeout: Duration) -> Result<Packet> {
         self.path.recheck()?;
         wait(self.socket.as_raw_fd(), timeout, libc::POLLIN)?;
+        // SAFETY: Null address pointers are allowed by accept4, and the socket is open.
         let fd = unsafe {
             libc::accept4(
                 self.socket.as_raw_fd(),
@@ -255,12 +283,19 @@ impl Listener {
             )
         };
         require(fd >= 0, "packet socket accept failed")?;
+        // SAFETY: `fd` was just returned by accept4 and is owned by nothing else.
         let file = unsafe { File::from_raw_fd(fd) };
         self.path.recheck()?;
         Packet::from_file(file)
     }
     // Drop retains the named socket for inspection. A generation path is never reused.
 }
+/// Connect to the packet socket at `path`, owned by `owner`, within `timeout`.
+///
+/// # Errors
+///
+/// Fails when the path is not an owned socket, the connection is refused or not completed in time,
+/// or the path changes. Connections are never retried.
 #[allow(unsafe_code, reason = "Linux syscall ABI (connect, getsockopt).")]
 pub fn connect(path: &Path, owner: u32, timeout: Duration) -> Result<Packet> {
     require(
@@ -270,6 +305,7 @@ pub fn connect(path: &Path, owner: u32, timeout: Duration) -> Result<Packet> {
     let retained = PathIdentity::observe(path, owner)?;
     let address = address(path)?;
     let socket = socket()?;
+    // SAFETY: `address` is a complete sockaddr_un passed with its size, and `socket` is open.
     let rc = unsafe {
         libc::connect(
             socket.as_raw_fd(),
@@ -286,6 +322,7 @@ pub fn connect(path: &Path, owner: u32, timeout: Duration) -> Result<Packet> {
         let mut error: i32 = -1;
         let mut size = std::mem::size_of_val(&error) as libc::socklen_t;
         require(
+            // SAFETY: The option buffer is `error` with its size in `size`, and `socket` is open.
             unsafe {
                 libc::getsockopt(
                     socket.as_raw_fd(),

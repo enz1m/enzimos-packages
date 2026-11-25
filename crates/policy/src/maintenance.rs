@@ -22,7 +22,6 @@ fn command(action: &str) -> Result<(&'static str, &'static [&'static str])> {
         )),
     }
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 pub fn maintain(action: &str) -> Result<Value> {
     let (program, args) = command(action)?;
     operation::root_only()?;
@@ -42,7 +41,7 @@ pub fn maintain(action: &str) -> Result<Value> {
     guard.recheck()?;
     lock.recheck()?;
     let root = guard.root_descriptor()?;
-    let flags = unsafe { libc::fcntl(root.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&root);
     require(
         flags >= 0 && flags & libc::O_PATH == 0,
         "actual maintenance Root descriptor status required",
@@ -55,8 +54,7 @@ pub fn maintain(action: &str) -> Result<Value> {
         guard.recheck()?;
         lock.recheck()?;
         require(
-            unsafe { libc::fcntl(root.as_raw_fd(), libc::F_GETFL) } == flags
-                && image.evidence()? == original,
+            enzimos_platform::files::status_flags(&root) == flags && image.evidence()? == original,
             "maintenance original Root/image status changed; no replay",
         )
     };

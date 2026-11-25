@@ -14,9 +14,8 @@ use std::{
 };
 const LIMIT: u64 = 2 * 1024 * 1024;
 type Shape = (u64, u64, u32, u32, u32);
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn status(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = crate::files::status_flags(&file);
     require(
         flags >= 0,
         "original publication description status unavailable",
@@ -56,6 +55,7 @@ fn renamed(before: files::FileIdentity, after: files::FileIdentity) -> bool {
         && before.9 == after.9
         && before.10 == after.10
 }
+/// A synced `<name>.new` file awaiting an owned rename onto its destination.
 pub struct Prepared {
     parent: File,
     parent_flags: i32,
@@ -74,10 +74,17 @@ pub struct Prepared {
     sha256: String,
 }
 impl Prepared {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, openat).")]
+    /// Exclusively create and sync `<name>.new` beside `path` with `body`, retaining the parent and
+    /// any current destination.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is `owner` and `body` fits the size bound, when the
+    /// parent or name is unsafe, or when the pending name already exists.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn write(path: &Path, body: &[u8], owner: u32) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == owner && body.len() as u64 <= LIMIT,
+            crate::process_identity::effective_uid() == owner && body.len() as u64 <= LIMIT,
             "publication writer or size",
         )?;
         let parent_path = path
@@ -106,6 +113,7 @@ impl Prepared {
             .as_ref()
             .map(|f| member(f, owner, mount))
             .transpose()?;
+        // SAFETY: `temporary` is a NUL-terminated CString and `parent` keeps the descriptor open.
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -115,6 +123,7 @@ impl Prepared {
             )
         };
         require(fd >= 0, "publication pending; inspection required")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let mut written = unsafe { File::from_raw_fd(fd) };
         let written_flags = status(&written)?;
         written.write_all(body)?;
@@ -143,6 +152,11 @@ impl Prepared {
         this.recheck()?;
         Ok(this)
     }
+    /// [`Prepared::write`] with `authorize` checked before and after the write.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `authorize` fails or on the checks of [`Prepared::write`].
     pub fn write_authorized(
         path: &Path,
         body: &[u8],
@@ -155,10 +169,9 @@ impl Prepared {
         prepared.recheck()?;
         Ok(prepared)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn parent(&self) -> Result<()> {
         require(
-            unsafe { libc::geteuid() } == self.owner,
+            crate::process_identity::effective_uid() == self.owner,
             "original publication writer changed",
         )?;
         require(
@@ -176,6 +189,11 @@ impl Prepared {
             "original publication parent replaced/covered",
         )
     }
+    /// Verify the parent, pending file, its bytes and the retained destination are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any retained description, the pending bytes, or destination presence changed.
     pub fn recheck(&self) -> Result<()> {
         self.parent()?;
         let temporary = Path::new(std::ffi::OsStr::from_bytes(self.temporary.to_bytes()));
@@ -217,6 +235,11 @@ impl Prepared {
     /// parent and exact leaf. Existing destinations cannot supply this proof.
     /// Return only the temporary name of this live writer beneath its original
     /// parent, after joining an independently held parent and destination.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `parent` or `destination` differ from the retained ones, or on
+    /// [`Prepared::recheck`].
     pub fn pending_name(&self, parent: &File, destination: &Path) -> Result<&str> {
         self.recheck()?;
         require(
@@ -229,6 +252,11 @@ impl Prepared {
             .to_str()
             .map_err(|_| Error("pending publication name encoding".into()))
     }
+    /// Require that `parent` and `name` match this publication and that no destination existed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they differ, an original destination is retained, or on [`Prepared::recheck`].
     pub fn require_new_destination(&self, parent: &File, name: &Path) -> Result<()> {
         self.recheck()?;
         require(
@@ -241,6 +269,11 @@ impl Prepared {
         )?;
         self.recheck()
     }
+    /// Require that `original` is the destination description retained at preparation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it is a different description, or on [`Prepared::recheck`].
     pub fn require_original(&self, original: &File) -> Result<()> {
         self.recheck()?;
         require(
@@ -250,6 +283,10 @@ impl Prepared {
     }
     /// Check an independently retained caller epoch before the destructive
     /// replacement, rather than adopting metadata observed during preparation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the epoch differs, or on [`Prepared::recheck`].
     pub fn require_original_epoch(
         &self,
         original: &File,
@@ -263,9 +300,19 @@ impl Prepared {
         )?;
         self.require_original(original)
     }
+    /// Rename the pending file onto its destination and recheck the result.
+    ///
+    /// # Errors
+    ///
+    /// Fails on the checks of [`Prepared::commit_retained`] and [`Committed::recheck`].
     pub fn commit(self, replace: bool) -> Result<()> {
         self.commit_retained(replace)?.recheck()
     }
+    /// [`Prepared::commit`] with `authorize` checked around every step.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `authorize` fails or on the checks of [`Prepared::commit`].
     pub fn commit_authorized(
         self,
         replace: bool,
@@ -274,6 +321,11 @@ impl Prepared {
         self.commit_retained_authorized(replace, authorize)?
             .recheck()
     }
+    /// [`Prepared::commit_retained`] with `authorize` checked around every step.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `authorize` fails or on the checks of [`Prepared::commit_retained`].
     pub fn commit_retained_authorized(
         self,
         replace: bool,
@@ -290,6 +342,10 @@ impl Prepared {
     }
     /// Check the actual retained replacement after the sole rename attempt.
     /// The postcondition receives only the producer returned by that attempt.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `before` or `after` fail, or on the checks of [`Prepared::commit_retained`].
     pub fn commit_checked(
         self,
         replace: bool,
@@ -307,6 +363,12 @@ impl Prepared {
     }
     /// Original-file witness returned only by this actual owned publication.
     /// Drop never removes a pending file or repairs an uncertain rename.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an exclusive destination exists, the publication changed before the rename, or
+    /// the renamed file differs from the written one. A failed rename leaves the pending file in
+    /// place.
     #[allow(unsafe_code, reason = "Linux syscall ABI (renameat2).")]
     pub fn commit_retained(self, replace: bool) -> Result<Committed> {
         self.recheck()?;
@@ -315,6 +377,8 @@ impl Prepared {
             "exclusive publication destination already exists",
         )?;
         require(
+            // SAFETY: Both names are NUL-terminated CStrings and `self.parent` keeps the descriptor
+            // open.
             unsafe {
                 libc::renameat2(
                     self.parent.as_raw_fd(),
@@ -359,6 +423,7 @@ impl Prepared {
         Ok(committed)
     }
 }
+/// A published file, with the original destination it replaced, if any.
 pub struct Committed {
     original: Prepared,
     epoch: files::FileIdentity,
@@ -367,6 +432,12 @@ pub struct Committed {
     replaced_epoch: Option<files::FileIdentity>,
 }
 impl Committed {
+    /// Verify the published file, its bytes and any replaced original are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the published description, flags or bytes changed, or the pending name
+    /// reappeared.
     pub fn recheck(&self) -> Result<()> {
         let p = &self.original;
         p.parent()?;
@@ -432,6 +503,10 @@ impl Committed {
     }
     /// Actual predecessor descriptions are retained by this owned replacement.
     /// The returned epoch is comparison data; it cannot construct a publication.
+    ///
+    /// # Errors
+    ///
+    /// Fails when this publication replaced nothing, or on [`Committed::recheck`].
     pub fn replaced_original(&self) -> Result<(&File, files::FileIdentity)> {
         self.recheck()?;
         let original = self
@@ -448,6 +523,10 @@ impl Committed {
     }
     /// Bind this actual publication to an already retained original parent and
     /// exact leaf. Metadata returned by evidence cannot supply this witness.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `parent` or `name` differ from this publication, or on [`Committed::recheck`].
     pub fn require_destination(&self, parent: &File, name: &Path) -> Result<()> {
         self.recheck()?;
         require(
@@ -460,10 +539,20 @@ impl Committed {
             "owned publication requires original parent and exact leaf",
         )
     }
+    /// The published file after a recheck.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Committed::recheck`].
     pub fn file(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.published)
     }
+    /// JSON evidence with the published inode identity, mount ID and SHA-256.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Committed::recheck`].
     pub fn evidence(&self) -> Result<serde_json::Value> {
         self.recheck()?;
         Ok(
@@ -478,12 +567,22 @@ pub struct Chain {
     publications: Vec<Committed>,
 }
 impl Chain {
+    /// Start a chain with one committed publication.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Committed::recheck`].
     pub fn new(initial: Committed) -> Result<Self> {
         initial.recheck()?;
         Ok(Self {
             publications: vec![initial],
         })
     }
+    /// Verify the latest publication and that each superseded one changed only by its successor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any publication in the chain changed outside the chain.
     pub fn recheck(&self) -> Result<()> {
         let latest = self
             .publications
@@ -513,6 +612,12 @@ impl Chain {
         }
         latest.recheck()
     }
+    /// Publish `body` over the latest publication and append it to the chain.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the chain would exceed 256 publications or 16 MiB, when `authorize` fails, or on
+    /// the publication checks.
     pub fn replace(
         &mut self,
         body: &[u8],
@@ -544,6 +649,11 @@ impl Chain {
         self.recheck()?;
         authorize()
     }
+    /// The latest published file after a chain recheck.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Chain::recheck`].
     pub fn file(&self) -> Result<&File> {
         self.recheck()?;
         self.publications
@@ -551,6 +661,11 @@ impl Chain {
             .ok_or_else(|| Error("publication chain is empty".into()))?
             .file()
     }
+    /// Require that the latest publication is at `parent` and `name`.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Chain::recheck`] or [`Committed::require_destination`].
     pub fn require_destination(&self, parent: &File, name: &Path) -> Result<()> {
         self.recheck()?;
         self.publications
@@ -558,6 +673,11 @@ impl Chain {
             .ok_or_else(|| Error("publication chain is empty".into()))?
             .require_destination(parent, name)
     }
+    /// JSON evidence for the latest publication and the chain length.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Chain::recheck`].
     pub fn evidence(&self) -> Result<serde_json::Value> {
         self.recheck()?;
         Ok(

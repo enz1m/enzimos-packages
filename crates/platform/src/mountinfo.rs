@@ -1,19 +1,35 @@
 // SPDX-License-Identifier: MIT
 //! Kernel mount records are observations, not filesystem ownership authority.
 use crate::{Error, Result, require};
+/// One `/proc/<pid>/mountinfo` record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
+    /// Mount ID.
     pub id: u64,
+    /// Parent mount ID.
     pub parent: u64,
+    /// Device major number.
     pub major: u32,
+    /// Device minor number.
     pub minor: u32,
+    /// Root of the mount within its filesystem.
     pub root: String,
+    /// Mount point.
     pub target: String,
+    /// Filesystem type.
     pub filesystem: String,
+    /// Per-mount options.
     pub options: String,
+    /// Per-superblock options.
     pub filesystem_options: String,
+    /// Optional fields such as `shared:N`.
     pub optional: Vec<String>,
 }
+/// Decode the octal escapes the kernel uses in mountinfo paths.
+///
+/// # Errors
+///
+/// Fails on a malformed escape, a disallowed byte, or a result that is not UTF-8.
 pub fn unescape(s: &str) -> Result<String> {
     let mut bytes = Vec::new();
     let input = s.as_bytes();
@@ -40,6 +56,12 @@ pub fn unescape(s: &str) -> Result<String> {
     }
     String::from_utf8(bytes).map_err(|_| Error("unsupported mount filename encoding".into()))
 }
+/// Parse a whole mountinfo body.
+///
+/// # Errors
+///
+/// Fails when the body or record count exceeds its bound, a record is malformed, or mount IDs
+/// repeat.
 pub fn parse(body: &str) -> Result<Vec<Row>> {
     require(
         body.len() <= 2 * 1024 * 1024 && !body.contains('\0'),

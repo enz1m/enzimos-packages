@@ -25,7 +25,7 @@ impl Owner {
     #[allow(unsafe_code, reason = "Fork-child setup must run before exec.")]
     pub(crate) fn start(home: &Path, owner: u32) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == owner,
+            enzimos_platform::process_identity::effective_uid() == owner,
             "development agent owner mismatch",
         )?;
         let parent = files::directory(Path::new("/usr/bin"), Some(0))?;

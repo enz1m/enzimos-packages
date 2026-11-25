@@ -77,7 +77,6 @@ pub struct Object {
     credential: Option<Value>,
 }
 impl Object {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn observe(guard: &Guard, role: Role) -> Result<Option<Self>> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -107,7 +106,7 @@ impl Object {
             "protected single-link original remote rotation object",
         )?;
         let epoch = files::identity(&m);
-        let flags = unsafe { libc::fcntl(std::os::fd::AsRawFd::as_raw_fd(&file), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&file);
         require(
             flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY && flags & libc::O_PATH == 0,
             "original remote object readonly description",
@@ -624,7 +623,6 @@ impl Object {
         authorize()?;
         Ok(self)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn retire(
         self,
         guard: &Guard,
@@ -644,8 +642,7 @@ impl Object {
             authorize()?;
             guard.recheck()?;
             require(
-                unsafe { libc::fcntl(std::os::fd::AsRawFd::as_raw_fd(&self.file), libc::F_GETFL) }
-                    == self.flags,
+                enzimos_platform::files::status_flags(&self.file) == self.flags,
                 "original remote retirement description flags changed",
             )
         };

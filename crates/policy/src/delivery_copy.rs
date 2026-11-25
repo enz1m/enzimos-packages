@@ -170,10 +170,10 @@ mod tests {
             .unwrap()
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, lseek).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (lseek).")]
     fn actual_owned_descriptor_copy_never_overwrites_or_moves_shared_source_cursor() {
         let temp = fixture();
-        let uid = unsafe { libc::geteuid() };
+        let uid = enzimos_platform::process_identity::effective_uid();
         assert!(
             (1000..i32::MAX as u32).contains(&uid),
             "owned-file fixture requires ordinary test user"

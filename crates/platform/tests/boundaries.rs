@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Strict JSON decoding and descriptor walks that refuse symlinks and special files.
 use enzimos_platform::{files, json};
 use serde_json::json as value;
 use std::time::{Duration, Instant};
@@ -32,6 +33,7 @@ fn descriptor_walk_refuses_symlinks_and_special_files_without_blocking() {
     std::os::unix::fs::symlink(path.join("regular"), path.join("link")).unwrap();
     std::os::unix::fs::symlink(&path, path.join("ancestor")).unwrap();
     let fifo = std::ffi::CString::new(path.join("fifo").as_os_str().as_encoded_bytes()).unwrap();
+    // SAFETY: `fifo` is a NUL-terminated CString.
     assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
     let started = Instant::now();
     for name in ["link", "ancestor/regular", "fifo"] {

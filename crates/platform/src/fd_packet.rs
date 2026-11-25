@@ -7,27 +7,44 @@ use std::{
     os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd},
     time::Duration,
 };
+/// Largest packet body in bytes.
 pub const MAX_BYTES: usize = 65_536;
 // Remote copy carries eighteen original descriptions. Older consumers retain
 // their exact role-specific counts and cannot accept a remote packet.
+/// Most descriptors one packet may carry.
 pub const MAX_FILES: usize = 18;
+/// Sender identity stamped by the kernel (SCM_CREDENTIALS).
 #[derive(Debug, PartialEq, Eq)]
 pub struct Credentials {
+    /// Sender process ID.
     pub pid: u32,
+    /// Sender user ID.
     pub uid: u32,
+    /// Sender group ID.
     pub gid: u32,
 }
+/// A received packet.
 pub struct Message {
+    /// Packet payload.
     pub body: Vec<u8>,
+    /// Received descriptors, close-on-exec.
     pub files: Vec<OwnedFd>,
+    /// Kernel-stamped sender credentials.
     pub sender: Credentials,
 }
+/// A connected `SOCK_SEQPACKET` Unix socket that passes kernel credentials.
 pub struct Packet(OwnedFd);
 impl Packet {
+    /// Create a connected, close-on-exec socket pair.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the socket pair cannot be created or credential passing cannot be enabled.
     #[allow(unsafe_code, reason = "Linux syscall ABI (socketpair).")]
     pub fn pair() -> Result<(Self, Self)> {
         let mut fds = [-1; 2];
         require(
+            // SAFETY: `fds` has room for the two descriptors socketpair writes.
             unsafe {
                 libc::socketpair(
                     libc::AF_UNIX,
@@ -38,7 +55,9 @@ impl Packet {
             } == 0,
             "packet socket creation failed",
         )?;
+        // SAFETY: socketpair succeeded, so `fds[0]` is a fresh descriptor owned by nothing else.
         let a = Self(unsafe { OwnedFd::from_raw_fd(fds[0]) });
+        // SAFETY: socketpair succeeded, so `fds[1]` is a fresh descriptor owned by nothing else.
         let b = Self(unsafe { OwnedFd::from_raw_fd(fds[1]) });
         a.enable_credentials()?;
         b.enable_credentials()?;
@@ -48,6 +67,7 @@ impl Packet {
     fn enable_credentials(&self) -> Result<()> {
         let yes: libc::c_int = 1;
         require(
+            // SAFETY: The option value points at `yes` with its exact size, and the socket is open.
             unsafe {
                 libc::setsockopt(
                     self.0.as_raw_fd(),
@@ -60,15 +80,23 @@ impl Packet {
             "packet kernel credentials unavailable",
         )
     }
+    /// Adopt `file` as a packet socket after checking it is a connected local `SOCK_SEQPACKET`
+    /// socket.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `file` is not such a socket or cannot be made close-on-exec.
     #[allow(
         unsafe_code,
         reason = "Linux syscall ABI (fcntl, getpeername, getsockopt)."
     )]
     pub fn from_file(file: File) -> Result<Self> {
         let socket = Self(file.into());
+        // SAFETY: F_GETFD takes no pointers and `socket` keeps the descriptor open.
         let flags = unsafe { libc::fcntl(socket.0.as_raw_fd(), libc::F_GETFD) };
         require(
             flags >= 0
+                // SAFETY: F_SETFD takes no pointers and `socket` keeps the descriptor open.
                 && unsafe {
                     libc::fcntl(
                         socket.0.as_raw_fd(),
@@ -81,6 +109,7 @@ impl Packet {
         let mut kind: libc::c_int = 0;
         let mut size = std::mem::size_of_val(&kind) as libc::socklen_t;
         require(
+            // SAFETY: The option buffer is `kind` with its size in `size`, and the socket is open.
             unsafe {
                 libc::getsockopt(
                     socket.0.as_raw_fd(),
@@ -93,9 +122,13 @@ impl Packet {
                 && kind == libc::SOCK_SEQPACKET,
             "connected packet descriptor required",
         )?;
+        // SAFETY: `libc::sockaddr_un` is a plain C struct, for which all-zero bytes are a valid
+        // value.
         let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
         let mut size = std::mem::size_of_val(&address) as libc::socklen_t;
         require(
+            // SAFETY: The address buffer is `address` with its size in `size`, and the socket is
+            // open.
             unsafe {
                 libc::getpeername(
                     socket.0.as_raw_fd(),
@@ -124,6 +157,7 @@ impl Packet {
                 events,
                 revents: 0,
             };
+            // SAFETY: `p` is one writable pollfd and the count is 1.
             let rc = unsafe {
                 libc::poll(
                     &mut p,
@@ -146,6 +180,11 @@ impl Packet {
     /// Wait for a verified live caller to finish bounded validation. This does
     /// not receive a packet or grant an operation; normal decoder deadlines,
     /// credentials, descriptor counts and nonce checks remain at the caller.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the deadline passes, polling fails, the caller exits, the peer closes, or
+    /// `checkpoint` fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (poll).")]
     pub fn wait_ready(
         &self,
@@ -178,11 +217,12 @@ impl Packet {
                     revents: 0,
                 },
             ];
+            // SAFETY: `polls` holds exactly the two pollfd entries passed.
             let rc = unsafe {
                 libc::poll(
                     polls.as_mut_ptr(),
                     2,
-                    remaining.as_millis().min(100).max(1) as i32,
+                    remaining.as_millis().clamp(1, 100) as i32,
                 )
             };
             if rc < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
@@ -210,11 +250,17 @@ impl Packet {
     }
 
     /// Kernel connection peer, independent of credentials supplied in a packet.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the kernel does not report a live peer.
     #[allow(unsafe_code, reason = "Linux syscall ABI (getsockopt).")]
     pub fn peer_credentials(&self) -> Result<Credentials> {
+        // SAFETY: `libc::ucred` is a plain C struct, for which all-zero bytes are a valid value.
         let mut peer: libc::ucred = unsafe { std::mem::zeroed() };
         let mut size = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
         require(
+            // SAFETY: The option buffer is `peer` with its size in `size`, and the socket is open.
             unsafe {
                 libc::getsockopt(
                     self.0.as_raw_fd(),
@@ -234,6 +280,12 @@ impl Packet {
             gid: peer.gid,
         })
     }
+    /// Send one packet with `files`, waiting up to `timeout` for the socket to accept it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `body` is empty or too large, there are too many descriptors, the deadline
+    /// passes, or the send is incomplete. Sends are never retried.
     #[allow(
         unsafe_code,
         reason = "Linux syscall ABI (CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE and others)."
@@ -249,17 +301,21 @@ impl Packet {
             iov_len: body.len(),
         };
         let mut control = [0usize; 16];
+        // SAFETY: `libc::msghdr` is a plain C struct, for which all-zero bytes are a valid value.
         let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
         message.msg_iov = &mut iov;
         message.msg_iovlen = 1;
         if !files.is_empty() {
             message.msg_control = control.as_mut_ptr().cast();
             let bytes = files.len() * std::mem::size_of::<libc::c_int>();
+            // SAFETY: CMSG_SPACE only computes a size.
             message.msg_controllen = unsafe { libc::CMSG_SPACE(bytes as _) } as usize;
             require(
                 message.msg_controllen <= std::mem::size_of_val(&control),
                 "packet ancillary bound",
             )?;
+            // SAFETY: `message` points at `control`, whose size was checked to hold one header with
+            // `files.len()` descriptors.
             unsafe {
                 let header = libc::CMSG_FIRSTHDR(&message);
                 (*header).cmsg_level = libc::SOL_SOCKET;
@@ -272,6 +328,7 @@ impl Packet {
             }
         }
         require(
+            // SAFETY: `message` and the iovec and control buffers it points at outlive the call.
             unsafe {
                 libc::sendmsg(
                     self.0.as_raw_fd(),
@@ -282,6 +339,11 @@ impl Packet {
             "packet send failed; no automatic retry",
         )
     }
+    /// Receive one packet of at most `maximum` bytes carrying exactly `expected_files` descriptors.
+    ///
+    /// # Errors
+    ///
+    /// Fails on the checks of [`Packet::receive_counts`].
     pub fn receive(
         &self,
         maximum: usize,
@@ -292,6 +354,11 @@ impl Packet {
     }
     /// Accept only an explicit closed set of descriptor counts. The caller
     /// must then bind the wire version to its exact count before using any FD.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the bounds are invalid, the deadline passes, the packet is truncated, carries an
+    /// unexpected descriptor count, or lacks kernel credentials.
     #[allow(
         unsafe_code,
         reason = "Linux syscall ABI (CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR and others)."
@@ -320,11 +387,14 @@ impl Packet {
             iov_base: body.as_mut_ptr().cast(),
             iov_len: body.len(),
         };
+        // SAFETY: `libc::msghdr` is a plain C struct, for which all-zero bytes are a valid value.
         let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
         message.msg_iov = &mut iov;
         message.msg_iovlen = 1;
         message.msg_control = control.as_mut_ptr().cast();
         message.msg_controllen = std::mem::size_of_val(&control);
+        // SAFETY: `message` points at `iov` over `body` and at `control`, all of which outlive the
+        // call.
         let size = unsafe {
             libc::recvmsg(
                 self.0.as_raw_fd(),
@@ -336,6 +406,8 @@ impl Packet {
         let mut files = Vec::new();
         let mut credentials = None;
         let mut valid = true;
+        // SAFETY: The CMSG macros walk only headers recvmsg wrote inside `control`, and SCM_RIGHTS
+        // descriptors are fresh and owned by this process.
         unsafe {
             let mut header = libc::CMSG_FIRSTHDR(&message);
             while !header.is_null() {

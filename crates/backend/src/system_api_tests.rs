@@ -277,10 +277,9 @@ async fn terminal(proxy: &Proxy<'_>, id: &str) -> Value {
     .unwrap()
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
 async fn actual_sender_authority_revocation_and_provider_owner_changes_never_replay() {
     let _fork_guard = crate::LOCK_FIXTURE_GUARD.lock().unwrap();
-    let uid = unsafe { libc::getuid() };
+    let uid = enzimos_platform::process_identity::real_uid();
     assert!(
         uid >= 1000,
         "this fixture requires the ordinary lab account"

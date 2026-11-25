@@ -20,9 +20,8 @@ use std::{
 const MAX_ENTRIES: usize = 256;
 const MAX_ASSETS: usize = 512;
 const MAX_ASSET_BYTES: u64 = 4 * 1024 * 1024 * 1024;
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "original offline loader read-only descriptor required",

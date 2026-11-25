@@ -83,10 +83,10 @@ pub fn verify(bytes: &[u8]) -> Result<()> {
 }
 #[allow(
     unsafe_code,
-    reason = "Linux syscall ABI (geteuid, getppid, prctl, setgroups and others)."
+    reason = "Linux syscall ABI (prctl, setgroups and others)."
 )]
 pub fn constrain() -> Result<()> {
-    let parent = unsafe { libc::getppid() };
+    let parent = enzimos_platform::process_identity::parent_pid();
     for (kind, value) in [
         (libc::RLIMIT_CORE, 0),
         (libc::RLIMIT_CPU, 10),
@@ -101,7 +101,7 @@ pub fn constrain() -> Result<()> {
             "password verifier limits unavailable",
         )?;
     }
-    if unsafe { libc::geteuid() } == 0 {
+    if enzimos_platform::process_identity::effective_uid() == 0 {
         require(
             unsafe { libc::setgroups(0, std::ptr::null()) } == 0
                 && unsafe { libc::setresgid(65534, 65534, 65534) } == 0
@@ -112,7 +112,7 @@ pub fn constrain() -> Result<()> {
     require(
         parent > 0
             && unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) } == 0
-            && unsafe { libc::getppid() } == parent
+            && enzimos_platform::process_identity::parent_pid() == parent
             && unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } == 0
             && unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "password verifier confinement unavailable",

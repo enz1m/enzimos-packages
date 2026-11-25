@@ -18,10 +18,10 @@ impl Retained {
     }
     /// The production validator additionally sets CPU/address-space/core limits,
     /// drops Root/groups and disables privilege gains/dumps before this entry.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, pread).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (pread).")]
     pub fn validate_in_consumer(&self) -> Result<()> {
         require(
-            unsafe { libc::geteuid() } != 0,
+            enzimos_platform::process_identity::effective_uid() != 0,
             "Root broker cannot read credential bytes",
         )?;
         self.recheck()?;
@@ -42,10 +42,7 @@ pub fn retain(fd: BorrowedFd<'_>, uid: u32) -> Result<Retained> {
         original: sealed::retain(fd, uid)?,
     })
 }
-#[allow(
-    unsafe_code,
-    reason = "Linux syscall ABI (close, fcntl, geteuid, getppid and others)."
-)]
+#[allow(unsafe_code, reason = "Linux syscall ABI (close, fcntl and others).")]
 pub fn constrain_consumer(input: BorrowedFd<'_>) -> Result<()> {
     let fd = input.as_raw_fd();
     require(
@@ -71,7 +68,7 @@ pub fn constrain_consumer(input: BorrowedFd<'_>) -> Result<()> {
             originals.push(number);
         }
     }
-    let parent = unsafe { libc::getppid() };
+    let parent = enzimos_platform::process_identity::parent_pid();
     require(parent > 1, "secret consumer supervisor required")?;
     // Only stdio and this already-retained sealed input survive into the reader.
     // close_range is mandatory; no /proc fallback or inherited service authority.
@@ -105,7 +102,7 @@ pub fn constrain_consumer(input: BorrowedFd<'_>) -> Result<()> {
             "secret consumer confinement unavailable",
         )?;
     }
-    if unsafe { libc::geteuid() } == 0 {
+    if enzimos_platform::process_identity::effective_uid() == 0 {
         let body = enzimos_platform::files::read_kernel(
             std::path::Path::new("/proc/sys/kernel/cap_last_cap"),
             8,
@@ -160,7 +157,7 @@ pub fn constrain_consumer(input: BorrowedFd<'_>) -> Result<()> {
     )?;
     require(
         unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL, 0, 0, 0) } == 0
-            && unsafe { libc::getppid() } == parent,
+            && enzimos_platform::process_identity::parent_pid() == parent,
         "secret consumer supervisor disappeared",
     )?;
     require(

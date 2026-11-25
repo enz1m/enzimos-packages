@@ -11,14 +11,20 @@ use std::{
     process::Command,
     time::Duration,
 };
+/// Closed local repository workflow commands run by [`execute`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Task {
+    /// Create a new repository.
     Initialize,
+    /// List keys to prove the password opens the repository.
     Authenticate,
+    /// List keys with the input-checking profile.
     AuthenticateInput,
+    /// Check repository metadata without reading pack data.
     CheckMetadata,
 }
 impl Task {
+    /// Stable wire name accepted by [`Task::parse`].
     pub fn name(self) -> &'static str {
         match self {
             Self::Initialize => "initialize",
@@ -27,6 +33,11 @@ impl Task {
             Self::CheckMetadata => "check-metadata",
         }
     }
+    /// Parse a wire name produced by [`Task::name`].
+    ///
+    /// # Errors
+    ///
+    /// Fails for any other name.
     pub fn parse(name: &str) -> Result<Self> {
         match name {
             "initialize" => Ok(Self::Initialize),
@@ -58,6 +69,7 @@ impl Task {
         });
         args
     }
+    /// Wall-clock bound for the Restic process.
     pub fn timeout(self) -> Duration {
         if self == Self::CheckMetadata {
             CHECK_TIMEOUT
@@ -65,6 +77,7 @@ impl Task {
             Duration::from_secs(120)
         }
     }
+    /// Byte bound on captured standard output.
     pub fn output_limit(self) -> usize {
         if matches!(self, Self::Authenticate | Self::AuthenticateInput) {
             32768
@@ -76,7 +89,9 @@ impl Task {
 /// Query-only inventory is deliberately absent from the worker task parser.
 #[derive(Clone, Copy)]
 pub enum CredentialReview {
+    /// List repository keys.
     Keys,
+    /// Check repository metadata.
     Metadata,
 }
 impl CredentialReview {
@@ -90,8 +105,11 @@ impl CredentialReview {
 /// Closed replacement-repository mutation roles. Not reachable through Task::parse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RotationPrepare {
+    /// Create the replacement repository.
     Initialize,
+    /// Copy snapshots into the replacement repository.
     Copy,
+    /// Verify all pack data of the replacement repository.
     ReadData,
 }
 impl RotationPrepare {
@@ -130,7 +148,9 @@ impl RotationPrepare {
 /// Rotation authentication and inventory only; never initialization/copy/forget.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RotationTask {
+    /// List repository keys.
     Keys,
+    /// List snapshots.
     Points,
 }
 impl RotationTask {
@@ -150,19 +170,31 @@ impl RotationTask {
         args
     }
 }
+/// Read-only queries about one selected home file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectiveTask {
+    /// Resolve the selected snapshot.
     Snapshot,
+    /// List the selected path.
     Listing,
+    /// List the selected directory tree.
     TreeListing,
+    /// Stream the selected file's content.
     Dump,
 }
+/// A full snapshot ID and a canonical path below `/backup-source/home/`.
 #[derive(Clone, Debug)]
 pub struct SelectedFile {
     snapshot: String,
     path: String,
 }
 impl SelectedFile {
+    /// Validate a selected snapshot and home path.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `snapshot` is a 64-digit lowercase hex ID and `path` is a canonical path below
+    /// `/backup-source/home/` with allowed characters.
     pub fn new(snapshot: &str, path: &str) -> Result<Self> {
         require(
             snapshot.len() == 64
@@ -226,6 +258,11 @@ pub struct RestoreSystem {
     snapshot: String,
 }
 impl RestoreSystem {
+    /// Validate the snapshot to restore.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `snapshot` is a 64-digit lowercase hex ID.
     pub fn new(snapshot: &str) -> Result<Self> {
         require(
             snapshot.len() == 64
@@ -266,6 +303,11 @@ pub struct RestoreComplete {
     snapshot: String,
 }
 impl RestoreComplete {
+    /// Validate the snapshot to restore.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless `snapshot` is a 64-digit lowercase hex ID.
     pub fn new(snapshot: &str) -> Result<Self> {
         require(
             snapshot.len() == 64
@@ -369,6 +411,11 @@ pub struct Retention {
     identifiers: Vec<String>,
 }
 impl Retention {
+    /// Validate the snapshots to forget.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless there are at most 4096 strictly ascending 64-digit lowercase hex IDs.
     pub fn new(identifiers: &[String]) -> Result<Self> {
         require(
             identifiers.len() <= 4096
@@ -589,6 +636,12 @@ pub(crate) fn require_enforced(task: &Consumer) -> Result<()> {
 }
 /// Only the owned Root consumer calls this, after independently checking its
 /// original caller, durable intent and reviewed filesystem. No plaintext reads.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn execute(
     task: Task,
     image: &File,
@@ -608,6 +661,12 @@ pub fn execute(
 }
 /// Display-only snapshots use a distinct enforced read-only profile and five-second bound.
 /// No caller-provided arguments, initialization, locking, cache or scratch creation.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn points(
     image: &File,
     repository: &File,
@@ -626,6 +685,12 @@ pub fn points(
 }
 /// Original admitted preparation and fresh caller checks are mandatory; this
 /// returns command observations only, never snapshot cleanup or backup receipts.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn backup(
     prepared: &std::sync::Arc<crate::backup_mount_child::Prepared>,
     image: &File,
@@ -650,6 +715,12 @@ pub fn backup(
 }
 /// Independent fixed review role. It cannot initialize, add/remove keys or
 /// substitute a caller-selected command, profile or credential path.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn credential_review(
     task: CredentialReview,
     image: &File,
@@ -668,6 +739,12 @@ pub fn credential_review(
     )
 }
 /// Selected read-only queries retain fixed arguments and a separate mandatory profile.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn selective(
     selection: &SelectedFile,
     task: SelectiveTask,
@@ -688,6 +765,10 @@ pub fn selective(
 }
 /// Read-only plan queries are separately confined and bounded. A dump cannot
 /// enter this role, and it never creates a scratch directory or receipt.
+///
+/// # Errors
+///
+/// Fails unless `task` is `Snapshot` or `TreeListing`, or as for [`execute`].
 pub fn selective_plan(
     selection: &SelectedFile,
     task: SelectiveTask,
@@ -712,6 +793,12 @@ pub fn selective_plan(
 }
 /// Fixed read-only rotation queries. Authentication failures retain their actual
 /// exit code so only Restic's explicit wrong-password code can prove refusal.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn rotation_read(
     task: RotationTask,
     image: &File,
@@ -729,6 +816,13 @@ pub fn rotation_read(
         boundary,
     )
 }
+/// Forget exactly the snapshots in `retention`.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn retain(
     retention: &Retention,
     image: &File,
@@ -746,6 +840,11 @@ pub fn retain(
         boundary,
     )
 }
+/// Restore a system snapshot into the staging directory `target`.
+///
+/// # Errors
+///
+/// Fails when `target` is not the private Root staging subvolume, or as for [`execute`].
 pub fn restore_system(
     restore: &RestoreSystem,
     image: &File,
@@ -766,6 +865,11 @@ pub fn restore_system(
         boundary,
     )
 }
+/// Restore a complete snapshot into the staging directory `target`.
+///
+/// # Errors
+///
+/// Fails when `target` is not the private Root staging subvolume, or as for [`execute`].
 pub fn restore_complete(
     restore: &RestoreComplete,
     image: &File,
@@ -787,6 +891,12 @@ pub fn restore_complete(
     )
 }
 /// One fixed key addition; never admitted through the generic worker task parser.
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
 pub fn credential_enroll(
     image: &File,
     repository: &File,
@@ -809,7 +919,17 @@ pub fn credential_enroll(
 /// Only original protected descriptors supplied by the native Root coordinator.
 /// Target/credential and source/credential are distinct; there are no paths,
 /// environment secrets, task strings, optional roles or source write commands.
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, fstatfs, geteuid).")]
+///
+/// # Errors
+///
+/// Fails when a descriptor is not the expected protected Root file, the confining AppArmor profile
+/// is not enforced, `boundary` fails, or the process exceeds its time or output bound. A nonzero
+/// Restic exit is returned in the output.
+#[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each descriptor fills a distinct, closed Restic role."
+)]
 pub fn rotation_prepare(
     task: RotationPrepare,
     image: &File,
@@ -821,7 +941,7 @@ pub fn rotation_prepare(
     boundary: &mut dyn FnMut() -> Result<()>,
 ) -> Result<process::Output> {
     require(
-        unsafe { libc::geteuid() } == 0,
+        crate::process_identity::effective_uid() == 0,
         "Root rotation consumer required",
     )?;
     let task = Consumer::RotationPrepare(task);
@@ -843,8 +963,10 @@ pub fn rotation_prepare(
             && directory_shapes[0] != directory_shapes[1],
         "distinct replacement/source on original backup mount required",
     )?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `fs` is a writable `libc::statfs` and `scratch` keeps the descriptor open.
         unsafe { libc::fstatfs(scratch.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x01021994,
         "private rotation scratch tmpfs required",
     )?;
@@ -852,7 +974,7 @@ pub fn rotation_prepare(
     let mut credential_mounts = Vec::new();
     for f in [next, current] {
         let m = f.metadata()?;
-        let flags = unsafe { libc::fcntl(f.as_raw_fd(), libc::F_GETFL) };
+        let flags = crate::files::status_flags(&f);
         require(
             m.is_file()
                 && m.uid() == 0
@@ -873,7 +995,7 @@ pub fn rotation_prepare(
     )?;
     let image_epoch = files::identity(&image.metadata()?);
     let descriptions = [image, target, next, source, current, scratch];
-    let flags = descriptions.map(|f| unsafe { libc::fcntl(f.as_raw_fd(), libc::F_GETFL) });
+    let flags = descriptions.map(|f| crate::files::status_flags(&f));
     require(
         flags.iter().all(|f| *f >= 0),
         "original rotation description status unavailable",
@@ -896,7 +1018,7 @@ pub fn rotation_prepare(
         }
         for (f, flag) in descriptions.into_iter().zip(flags) {
             require(
-                unsafe { libc::fcntl(f.as_raw_fd(), libc::F_GETFL) } == flag,
+                crate::files::status_flags(&f) == flag,
                 "original rotation shared status changed",
             )?;
         }
@@ -942,19 +1064,19 @@ use execution::execute_role_extended;
 pub(crate) use execution::progress_line;
 
 /// Total bound for a plain `restic check` (metadata only).
-pub const CHECK_TIMEOUT: Duration = Duration::from_secs(12 * 3600);
+pub(crate) const CHECK_TIMEOUT: Duration = Duration::from_secs(12 * 3600);
 /// No-output limit for a plain `restic check`. Restic 0.19.1 prints progress
 /// only while checking snapshots/trees; loading indexes and listing packs are
 /// silent (measured: no line for 6 min on a throttled read). The silence limit
 /// therefore stays at the old total bound (20 min), so no check that used to
 /// pass can trip it, while a long check that keeps printing may now finish.
-pub const CHECK_STALL: Duration = Duration::from_secs(1200);
+pub(crate) const CHECK_STALL: Duration = Duration::from_secs(1200);
 /// Total bound for one `restic backup`: a first whole-system backup to a USB
 /// disk takes hours. Liveness is enforced by `BACKUP_STALL` instead.
-pub const BACKUP_TIMEOUT: Duration = Duration::from_secs(12 * 3600);
+pub(crate) const BACKUP_TIMEOUT: Duration = Duration::from_secs(12 * 3600);
 /// Abort a backup only after this long without any output. With
 /// `PROGRESS_FPS` a live backup prints a status line every 30 s.
-pub const BACKUP_STALL: Duration = Duration::from_secs(15 * 60);
+pub(crate) const BACKUP_STALL: Duration = Duration::from_secs(15 * 60);
 /// Progress rate for the long roles (`backup --json`, `copy`). For copy the
 /// variable is what turns progress on at all. With stdout not a terminal
 /// Restic 0.19 still
@@ -962,4 +1084,4 @@ pub const BACKUP_STALL: Duration = Duration::from_secs(15 * 60);
 /// system backup passed its 2 MiB / 8192-line output bound after about 15
 /// minutes. One line per 30 s keeps a 24 h run near 700 KiB. Short roles never
 /// get it: for non-JSON commands any rate would *enable* progress text.
-pub const PROGRESS_FPS: &str = "0.0333";
+pub(crate) const PROGRESS_FPS: &str = "0.0333";

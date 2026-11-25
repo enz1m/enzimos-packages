@@ -28,9 +28,8 @@ struct Member {
     flags: i32,
     sha: String,
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let f = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let f = enzimos_platform::files::status_flags(&file);
     require(
         f >= 0 && f & libc::O_ACCMODE == libc::O_RDONLY,
         "original native image read-only descriptor",

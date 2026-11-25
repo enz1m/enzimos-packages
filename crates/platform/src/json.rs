@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
+//! Strict JSON decoding and the canonical encoding used for digests.
 use crate::{Result, require};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
-use std::fmt;
+use std::fmt::{self, Write as _};
 
 struct Strict(Value);
 impl<'de> Deserialize<'de> for Strict {
@@ -68,6 +69,11 @@ impl<'de> Deserialize<'de> for Strict {
     }
 }
 
+/// Decode one JSON document of at most `limit` bytes, refusing duplicate object keys.
+///
+/// # Errors
+///
+/// Fails when the input exceeds `limit`, is malformed, has duplicate keys or trailing data.
 pub fn decode(bytes: &[u8], limit: usize) -> Result<Value> {
     require(bytes.len() <= limit, "JSON size limit exceeded")?;
     let mut d = serde_json::Deserializer::from_slice(bytes);
@@ -80,10 +86,18 @@ pub fn decode(bytes: &[u8], limit: usize) -> Result<Value> {
 /// or the input/property text. General callers retain the existing decode API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeFailure {
+    /// Input exceeds the byte limit.
     Bound,
+    /// An object repeats a key.
     Duplicate,
+    /// Input is not one well-formed JSON document.
     Malformed,
 }
+/// [`decode`] with a refusal class instead of parser diagnostics.
+///
+/// # Errors
+///
+/// Returns the [`DecodeFailure`] class of the refusal.
 pub fn decode_classified(bytes: &[u8], limit: usize) -> std::result::Result<Value, DecodeFailure> {
     if bytes.len() > limit {
         return Err(DecodeFailure::Bound);
@@ -104,6 +118,11 @@ pub fn decode_classified(bytes: &[u8], limit: usize) -> std::result::Result<Valu
 
 // Python's previous canonical encoder escapes non-ASCII. Keep existing plan and
 // receipt digests stable across the language transition, including surrogate pairs.
+/// Compact JSON with sorted object keys and non-ASCII escaped as UTF-16 `\uXXXX`.
+///
+/// # Errors
+///
+/// Fails when `value` cannot be serialized.
 pub fn canonical(value: &Value) -> Result<Vec<u8>> {
     let text = serde_json::to_string(value)?;
     let mut out = String::with_capacity(text.len());
@@ -112,18 +131,97 @@ pub fn canonical(value: &Value) -> Result<Vec<u8>> {
             out.push(c);
         } else {
             for u in c.encode_utf16(&mut [0; 2]) {
-                out.push_str(&format!("\\u{u:04x}"));
+                // Writing to a String cannot fail.
+                let _ = write!(out, "\\u{u:04x}");
             }
         }
     }
     Ok(out.into_bytes())
 }
+/// Lowercase hex SHA-256 of [`canonical`].
+///
+/// # Errors
+///
+/// Fails as [`canonical`] does.
 pub fn fingerprint(value: &Value) -> Result<String> {
     Ok(sha256(&canonical(value)?))
 }
+/// Lowercase hex SHA-256 of `bytes`.
 pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn typed<T>(value: Option<T>) -> Result<T> {
+    value.ok_or_else(|| crate::Error("unexpected JSON value type".into()))
+}
+/// String content of `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not a string.
+pub fn string(value: &Value) -> Result<&str> {
+    typed(value.as_str())
+}
+/// Unsigned integer content of `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an unsigned integer that fits `u64`.
+pub fn unsigned(value: &Value) -> Result<u64> {
+    typed(value.as_u64())
+}
+/// Signed integer content of `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an integer that fits `i64`.
+pub fn signed(value: &Value) -> Result<i64> {
+    typed(value.as_i64())
+}
+/// Boolean content of `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not a boolean.
+pub fn boolean(value: &Value) -> Result<bool> {
+    typed(value.as_bool())
+}
+/// Members of an object `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an object.
+pub fn object(value: &Value) -> Result<&Map<String, Value>> {
+    typed(value.as_object())
+}
+/// Mutable members of an object `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an object.
+pub fn object_mut(value: &mut Value) -> Result<&mut Map<String, Value>> {
+    typed(value.as_object_mut())
+}
+/// Elements of an array `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an array.
+pub fn array(value: &Value) -> Result<&Vec<Value>> {
+    typed(value.as_array())
+}
+/// Mutable elements of an array `value`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an array.
+pub fn array_mut(value: &mut Value) -> Result<&mut Vec<Value>> {
+    typed(value.as_array_mut())
+}
+/// Require `value` to be an object with exactly the space-separated field `names`.
+///
+/// # Errors
+///
+/// Fails when `value` is not an object or its keys differ.
 pub fn fields(value: &Value, names: &str) -> Result<()> {
     let expected: std::collections::BTreeSet<_> = names.split_whitespace().collect();
     let Some(object) = value.as_object() else {

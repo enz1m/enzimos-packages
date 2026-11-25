@@ -45,6 +45,8 @@ fn renamed(before: files::FileIdentity, after: files::FileIdentity) -> Result<()
     known.6 = after.6;
     require(known == after, "credential changed beyond original rename")
 }
+/// A private credential renamed to a random quarantine name in its parent, retained until
+/// [`Quarantined::unlink`].
 pub struct Quarantined {
     parent: File,
     shape: Shape,
@@ -60,7 +62,14 @@ pub struct Quarantined {
     members: BTreeSet<std::ffi::OsString>,
 }
 impl Quarantined {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid, renameat2).")]
+    /// Rename `file`, found at `original`, to a random quarantine name after checking it still has
+    /// epoch `expected`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is `owner`, when the credential is not private,
+    /// read-only and single-link, when it changed, or when the rename collides or fails.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (renameat2).")]
     pub fn enter_original(
         parent: &File,
         file: &File,
@@ -71,7 +80,7 @@ impl Quarantined {
     ) -> Result<Self> {
         authorize()?;
         require(
-            unsafe { libc::geteuid() } == owner,
+            crate::process_identity::effective_uid() == owner,
             "credential retirement writer authority",
         )?;
         let old = name(original)?;
@@ -80,7 +89,7 @@ impl Quarantined {
         let m = file.metadata()?;
         let epoch = files::identity(&m);
         let mount = mount_identity::id(file.as_fd(), true)?;
-        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        let flags = crate::files::status_flags(&file);
         require(
             epoch == expected
                 && m.is_file()
@@ -110,10 +119,12 @@ impl Quarantined {
         require(
             files::identity(&file.metadata()?) == expected
                 && mount_identity::id(file.as_fd(), true)? == mount
-                && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } == flags,
+                && crate::files::status_flags(&file) == flags,
             "original credential changed before quarantine",
         )?;
         require(
+            // SAFETY: Both names are NUL-terminated CStrings and `parent` keeps the descriptor
+            // open.
             unsafe {
                 libc::renameat2(
                     parent.as_raw_fd(),
@@ -146,7 +157,11 @@ impl Quarantined {
         authorize()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
+    /// Verify the quarantined credential, its parent and membership are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed or the original name reappeared.
     pub fn recheck(&self) -> Result<()> {
         let named = files::open_relative(&self.parent, &self.quarantine)?;
         require(
@@ -156,18 +171,24 @@ impl Quarantined {
                 && files::identity(&named.metadata()?) == self.epoch
                 && mount_identity::id(self.file.as_fd(), true)? == self.mount
                 && mount_identity::id(named.as_fd(), true)? == self.mount
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && crate::files::status_flags(&self.file) == self.flags
                 && names(&self.parent)? == self.members
                 && files::optional_relative(&self.parent, &self.original)?.is_none(),
             "original quarantined credential changed/replaced/covered or membership differs",
         )
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, unlinkat).")]
+    /// Unlink the quarantined credential.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is the owner, when `authorize` or a recheck fails,
+    /// or when the unlink is refused or uncertain. It is never retried.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
     pub fn unlink(mut self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Removed> {
         authorize()?;
         self.recheck()?;
         require(
-            unsafe { libc::geteuid() } == self.owner,
+            crate::process_identity::effective_uid() == self.owner,
             "credential unlink writer authority",
         )?;
         let entry = crate::directory_entry::Entry::observe(&self.parent, &self.quarantine)?;
@@ -177,6 +198,8 @@ impl Quarantined {
         self.recheck()?;
         entry.recheck()?;
         require(
+            // SAFETY: `leaf` is a NUL-terminated CString and `self.parent` keeps the descriptor
+            // open.
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), leaf.as_ptr(), 0) } == 0,
             "credential unlink refused/uncertain; no retry",
         )?;
@@ -211,12 +234,17 @@ impl Quarantined {
         Ok(removed)
     }
 }
+/// Proof of an owned credential unlink.
 pub struct Removed {
     original: Quarantined,
     epoch: files::FileIdentity,
 }
 impl Removed {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
+    /// Verify the removed credential and its parent are unchanged and no name reappeared.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         let q = &self.original;
         require(
@@ -225,16 +253,26 @@ impl Removed {
                 && files::identity(&q.file.metadata()?) == self.epoch
                 && self.epoch.10 == 0
                 && mount_identity::id(q.file.as_fd(), true)? == q.mount
-                && unsafe { libc::fcntl(q.file.as_raw_fd(), libc::F_GETFL) } == q.flags
+                && crate::files::status_flags(&q.file) == q.flags
                 && files::optional_relative(&q.parent, &q.original)?.is_none()
                 && files::optional_relative(&q.parent, &q.quarantine)?.is_none(),
             "original retired credential changed or names/membership reappeared",
         )
     }
+    /// Credential epoch before quarantine.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Removed::recheck`].
     pub fn before_epoch(&self) -> Result<files::FileIdentity> {
         self.recheck()?;
         Ok(self.original.before)
     }
+    /// The removed credential's description.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Removed::recheck`].
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.original.file)
@@ -247,18 +285,16 @@ mod tests {
     fn fixture() -> tempfile::TempDir {
         tempfile::Builder::new()
             .permissions(std::fs::Permissions::from_mode(0o700))
-            .tempdir_in(
-                std::env::var_os("ENZIMOS_TEST_TMPDIR")
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(|| std::env::current_dir().unwrap()),
-            )
+            .tempdir_in(std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(
+                || std::env::current_dir().unwrap(),
+                std::path::PathBuf::from,
+            ))
             .unwrap()
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn actual_private_credential_retains_original_unlinked_description_and_refuses_reappearance() {
         let d = fixture();
-        let uid = unsafe { libc::geteuid() };
+        let uid = crate::process_identity::effective_uid();
         let path = d.path().join("secret");
         std::fs::write(&path, b"fixture-only").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();

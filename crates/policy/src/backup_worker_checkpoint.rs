@@ -147,9 +147,8 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn actual_packet_credentials_cannot_be_replaced_by_body_claims() {
-        if unsafe { libc::geteuid() } == 0 {
+        if enzimos_platform::process_identity::effective_uid() == 0 {
             return;
         }
         let (sender, receiver) = Packet::pair().unwrap();
@@ -164,7 +163,10 @@ mod tests {
             )
             .unwrap();
         let message = receiver.receive(4096, 0, Duration::from_secs(1)).unwrap();
-        assert_eq!(message.sender.uid, unsafe { libc::geteuid() });
+        assert_eq!(
+            message.sender.uid,
+            enzimos_platform::process_identity::effective_uid()
+        );
         assert!(acknowledgement(&message, &challenge, std::process::id()).is_err());
     }
 }

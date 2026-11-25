@@ -199,11 +199,10 @@ impl Scope {
         self.recheck()?;
         Ok(&self.proc)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getpid).")]
     pub fn observe() -> Result<Self> {
         operation::root_only()?;
         require(
-            unsafe { libc::getpid() } == 1,
+            enzimos_platform::process_identity::current_pid() == 1,
             "offline retirement observation requires actual PID1",
         )?;
         crate::namespaces::initial()?;
@@ -236,10 +235,12 @@ impl Scope {
         this.recheck()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getpid).")]
     pub fn recheck(&self) -> Result<()> {
         operation::root_only()?;
-        require(unsafe { libc::getpid() } == 1, "original offline PID1 lost")?;
+        require(
+            enzimos_platform::process_identity::current_pid() == 1,
+            "original offline PID1 lost",
+        )?;
         crate::namespaces::initial()?;
         require(
             operation::boot_id()? == self.boot,
@@ -305,9 +306,8 @@ pub struct Mounts<'a> {
     rows: Vec<enzimos_platform::mountinfo::Row>,
 }
 const OFFLINE_TOP: &str = "/run/enzimos/root-retirement-top";
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn readonly_flags(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "original offline observation flags",

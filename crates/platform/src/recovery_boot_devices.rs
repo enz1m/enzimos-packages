@@ -43,10 +43,10 @@ const PROGRAM: [Instruction; 17] = [
     ins(0xb7, 0x00, 0, 1),
     ins(0x95, 0x00, 0, 0),
 ];
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid, syscall).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, syscall).")]
 pub(crate) fn attach(group: &File) -> Result<File> {
     require(
-        unsafe { libc::geteuid() } == 0,
+        crate::process_identity::effective_uid() == 0,
         "Root complete boot device policy required",
     )?;
     #[repr(C)]
@@ -79,13 +79,17 @@ pub(crate) fn attach(group: &File) -> Result<File> {
         interface: 0,
         expected_attach: 6,
     };
+    // SAFETY: `load` is a repr(C) bpf_attr prefix passed with its exact size, and its pointers
+    // reference live buffers.
     let fd = unsafe { libc::syscall(libc::SYS_bpf, 5, &load, std::mem::size_of::<Load>()) } as i32;
     require(
         fd >= 0,
         "complete boot kernel device policy load failed; no execution fallback",
     )?;
+    // SAFETY: `fd` was just returned by bpf and is owned by nothing else.
     let program = unsafe { File::from_raw_fd(fd) };
     require(
+        // SAFETY: F_SETFD takes no pointers and `program` owns the descriptor.
         unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } == 0,
         "complete boot device policy descriptor flags",
     )?;
@@ -105,6 +109,7 @@ pub(crate) fn attach(group: &File) -> Result<File> {
         replace: 0,
     };
     require(
+        // SAFETY: `attach` is a repr(C) bpf_attr prefix passed with its exact size.
         unsafe { libc::syscall(libc::SYS_bpf, 8, &attach, std::mem::size_of::<Attach>()) } == 0,
         "complete boot kernel device policy attach failed; no execution fallback",
     )?;

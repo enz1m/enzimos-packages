@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Digest-verified streamed publication of archive members.
 use enzimos_platform::{files, json, stream_copy};
 use std::{
     io::Cursor,
@@ -6,7 +7,6 @@ use std::{
     path::PathBuf,
 };
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn streams_empty_and_executable_members_with_actual_modes_and_refuses_false_digests() {
     let temp = tempfile::Builder::new()
         .permissions(std::fs::Permissions::from_mode(0o700))
@@ -15,7 +15,7 @@ fn streams_empty_and_executable_members_with_actual_modes_and_refuses_false_dige
                 .unwrap_or_else(|| env!("CARGO_MANIFEST_DIR").into()),
         ))
         .unwrap();
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let parent = files::directory(temp.path(), Some(owner)).unwrap();
     let file = stream_copy::verified_reader(
         &mut Cursor::new(b"executable"),

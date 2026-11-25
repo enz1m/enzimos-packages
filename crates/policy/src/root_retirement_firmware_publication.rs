@@ -19,9 +19,8 @@ const EFI: &str = crate::recovery_activation_runtime::EFI;
 const GUID: &str = crate::recovery_activation_runtime::GUID;
 // Linux UAPI linux/magic.h EFIVARFS_MAGIC, observed in the installed header.
 const EFIVARFS: i64 = 0xde5e81e4;
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "original firmware read-only description required",
@@ -366,9 +365,8 @@ impl<'a> Original<'a> {
         )
     }
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn status(file: &File) -> Result<i32> {
-    let value = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let value = enzimos_platform::files::status_flags(&file);
     require(value >= 0, "firmware writer description unavailable")?;
     Ok(value)
 }
@@ -393,7 +391,7 @@ struct Created {
     owner: u32,
 }
 impl Created {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, openat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     fn new(parent: &File, leaf: &str) -> Result<Self> {
         require(
             leaf == format!("LoaderEntryOneShot-{GUID}"),
@@ -404,7 +402,7 @@ impl Created {
         require(
             metadata.is_dir()
                 && metadata.mode() & 0o022 == 0
-                && unsafe { libc::geteuid() } == owner,
+                && enzimos_platform::process_identity::effective_uid() == owner,
             "firmware creation parent owner/mode",
         )?;
         let parent = parent.try_clone()?;
@@ -449,13 +447,12 @@ impl Created {
         result.recheck()?;
         Ok(result)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn parent(&self) -> Result<()> {
         require(
             files::identity(&self.parent.metadata()?) == self.parent_epoch
                 && flags(&self.parent)? == self.parent_flags
                 && mount_identity::id(self.parent.as_fd(), true)? == self.mount
-                && unsafe { libc::geteuid() } == self.owner,
+                && enzimos_platform::process_identity::effective_uid() == self.owner,
             "actual exclusive firmware parent changed/covered",
         )
     }

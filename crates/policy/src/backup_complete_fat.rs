@@ -14,7 +14,7 @@ use std::{
 };
 #[allow(
     unsafe_code,
-    reason = "Linux syscall ABI (fstatfs, geteuid, openat, renameat2)."
+    reason = "Linux syscall ABI (fstatfs, openat, renameat2)."
 )]
 pub(super) fn write(
     parent: &File,
@@ -35,7 +35,7 @@ pub(super) fn write(
             && p.uid() == 0
             && p.gid() == 0
             && p.mode() & 0o022 == 0
-            && unsafe { libc::geteuid() } == 0,
+            && enzimos_platform::process_identity::effective_uid() == 0,
         "original protected FAT publication parent required",
     )?;
     let mount = mount_identity::id(parent.as_fd(), true)?;

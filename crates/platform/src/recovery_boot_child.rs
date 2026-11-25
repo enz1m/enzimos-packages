@@ -11,9 +11,12 @@ use std::{
         unix::fs::MetadataExt,
     },
 };
+/// Closed tools run inside a restored system.
 #[derive(Clone, Copy)]
 pub enum Tool {
+    /// Rebuild the initramfs images with `mkinitcpio -P`.
     Initramfs,
+    /// Install the boot loader with `bootctl install`.
     Loader,
 }
 impl Tool {
@@ -30,6 +33,7 @@ impl Tool {
         }
     }
 }
+/// Descriptors and strings prepared before fork for one complete-boot tool child.
 pub struct Context {
     // All strings and descriptors are prepared before fork. enter_child allocates
     // nothing and opens only fixed component paths below its private cloned root.
@@ -42,7 +46,13 @@ pub struct Context {
     procs: File,
 }
 impl Context {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, ioctl).")]
+    /// Prepare a child that enters the restored root and joins `group`.
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller is Root, when the root is not the frozen replacement root, a source
+    /// directory is invalid, or the cgroup procs file is unavailable.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
     pub fn prepare(
         root: &File,
         home: &File,
@@ -52,7 +62,7 @@ impl Context {
         group: &crate::recovery_boot_group::Group,
     ) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == 0,
+            crate::process_identity::effective_uid() == 0,
             "Root complete boot child required",
         )?;
         let procs = group.procs()?;
@@ -67,6 +77,8 @@ impl Context {
         )?;
         let mut info = [0u64; 63];
         require(
+            // SAFETY: `info` is 504 bytes, the size encoded in the ioctl number, and `root` keeps
+            // the descriptor open.
             unsafe {
                 libc::ioctl(
                     root.as_raw_fd(),
@@ -126,6 +138,7 @@ impl Context {
     }
     #[allow(unsafe_code, reason = "Native pointer or callback ABI.")]
     pub(crate) unsafe fn enter_child(&self) -> std::io::Result<()> {
+        // SAFETY: The caller upholds the same pre_exec contract that `enter_inner` requires.
         unsafe { self.enter_inner() }
     }
     #[allow(
@@ -133,6 +146,8 @@ impl Context {
         reason = "Linux syscall ABI (WEXITSTATUS, WIFEXITED, WTERMSIG, __errno_location and others)."
     )]
     unsafe fn enter_inner(&self) -> std::io::Result<()> {
+        // SAFETY: This runs in the owned pre_exec child, on descriptors held by `self` and
+        // NUL-terminated literals.
         unsafe {
             // Join the actual original cgroup before any restored tool executes.
             if libc::write(self.procs.as_raw_fd(), b"0\n".as_ptr().cast(), 2) != 2 {

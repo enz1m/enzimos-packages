@@ -6,7 +6,6 @@ use enzimos_policy::{
 };
 use std::{os::unix::fs::PermissionsExt, path::Path, time::Duration};
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn real_machine_local_signatures_retire_the_exact_owned_agent_and_private_key() {
     let work = Path::new(
         &std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -18,7 +17,7 @@ fn real_machine_local_signatures_retire_the_exact_owned_agent_and_private_key() 
         .permissions(std::fs::Permissions::from_mode(0o700))
         .tempdir_in(work)
         .unwrap();
-    let owner = unsafe { libc::geteuid() };
+    let owner = enzimos_platform::process_identity::effective_uid();
     let home = temporary.path().join("s");
     let mut signer = Signer::create(&home, owner).unwrap();
     let public = temporary.path().join("p");

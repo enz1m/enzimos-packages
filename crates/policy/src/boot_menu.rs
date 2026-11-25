@@ -43,10 +43,9 @@ fn tools(names: &[&str]) -> Vec<String> {
 fn lines(values: &[&str]) -> Vec<String> {
     values.iter().map(|s| (*s).into()).collect()
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 pub fn material(boot: &Path, restore_pending: bool) -> Result<BTreeMap<String, Vec<u8>>> {
     require(
-        unsafe { libc::geteuid() } == 0,
+        enzimos_platform::process_identity::effective_uid() == 0,
         "Root boot configuration writer required",
     )?;
     let directory = boot.join("EFI/enzimos");

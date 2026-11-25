@@ -9,19 +9,76 @@ use std::{
     },
     path::{Path, PathBuf},
 };
+/// Effective user ID of the calling process.
+#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
+#[must_use]
+pub fn effective_uid() -> libc::uid_t {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    unsafe { libc::geteuid() }
+}
+/// Real user ID of the calling process.
+#[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
+#[must_use]
+pub fn real_uid() -> libc::uid_t {
+    // SAFETY: getuid has no preconditions and cannot fail.
+    unsafe { libc::getuid() }
+}
+/// Effective group ID of the calling process.
+#[allow(unsafe_code, reason = "Linux syscall ABI (getegid).")]
+#[must_use]
+pub fn effective_gid() -> libc::gid_t {
+    // SAFETY: getegid has no preconditions and cannot fail.
+    unsafe { libc::getegid() }
+}
+/// Real group ID of the calling process.
+#[allow(unsafe_code, reason = "Linux syscall ABI (getgid).")]
+#[must_use]
+pub fn real_gid() -> libc::gid_t {
+    // SAFETY: getgid has no preconditions and cannot fail.
+    unsafe { libc::getgid() }
+}
+/// Process ID of the caller in its own PID namespace.
+#[allow(unsafe_code, reason = "Linux syscall ABI (getpid).")]
+#[must_use]
+pub fn current_pid() -> libc::pid_t {
+    // SAFETY: getpid has no preconditions and cannot fail.
+    unsafe { libc::getpid() }
+}
+/// Current parent process ID; changes to the reaper when the parent exits.
+#[allow(unsafe_code, reason = "Linux syscall ABI (getppid).")]
+#[must_use]
+pub fn parent_pid() -> libc::pid_t {
+    // SAFETY: getppid has no preconditions and cannot fail.
+    unsafe { libc::getppid() }
+}
+/// Fields of `/proc/<pid>/stat` used to identify a task instance.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Stat {
+    /// Process ID.
     pub pid: u32,
+    /// Parent process ID.
     pub parent: u32,
+    /// Start time in clock ticks since boot; with `pid` it names one task instance.
     pub start_ticks: u64,
+    /// Single-letter scheduler state.
     pub state: char,
 }
+/// Parse `/proc/<expected>/stat`, requiring a nonzero start time.
+///
+/// # Errors
+///
+/// Fails when the body is malformed, names another PID, or has a zero start time.
 pub fn parse_stat(body: &str, expected: u32) -> Result<Stat> {
     parse_stat_inner(body, expected, false)
 }
 /// Kernel tasks created at boot can legitimately have zero start ticks. Only
 /// the kernel PF_KTHREAD bit permits that exception; ordinary callers keep the
 /// existing stricter admission. This parses an observation, not a task actor.
+///
+/// # Errors
+///
+/// Fails when the body is malformed or names another PID, or the start time is zero for a
+/// non-kernel task.
 pub fn parse_kernel_stat(body: &str, expected: u32) -> Result<Stat> {
     parse_stat_inner(body, expected, true)
 }
@@ -30,14 +87,13 @@ fn parse_stat_inner(body: &str, expected: u32, kernel: bool) -> Result<Stat> {
         body.len() <= 8192 && !body.contains('\0'),
         "process stat bound",
     )?;
-    let begin = body
-        .find('(')
+    let (head, rest) = body
+        .rsplit_once(')')
         .ok_or_else(|| Error("process stat shape".into()))?;
-    let end = body
-        .rfind(')')
+    let (pid, _) = head
+        .split_once('(')
         .ok_or_else(|| Error("process stat shape".into()))?;
-    require(begin < end, "process stat shape")?;
-    let pid = body[..begin]
+    let pid = pid
         .trim()
         .parse::<u32>()
         .map_err(|_| Error("process stat PID".into()))?;
@@ -45,7 +101,7 @@ fn parse_stat_inner(body: &str, expected: u32, kernel: bool) -> Result<Stat> {
         pid == expected && pid > 0 && pid < i32::MAX as u32,
         "process stat PID mismatch",
     )?;
-    let fields = body[end + 1..].split_whitespace().collect::<Vec<_>>();
+    let fields = rest.split_whitespace().collect::<Vec<_>>();
     require(
         fields.len() >= 20 && fields.len() <= 64 && fields[0].len() == 1,
         "process stat fields",
@@ -78,6 +134,11 @@ fn parse_stat_inner(body: &str, expected: u32, kernel: bool) -> Result<Stat> {
         state,
     })
 }
+/// Real, effective, saved and filesystem UIDs from `/proc/<pid>/status`.
+///
+/// # Errors
+///
+/// Fails when the body is oversized or lacks one well-formed `Uid:` row.
 pub fn parse_uids(body: &str) -> Result<[u32; 4]> {
     require(
         body.len() <= 65536 && !body.contains('\0'),
@@ -200,7 +261,9 @@ impl Pinned {
         Ok(Self::new(self.file.try_clone()?, self.sha.clone()))
     }
 }
+/// A live process held by pidfd, its observed stat, and its admitted executable.
 pub struct Retained {
+    /// Stat observed when the process was retained.
     pub stat: Stat,
     uid: u32,
     pidfd: File,
@@ -209,6 +272,10 @@ pub struct Retained {
 }
 impl Retained {
     /// Root handoff must preserve the caller's actual open description, not just an inode.
+    ///
+    /// # Errors
+    ///
+    /// Fails on the checks of [`Retained::require_descriptions`].
     pub fn require_description(
         &self,
         file: std::os::fd::BorrowedFd<'_>,
@@ -219,13 +286,18 @@ impl Retained {
     /// Check a bounded handoff as one observation. Full executable and credential
     /// measurements bracket the batch; each KCMP retains its own original-task
     /// liveness checks. No descriptor is admitted by inode or numeric PID alone.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, syscall).")]
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller is Root, when the process exited or changed, or when any descriptor
+    /// is not the same open description in the process.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     pub fn require_descriptions(
         &self,
         descriptions: &[(std::os::fd::BorrowedFd<'_>, u32)],
     ) -> Result<()> {
         require(
-            unsafe { libc::geteuid() } == 0
+            effective_uid() == 0
                 && self.uid == 0
                 && !descriptions.is_empty()
                 && descriptions.len() <= 64
@@ -236,6 +308,7 @@ impl Retained {
         for (file, descriptor) in descriptions {
             require(!self.exited()?, "original description actor exited")?;
             require(
+                // SAFETY: kcmp takes no pointers; it only compares descriptors by number.
                 unsafe {
                     libc::syscall(
                         libc::SYS_kcmp,
@@ -257,10 +330,9 @@ impl Retained {
         use std::os::fd::AsFd;
         self.pidfd.as_fd()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     pub(crate) fn duplicate_root(&self) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == 0 && self.uid == 0,
+            effective_uid() == 0 && self.uid == 0,
             "original Root process required",
         )?;
         self.recheck()?;
@@ -272,10 +344,9 @@ impl Retained {
             pinned: self.pinned.as_ref().map(Pinned::duplicate).transpose()?,
         })
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     pub(crate) fn root_image_binding(&self) -> Result<(PathBuf, String)> {
         require(
-            unsafe { libc::geteuid() } == 0 && self.uid == 0 && self.fixed.len() == 1,
+            effective_uid() == 0 && self.uid == 0 && self.fixed.len() == 1,
             "single original Root image required",
         )?;
         self.recheck()?;
@@ -285,6 +356,12 @@ impl Retained {
             .ok_or_else(|| Error("original pinned Root image required".into()))?;
         Ok((self.fixed[0].clone(), pinned.sha.clone()))
     }
+    /// Retain process `pid` started at `start`, owned by `uid` and running one of `executables`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the arguments are out of bounds, the process is gone, or its start time, owner or
+    /// executable differs.
     #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     pub fn open(pid: u32, start: u64, uid: u32, executables: &[PathBuf]) -> Result<Self> {
         require(
@@ -296,8 +373,10 @@ impl Retained {
                 && executables.len() <= 8,
             "process binding bounds",
         )?;
+        // SAFETY: pidfd_open takes no pointers.
         let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) as i32 };
         require(fd >= 0, "process disappeared or pidfd unavailable")?;
+        // SAFETY: `fd` was just returned by pidfd_open and is owned by nothing else.
         let pidfd = unsafe { File::from_raw_fd(fd) };
         let stat = Self::observe(pid, uid, executables)?;
         require(stat.start_ticks == start, "process identity changed")?;
@@ -315,10 +394,14 @@ impl Retained {
         Self::observe_with_image(pid, uid, fixed, None)
     }
     /// Pin a freshly admitted Root image before package mutation can replace its name.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, geteuid).")]
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller and process are Root and no image is pinned yet, or when `file` is
+    /// not a single-link, read-only, Root-owned native executable.
     pub fn pin_executable(mut self, file: &File) -> Result<Self> {
         require(
-            unsafe { libc::geteuid() } == 0 && self.uid == 0 && self.pinned.is_none(),
+            effective_uid() == 0 && self.uid == 0 && self.pinned.is_none(),
             "fresh Root executable pin required",
         )?;
         self.recheck()?;
@@ -328,8 +411,7 @@ impl Retained {
                 && metadata.mode() & 0o022 == 0
                 && metadata.mode() & 0o111 != 0
                 && metadata.nlink() == 1
-                && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
-                    == libc::O_RDONLY,
+                && crate::files::status_flags(&file) & libc::O_ACCMODE == libc::O_RDONLY,
             "Root executable pin authority refused",
         )?;
         let bytes = files::read_file(file, 32 * 1024 * 1024, Some(0), true)?;
@@ -364,6 +446,8 @@ impl Retained {
         // Only this kernel-created symlink is followed. Fixed executable paths
         // are walked without symlinks and remain Root-owned and nonwritable.
         let name = c"exe";
+        // SAFETY: `name` is a NUL-terminated C string literal and `directory` keeps the descriptor
+        // open.
         let fd = unsafe {
             libc::openat(
                 directory.as_raw_fd(),
@@ -372,6 +456,7 @@ impl Retained {
             )
         };
         require(fd >= 0, "process executable unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let held = unsafe { File::from_raw_fd(fd) };
         let actual = held.metadata()?;
         let mut admitted = false;
@@ -407,6 +492,8 @@ impl Retained {
             }
         }
         require(admitted, "process executable changed")?;
+        // SAFETY: `name` is a NUL-terminated C string literal and `directory` keeps the descriptor
+        // open.
         let fd = unsafe {
             libc::openat(
                 directory.as_raw_fd(),
@@ -415,6 +502,7 @@ impl Retained {
             )
         };
         require(fd >= 0, "process executable unavailable")?;
+        // SAFETY: `fd` was just returned by openat and is owned by nothing else.
         let last_exe = unsafe { File::from_raw_fd(fd) };
         require(
             (if pinned.is_some() {
@@ -432,6 +520,11 @@ impl Retained {
         )?;
         Ok(last)
     }
+    /// Whether the retained process has exited.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the pidfd cannot be polled.
     #[allow(unsafe_code, reason = "Linux syscall ABI (poll).")]
     pub fn exited(&self) -> Result<bool> {
         let mut poll = libc::pollfd {
@@ -439,6 +532,7 @@ impl Retained {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: `poll` is one writable pollfd and the count is 1.
         let result = unsafe { libc::poll(&mut poll, 1, 0) };
         require(
             result >= 0 && poll.revents & (libc::POLLERR | libc::POLLNVAL) == 0,
@@ -446,6 +540,11 @@ impl Retained {
         )?;
         Ok(result > 0)
     }
+    /// Verify the process is alive and its stat, owner and executable are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the process exited or any retained property changed.
     pub fn recheck(&self) -> Result<()> {
         require(!self.exited()?, "retained process exited")?;
         let current =
@@ -455,6 +554,12 @@ impl Retained {
             "retained process changed",
         )
     }
+    /// Send SIGTERM through the pidfd after `fresh_authority` and a recheck succeed.
+    ///
+    /// # Errors
+    ///
+    /// Fails for PID 1, when `fresh_authority` or the recheck fails, or when the signal cannot be
+    /// sent.
     #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     pub fn terminate<F: FnOnce() -> Result<()>>(&self, fresh_authority: F) -> Result<()> {
         require(
@@ -464,6 +569,8 @@ impl Retained {
         fresh_authority()?;
         self.recheck()?;
         require(
+            // SAFETY: pidfd_send_signal gets a null siginfo, and `self.pidfd` keeps the descriptor
+            // open.
             unsafe {
                 libc::syscall(
                     libc::SYS_pidfd_send_signal,
@@ -477,7 +584,7 @@ impl Retained {
         )
     }
 }
-pub fn parse_pidfd_mapping(body: &str) -> Result<Option<u32>> {
+pub(crate) fn parse_pidfd_mapping(body: &str) -> Result<Option<u32>> {
     require(
         body.len() <= 8192 && !body.contains('\0'),
         "pidfd information bound",
@@ -524,21 +631,35 @@ pub fn parse_pidfd_mapping(body: &str) -> Result<Option<u32>> {
     )?;
     Ok((pid != -1).then_some(pid as u32))
 }
+/// Target PID from a pidfd's fdinfo body.
+///
+/// # Errors
+///
+/// Fails when the body is malformed or the target exited.
 pub fn parse_pidfd_info(body: &str) -> Result<u32> {
     parse_pidfd_mapping(body)?.ok_or_else(|| Error("pidfd target exited or invalid".into()))
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
+/// Target PID of a pidfd in the caller's PID namespace, or `None` once the target has exited.
+///
+/// # Errors
+///
+/// Fails when the fdinfo cannot be read or is malformed, or the target is in another namespace.
 pub fn pidfd_mapping(fd: std::os::fd::BorrowedFd<'_>) -> Result<Option<u32>> {
     let path = PathBuf::from(format!(
         "/proc/{}/fdinfo/{}",
         std::process::id(),
         fd.as_raw_fd()
     ));
-    let body = files::read_kernel_owned(&path, 8192, unsafe { libc::geteuid() })?;
+    let body = files::read_kernel_owned(&path, 8192, effective_uid())?;
     parse_pidfd_mapping(
         std::str::from_utf8(&body).map_err(|_| Error("pidfd target encoding".into()))?,
     )
 }
+/// Target PID of a pidfd in the caller's PID namespace.
+///
+/// # Errors
+///
+/// Fails as [`pidfd_mapping`] does, or when the target has exited.
 pub fn pidfd_target(fd: std::os::fd::BorrowedFd<'_>) -> Result<u32> {
     pidfd_mapping(fd)?.ok_or_else(|| Error("pidfd target exited or invalid".into()))
 }
@@ -561,11 +682,7 @@ mod pinned_tests {
         tempfile::tempdir_in(base).unwrap()
     }
     fn owner() -> u32 {
-        // SAFETY: geteuid has no preconditions.
-        #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
-        unsafe {
-            libc::geteuid()
-        }
+        super::effective_uid()
     }
 
     #[test]

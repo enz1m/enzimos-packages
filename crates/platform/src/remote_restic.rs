@@ -190,18 +190,30 @@ pub(crate) fn mount_refusal(error: &std::io::Error) -> Error {
     };
     Error(format!("{code}: {reason} ({error})"))
 }
+/// Closed Restic roles that run against the SMB share or the local repository.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Task {
+    /// Create the share repository.
     RemoteInitialize,
+    /// Read the share repository config.
     RemoteIdentity,
+    /// List share repository keys.
     RemoteKeys,
+    /// Look up one snapshot in the share repository.
     RemoteSelected,
+    /// List share repository snapshots.
     RemoteInventory,
+    /// Check share repository metadata.
     RemoteCheck,
+    /// Look up one snapshot in the local repository.
     LocalSelected,
+    /// List local repository snapshots.
     LocalInventory,
+    /// Check local repository metadata.
     LocalCheck,
+    /// Copy one local snapshot into the share repository.
     Replicate,
+    /// Copy one share snapshot into the local repository.
     Retrieve,
     /// A whole-system backup into the share; only [`backup`] runs it.
     Backup,
@@ -372,6 +384,16 @@ fn arguments(endpoint: &Endpoint, task: Task, snapshot: &str) -> Result<Vec<Stri
 }
 /// Only observations are returned. The policy receiver still independently
 /// admits Root sender OFDs, original pin/intent and the whole worker scope.
+///
+/// # Errors
+///
+/// Fails when the task, snapshot or descriptors are not admitted for this role, the share
+/// attachment or confinement fails, `boundary` fails, or the process exceeds its bounds. A nonzero
+/// Restic exit is returned in the output.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each descriptor fills a distinct, closed Restic role."
+)]
 pub fn execute(
     attachment: &Arc<crate::remote_mount_child::Prepared>,
     endpoint: &Endpoint,
@@ -427,6 +449,12 @@ fn initialization_arguments(endpoint: &Endpoint) -> Vec<String> {
 }
 /// Separate exact remote initializer; local repository and password roles are
 /// absent. The policy caller must retain its actual original entered receipt.
+///
+/// # Errors
+///
+/// Fails when the task, snapshot or descriptors are not admitted for this role, the share
+/// attachment or confinement fails, `boundary` fails, or the process exceeds its bounds. A nonzero
+/// Restic exit is returned in the output.
 pub fn initialize(
     attachment: &Arc<crate::remote_mount_child::Prepared>,
     endpoint: &Endpoint,
@@ -462,6 +490,12 @@ fn check_arguments(endpoint: &Endpoint) -> Result<Vec<String>> {
 }
 /// Standalone metadata check has only remote credential and scratch descriptors.
 /// It cannot acquire local copy repository/password roles through its factory.
+///
+/// # Errors
+///
+/// Fails when the task, snapshot or descriptors are not admitted for this role, the share
+/// attachment or confinement fails, `boundary` fails, or the process exceeds its bounds. A nonzero
+/// Restic exit is returned in the output.
 pub fn check(
     attachment: &Arc<crate::remote_mount_child::Prepared>,
     endpoint: &Endpoint,
@@ -563,6 +597,12 @@ fn prune_arguments(endpoint: &Endpoint, snapshots: &[String]) -> Result<Vec<Stri
 /// Forget exact remote snapshot IDs and prune. Like the standalone check it has
 /// only remote credential and scratch descriptors, and runs under the same
 /// remote-only confinement (no local repository or password roles).
+///
+/// # Errors
+///
+/// Fails when the task, snapshot or descriptors are not admitted for this role, the share
+/// attachment or confinement fails, `boundary` fails, or the process exceeds its bounds. A nonzero
+/// Restic exit is returned in the output.
 pub fn prune(
     attachment: &Arc<crate::remote_mount_child::Prepared>,
     endpoint: &Endpoint,
@@ -587,6 +627,16 @@ pub fn prune(
     )
 }
 /// Only fixed remote identity/key/inventory/selected queries. No copy/check/init.
+///
+/// # Errors
+///
+/// Fails when the task, snapshot or descriptors are not admitted for this role, the share
+/// attachment or confinement fails, `boundary` fails, or the process exceeds its bounds. A nonzero
+/// Restic exit is returned in the output.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each descriptor fills a distinct, closed Restic role."
+)]
 pub fn rotation_read(
     attachment: &Arc<crate::remote_mount_child::Prepared>,
     endpoint: &Endpoint,
@@ -607,7 +657,7 @@ pub fn rotation_read(
 }
 #[allow(
     unsafe_code,
-    reason = "Linux syscall ABI (fcntl, fstatfs, fstatvfs, geteuid and others)."
+    reason = "Linux syscall ABI (fstatfs, fstatvfs and others)."
 )]
 fn execute_invocation(
     invocation: Invocation,
@@ -619,25 +669,30 @@ fn execute_invocation(
     boundary: &mut dyn FnMut() -> Result<()>,
 ) -> Result<process::Output> {
     require(
-        unsafe { libc::geteuid() == 0 && libc::getuid() == 0 },
+        crate::process_identity::effective_uid() == 0 && crate::process_identity::real_uid() == 0,
         "Root remote consumer required",
     )?;
     let attachment = &invocation.attachment;
     let original = files::identity(&scratch.metadata()?);
     let mount = mount_identity::id(scratch.as_fd(), true)?;
     let m = scratch.metadata()?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut status: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         m.is_dir()
             && m.uid() == 0
             && m.gid() == 0
             && m.mode() & 0o7777 == 0o700
+            // SAFETY: `status` is a writable `libc::statfs` and `scratch` keeps the descriptor
+            // open.
             && unsafe { libc::fstatfs(std::os::fd::AsRawFd::as_raw_fd(scratch), &mut status) } == 0
             && status.f_type as u64 == 0x01021994,
         "original private tmpfs remote scratch",
     )?;
+    // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut space: libc::statvfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `space` is a writable `libc::statvfs` and `scratch` keeps the descriptor open.
         unsafe { libc::fstatvfs(std::os::fd::AsRawFd::as_raw_fd(scratch), &mut space) } == 0
             && u128::from(space.f_bavail) * u128::from(space.f_frsize) >= 256 * 1024 * 1024,
         "remote scratch reserve",
@@ -648,7 +703,7 @@ fn execute_invocation(
         .enumerate()
     {
         let m = file.metadata()?;
-        let flags = unsafe { libc::fcntl(std::os::fd::AsRawFd::as_raw_fd(file), libc::F_GETFL) };
+        let flags = crate::files::status_flags(file);
         require(
             m.is_file()
                 && m.uid() == 0
@@ -708,8 +763,11 @@ fn execute_invocation(
                 && mount_identity::id(repository.as_fd(), true)? == repository_mount,
             "original remote local repository changed",
         )?;
+        // SAFETY: `libc::statvfs` is a plain C struct, for which all-zero bytes are a valid value.
         let mut available: libc::statvfs = unsafe { std::mem::zeroed() };
         require(
+            // SAFETY: `available` is a writable `libc::statvfs` and `scratch` keeps the descriptor
+            // open.
             unsafe { libc::fstatvfs(std::os::fd::AsRawFd::as_raw_fd(scratch), &mut available) }
                 == 0
                 && u128::from(available.f_bavail) * u128::from(available.f_frsize)

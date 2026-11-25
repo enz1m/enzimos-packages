@@ -39,9 +39,8 @@ fn empty(bytes: &[u8]) -> Result<()> {
         "actual kernel helper setting is not the empty string",
     )
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let value = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let value = enzimos_platform::files::status_flags(&file);
     require(
         value >= 0 && value & libc::O_ACCMODE == libc::O_RDONLY,
         "actual kernel helper original read descriptor",

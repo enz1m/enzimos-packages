@@ -1,7 +1,6 @@
 use super::*;
 
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn actual_tree_copy_preserves_empty_files_and_refuses_changed_names_and_replay() {
     let work = Path::new(
         &std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -9,7 +8,7 @@ fn actual_tree_copy_preserves_empty_files_and_refuses_changed_names_and_replay()
     )
     .to_path_buf();
     let temp = tempfile::tempdir_in(work).unwrap();
-    let uid = unsafe { libc::geteuid() };
+    let uid = enzimos_platform::process_identity::effective_uid();
     std::fs::create_dir(temp.path().join("source")).unwrap();
     std::fs::create_dir(temp.path().join("target")).unwrap();
     let src = temp.path().join("source");

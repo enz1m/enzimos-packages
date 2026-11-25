@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Execution of a pinned executable image.
 use enzimos_platform::process;
 use std::{fs::File, os::unix::fs::PermissionsExt, time::Duration};
 #[test]

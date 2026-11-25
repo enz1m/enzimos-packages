@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Descriptor-relative file access that never follows symlinks and checks owners and modes.
 use crate::{Error, Result, require};
 use std::ffi::CString;
 use std::fs::File;
@@ -9,9 +10,17 @@ use std::os::unix::fs::FileExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path};
 
+/// File status flags (`F_GETFL`) of an open descriptor, or `-1` when the query fails.
+#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
+pub fn status_flags<F: std::os::fd::AsFd + ?Sized>(fd: &F) -> libc::c_int {
+    // SAFETY: F_GETFL only reads flags of a descriptor kept open by the borrow.
+    unsafe { libc::fcntl(fd.as_fd().as_raw_fd(), libc::F_GETFL) }
+}
+
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn openat(parent: i32, name: &std::ffi::OsStr, flags: i32, mode: u32) -> Result<File> {
     let name = CString::new(name.as_bytes()).map_err(|_| Error("invalid file name".into()))?;
+    // SAFETY: `name` is a NUL-terminated CString that outlives the call.
     let fd = unsafe {
         libc::openat(
             parent,
@@ -28,6 +37,7 @@ fn openat(parent: i32, name: &std::ffi::OsStr, flags: i32, mode: u32) -> Result<
             error.raw_os_error()
         )));
     }
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     Ok(unsafe { File::from_raw_fd(fd) })
 }
 
@@ -45,11 +55,19 @@ fn directory_ok(f: &File, owner: Option<u32>) -> Result<()> {
 
 /// Observe emptiness through the original directory description, including when
 /// its pathname is renamed or covered. This observation grants no ownership.
+///
+/// # Errors
+///
+/// Fails when the directory cannot be enumerated or leaves its original filesystem.
 pub fn directory_is_empty(file: &File) -> Result<bool> {
     Ok(directory_scan(file, 1, true)?.is_empty())
 }
 /// Bounded names from an original directory. Returned names do not authorize
 /// opening members; callers must still retain and recheck each original file.
+///
+/// # Errors
+///
+/// Fails when enumeration fails or the directory holds more than `maximum` members.
 pub fn directory_names(file: &File, maximum: usize) -> Result<Vec<std::ffi::OsString>> {
     require((1..=131072).contains(&maximum), "directory inventory bound")?;
     directory_scan(file, maximum, false)
@@ -81,8 +99,10 @@ fn directory_scan(
         "directory enumeration left original filesystem",
     )?;
     let raw = stream.into_raw_fd();
+    // SAFETY: `raw` came from `into_raw_fd`, so ownership passes to the DIR stream on success.
     let pointer = unsafe { libc::fdopendir(raw) };
     if pointer.is_null() {
+        // SAFETY: fdopendir failed, so `raw` is still owned here and closed exactly once.
         unsafe { libc::close(raw) };
         return Err(std::io::Error::last_os_error().into());
     }
@@ -90,6 +110,7 @@ fn directory_scan(
     impl Drop for Directory {
         #[allow(unsafe_code, reason = "Linux syscall ABI (closedir).")]
         fn drop(&mut self) {
+            // SAFETY: The pointer came from a successful fdopendir and is closed only by this drop.
             unsafe { libc::closedir(self.0) };
         }
     }
@@ -98,16 +119,21 @@ fn directory_scan(
     let mut finished = false;
     // Include dot, dot-dot and EOF within a fixed syscall bound.
     for _ in 0..maximum + 3 {
+        // SAFETY: errno is thread-local and always writable.
         unsafe { *libc::__errno_location() = 0 };
+        // SAFETY: `directory.0` is a live DIR stream owned by `directory`.
         let entry = unsafe { libc::readdir(directory.0) };
         if entry.is_null() {
             require(
+                // SAFETY: errno is thread-local and always readable.
                 unsafe { *libc::__errno_location() } == 0,
                 "original directory enumeration failed",
             )?;
             finished = true;
             break;
         }
+        // SAFETY: readdir returned a non-null entry whose `d_name` is NUL-terminated and valid
+        // until the next readdir.
         let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
         if !matches!(name, b"." | b"..") {
             require(result.len() < maximum, "original directory member bound")?;
@@ -129,9 +155,20 @@ fn directory_scan(
 
 /// Read kernel-generated regular pseudo-files without trusting their stat size.
 /// The path is still walked without symlinks and the owner/type remain checked.
+///
+/// # Errors
+///
+/// Fails on the same path, ownership and size checks as [`read_kernel_owned`].
 pub fn read_kernel(path: &Path, limit: usize) -> Result<Vec<u8>> {
     read_kernel_owned(path, limit, 0)
 }
+/// Read a kernel pseudo-file below `/proc` or `/sys`, whose parent directories must be owned by
+/// Root or `owner`.
+///
+/// # Errors
+///
+/// Fails for other paths, a `limit` above 4 MiB, an unsafe parent or file, or content larger than
+/// `limit`.
 pub fn read_kernel_owned(path: &Path, limit: usize, owner: u32) -> Result<Vec<u8>> {
     require(
         path.starts_with("/proc") || path.starts_with("/sys"),
@@ -182,6 +219,12 @@ pub fn read_kernel_owned(path: &Path, limit: usize, owner: u32) -> Result<Vec<u8
 fn at_path<T>(result: Result<T>, path: &Path) -> Result<T> {
     result.map_err(|error| Error(format!("{} (in {})", error.0, path.display())))
 }
+/// Open an absolute directory by walking each component without following symlinks.
+///
+/// # Errors
+///
+/// Fails on a relative or noncanonical path, a symlink or non-directory component, or, when `owner`
+/// is set, a directory not owned by Root or `owner` or writable by group or others.
 pub fn directory(path: &Path, owner: Option<u32>) -> Result<File> {
     at_path(directory_walk(path, owner), path)
 }
@@ -212,6 +255,10 @@ fn directory_walk(path: &Path, owner: Option<u32>) -> Result<File> {
     Ok(current)
 }
 /// Walk below an already retained directory; ancestor symlinks are refused.
+///
+/// # Errors
+///
+/// Fails on the same component checks as [`directory`].
 pub fn directory_relative(root: &File, path: &Path, owner: Option<u32>) -> Result<File> {
     at_path(directory_relative_walk(root, path, owner), path)
 }
@@ -240,10 +287,19 @@ fn directory_relative_walk(root: &File, path: &Path, owner: Option<u32>) -> Resu
     Ok(current)
 }
 
-#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, geteuid, mkdirat).")]
+/// Create any missing directories of an absolute path with `mode` (0o700 or 0o755), keeping
+/// existing ones.
+///
+/// # Errors
+///
+/// Fails unless the caller's effective UID is `owner`, or when an existing component is not a
+/// directory owned by `owner` with exactly `mode`.
+#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, mkdirat).")]
 pub fn ensure_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
     require(
-        path.is_absolute() && matches!(mode, 0o700 | 0o755) && unsafe { libc::geteuid() } == owner,
+        path.is_absolute()
+            && matches!(mode, 0o700 | 0o755)
+            && crate::process_identity::effective_uid() == owner,
         "directory writer authority or mode",
     )?;
     let mut current = directory(Path::new("/"), Some(owner))?;
@@ -253,6 +309,8 @@ pub fn ensure_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
             Component::Normal(name) => {
                 let c = CString::new(name.as_bytes())
                     .map_err(|_| Error("invalid directory name".into()))?;
+                // SAFETY: `c` is a NUL-terminated CString and `current` keeps the descriptor open
+                // for the call.
                 let rc = unsafe { libc::mkdirat(current.as_raw_fd(), c.as_ptr(), mode) };
                 if rc < 0
                     && std::io::Error::last_os_error().kind() != std::io::ErrorKind::AlreadyExists
@@ -267,6 +325,8 @@ pub fn ensure_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
                 )?;
                 if rc == 0 {
                     require(
+                        // SAFETY: fchmod takes no pointers and `next` keeps the descriptor open for
+                        // the call.
                         unsafe { libc::fchmod(next.as_raw_fd(), mode) } == 0,
                         "directory mode publication failed",
                     )?;
@@ -287,10 +347,16 @@ pub fn ensure_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
     Ok(current)
 }
 
-#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, geteuid, mkdirat).")]
+/// Create exactly one new directory with `mode` (0o700 or 0o755) below an existing parent.
+///
+/// # Errors
+///
+/// Fails unless the caller's effective UID is `owner`, when the name already exists, or when the
+/// parent is unsafe.
+#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, mkdirat).")]
 pub fn create_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
     require(
-        matches!(mode, 0o700 | 0o755) && unsafe { libc::geteuid() } == owner,
+        matches!(mode, 0o700 | 0o755) && crate::process_identity::effective_uid() == owner,
         "directory writer authority or mode",
     )?;
     let parent = directory(
@@ -303,6 +369,8 @@ pub fn create_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
         .ok_or_else(|| Error("missing directory filename".into()))?;
     let c = CString::new(name.as_bytes()).map_err(|_| Error("invalid directory name".into()))?;
     require(
+        // SAFETY: `c` is a NUL-terminated CString and `parent` keeps the descriptor open for the
+        // call.
         unsafe { libc::mkdirat(parent.as_raw_fd(), c.as_ptr(), mode) } == 0,
         "new directory required",
     )?;
@@ -313,6 +381,7 @@ pub fn create_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
         0,
     )?;
     require(
+        // SAFETY: fchmod takes no pointers and `created` keeps the descriptor open for the call.
         unsafe { libc::fchmod(created.as_raw_fd(), mode) } == 0,
         "directory mode publication failed",
     )?;
@@ -327,7 +396,12 @@ pub fn create_directory(path: &Path, mode: u32, owner: u32) -> Result<File> {
 
 /// Create exactly one new member through the held original parent. Existing
 /// names, including dangling symlinks, are never adopted or removed on failure.
-#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, geteuid, mkdirat).")]
+///
+/// # Errors
+///
+/// Fails unless the caller's effective UID is `owner`, when `name` is not a single component or
+/// already exists, or when the created directory's identity or mount differs.
+#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, mkdirat).")]
 pub fn create_directory_relative(
     parent: &File,
     name: &Path,
@@ -336,7 +410,7 @@ pub fn create_directory_relative(
 ) -> Result<File> {
     require(
         matches!(mode, 0o700 | 0o755)
-            && unsafe { libc::geteuid() } == owner
+            && crate::process_identity::effective_uid() == owner
             && name.components().count() == 1
             && matches!(name.components().next(), Some(Component::Normal(_))),
         "exclusive relative directory writer",
@@ -354,6 +428,8 @@ pub fn create_directory_relative(
     let c = CString::new(name.as_os_str().as_bytes())
         .map_err(|_| Error("directory leaf encoding".into()))?;
     require(
+        // SAFETY: `c` is a NUL-terminated CString and `parent` keeps the descriptor open for the
+        // call.
         unsafe { libc::mkdirat(parent.as_raw_fd(), c.as_ptr(), mode) } == 0,
         "new relative directory required; no adoption",
     )?;
@@ -364,6 +440,7 @@ pub fn create_directory_relative(
         0,
     )?;
     require(
+        // SAFETY: fchmod takes no pointers and `created` keeps the descriptor open for the call.
         unsafe { libc::fchmod(created.as_raw_fd(), mode) } == 0,
         "new directory mode publication",
     )?;
@@ -384,6 +461,11 @@ pub fn create_directory_relative(
     )?;
     Ok(created)
 }
+/// Like [`read`], but returns `None` when the file is absent and its parent directory is safe.
+///
+/// # Errors
+///
+/// Fails on the same checks as [`read`].
 pub fn read_optional(
     path: &Path,
     limit: usize,
@@ -404,6 +486,12 @@ pub fn read_optional(
     }
 }
 
+/// Open a regular file below `root` by walking a relative path without following symlinks.
+///
+/// # Errors
+///
+/// Fails on an absolute or noncanonical path, a symlink component, or a final member that is not a
+/// regular file.
 pub fn open_relative(root: &File, path: &Path) -> Result<File> {
     at_path(open_relative_walk(root, path), path)
 }
@@ -437,6 +525,11 @@ fn open_relative_walk(root: &File, path: &Path) -> Result<File> {
 
 /// Only kernel ENOENT is absence; unsafe types and other open failures remain errors.
 /// A relative multi-component path is walked one held directory at a time.
+///
+/// # Errors
+///
+/// Fails on an absolute or noncanonical path, a member that is not a safe directory, or any open
+/// error other than absence.
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 pub fn optional_directory_relative(
     parent: &File,
@@ -461,6 +554,8 @@ pub fn optional_directory_relative(
     directory_ok(parent, owner)?;
     let name = CString::new(name.as_os_str().as_bytes())
         .map_err(|_| Error("invalid optional directory name".into()))?;
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open for the
+    // call.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -476,11 +571,17 @@ pub fn optional_directory_relative(
             Err(error.into())
         };
     }
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw) };
     directory_ok(&file, owner)?;
     Ok(Some(file))
 }
 /// Only kernel ENOENT is absence; unsafe types and other open failures remain errors.
+///
+/// # Errors
+///
+/// Fails when `name` is not one component, the member is not a regular file, or the open fails
+/// other than with absence.
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 pub fn optional_relative(parent: &File, name: &Path) -> Result<Option<File>> {
     require(
@@ -490,6 +591,8 @@ pub fn optional_relative(parent: &File, name: &Path) -> Result<Option<File>> {
     )?;
     let name = CString::new(name.as_os_str().as_bytes())
         .map_err(|_| Error("invalid optional file name".into()))?;
+    // SAFETY: `name` is a NUL-terminated CString and `parent` keeps the descriptor open for the
+    // call.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -505,6 +608,7 @@ pub fn optional_relative(parent: &File, name: &Path) -> Result<Option<File>> {
             Err(error.into())
         };
     }
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw) };
     require(file.metadata()?.is_file(), "optional regular file required")?;
     Ok(Some(file))
@@ -512,6 +616,11 @@ pub fn optional_relative(parent: &File, name: &Path) -> Result<Option<File>> {
 
 /// Public-data aliases may resolve only beneath a retained directory. Linux
 /// openat2 refuses absolute links, '..' escapes and magic /proc descriptor links.
+///
+/// # Errors
+///
+/// Fails when `path` is not a bounded relative path, resolves outside `root`, or is not a regular
+/// file.
 #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
 pub fn open_beneath(root: &File, path: &Path) -> Result<File> {
     require(
@@ -538,6 +647,8 @@ pub fn open_beneath(root: &File, path: &Path) -> Result<File> {
         mode: 0,
         resolve: 0x8 | 0x2,
     };
+    // SAFETY: The path is NUL-terminated, `how` outlives the call and its size is passed, and
+    // `root` stays open.
     let raw = unsafe {
         libc::syscall(
             libc::SYS_openat2,
@@ -551,6 +662,7 @@ pub fn open_beneath(root: &File, path: &Path) -> Result<File> {
         raw >= 0,
         "public-data alias escaped its retained root or could not be opened",
     )?;
+    // SAFETY: `raw` was just returned by openat2 and is owned by nothing else.
     let file = unsafe { File::from_raw_fd(raw as i32) };
     require(
         file.metadata()?.is_file(),
@@ -559,6 +671,12 @@ pub fn open_beneath(root: &File, path: &Path) -> Result<File> {
     Ok(file)
 }
 
+/// Read a regular file by absolute path, walking its parent with [`directory`] and the file with
+/// [`read_file`].
+///
+/// # Errors
+///
+/// Fails on the checks of [`directory`] and [`read_file`].
 pub fn read(path: &Path, limit: usize, owner: Option<u32>, single_link: bool) -> Result<Vec<u8>> {
     let parent = directory(
         path.parent()
@@ -575,6 +693,11 @@ pub fn read(path: &Path, limit: usize, owner: Option<u32>, single_link: bool) ->
     read_file(&file, limit, owner, single_link)
 }
 /// Stable bounded pread preserves the borrowed descriptor's shared offset.
+///
+/// # Errors
+///
+/// Fails when the file is not regular, exceeds `limit` (at most 512 MiB), has more than one link
+/// while `single_link` is set, is unsafe for `owner`, or changes during the read.
 pub fn read_file(
     file: &File,
     limit: usize,
@@ -594,7 +717,7 @@ pub fn read_file(
         )?;
     }
     let mut bytes = Vec::new();
-    let mut chunk = [0u8; 65536];
+    let mut chunk = vec![0u8; 65536];
     loop {
         let remaining = (limit + 1 - bytes.len()).min(chunk.len());
         let count = file.read_at(&mut chunk[..remaining], bytes.len() as u64)?;
@@ -614,7 +737,9 @@ pub fn read_file(
     Ok(bytes)
 }
 
+/// Inode identity and content-change fields of [`identity`], in its field order.
 pub type FileIdentity = (u64, u64, u64, i64, i64, i64, i64, u32, u32, u32, u64);
+/// Device, inode, size, mtime, ctime, mode, owner, group and link count of `m`.
 pub fn identity(m: &std::fs::Metadata) -> FileIdentity {
     (
         m.dev(),
@@ -631,12 +756,18 @@ pub fn identity(m: &std::fs::Metadata) -> FileIdentity {
     )
 }
 
+/// Hex-encode `bytes` random bytes from the kernel.
+///
+/// # Errors
+///
+/// Fails when `bytes` is zero or above 256, or the kernel random source fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (getrandom).")]
 pub fn random_hex(bytes: usize) -> Result<String> {
     require(bytes > 0 && bytes <= 256, "random size bound")?;
     let mut data = vec![0u8; bytes];
     let mut pos = 0;
     while pos < data.len() {
+        // SAFETY: The pointer and length describe the unfilled tail of `data`.
         let n = unsafe { libc::getrandom(data[pos..].as_mut_ptr().cast(), data.len() - pos, 0) };
         if n < 0 {
             if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
@@ -651,14 +782,19 @@ pub fn random_hex(bytes: usize) -> Result<String> {
 }
 
 /// Create a protected directory tree below an already retained filesystem root.
-#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, geteuid, mkdirat).")]
+///
+/// # Errors
+///
+/// Fails unless the caller's effective UID is `owner`, or when the path is noncanonical, deeper
+/// than its bound, or crosses a directory with another owner or mode.
+#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, mkdirat).")]
 pub fn ensure_directory_relative(root: &File, path: &Path, mode: u32, owner: u32) -> Result<File> {
     require(
         !path.is_absolute()
             && !path.as_os_str().is_empty()
             && path.as_os_str().as_bytes().len() <= 4096
             && matches!(mode, 0o700 | 0o755)
-            && unsafe { libc::geteuid() } == owner,
+            && crate::process_identity::effective_uid() == owner,
         "relative directory writer authority",
     )?;
     directory_ok(root, Some(owner))?;
@@ -670,6 +806,8 @@ pub fn ensure_directory_relative(root: &File, path: &Path, mode: u32, owner: u32
         };
         let name_c =
             CString::new(name.as_bytes()).map_err(|_| Error("invalid directory name".into()))?;
+        // SAFETY: `name_c` is a NUL-terminated CString and `current` keeps the descriptor open for
+        // the call.
         let rc = unsafe { libc::mkdirat(current.as_raw_fd(), name_c.as_ptr(), mode) };
         if rc < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::AlreadyExists {
             return Err(std::io::Error::last_os_error().into());
@@ -682,6 +820,8 @@ pub fn ensure_directory_relative(root: &File, path: &Path, mode: u32, owner: u32
         )?;
         if rc == 0 {
             require(
+                // SAFETY: fchmod takes no pointers and `next` keeps the descriptor open for the
+                // call.
                 unsafe { libc::fchmod(next.as_raw_fd(), mode) } == 0,
                 "relative directory mode publication",
             )?;
@@ -698,6 +838,7 @@ pub fn ensure_directory_relative(root: &File, path: &Path, mode: u32, owner: u32
     Ok(current)
 }
 
+/// Exclusive flock on an owned lock file, rechecked against its original path, parent and mount.
 pub struct Lock {
     file: File,
     identity: FileIdentity,
@@ -708,6 +849,10 @@ pub struct Lock {
 }
 
 /// Replace only an owned regular file or symlink, never following its destination.
+///
+/// # Errors
+///
+/// Fails on the checks of [`symlink_member`] or when `target` is not absolute.
 pub fn symlink_relative(parent: &File, name: &Path, target: &str, owner: u32) -> Result<()> {
     require(
         target.starts_with('/'),
@@ -717,14 +862,19 @@ pub fn symlink_relative(parent: &File, name: &Path, target: &str, owner: u32) ->
 }
 /// Publish an archive's already reviewed link without following its destination.
 /// The archive caller must additionally validate its target-root containment.
+///
+/// # Errors
+///
+/// Fails unless the caller's effective UID is `owner`, when `name` is not one component, when an
+/// existing member is not an owned file or symlink, or when the member changes during publication.
 #[allow(
     unsafe_code,
-    reason = "Linux syscall ABI (fstatat, geteuid, renameat2, symlinkat and others)."
+    reason = "Linux syscall ABI (fstatat, renameat2, symlinkat and others)."
 )]
 pub fn symlink_member(parent: &File, name: &Path, target: &str, owner: u32) -> Result<()> {
     directory_ok(parent, Some(owner))?;
     require(
-        unsafe { libc::geteuid() } == owner
+        crate::process_identity::effective_uid() == owner
             && name.components().count() == 1
             && matches!(name.components().next(), Some(Component::Normal(_)))
             && !target.is_empty()
@@ -735,8 +885,13 @@ pub fn symlink_member(parent: &File, name: &Path, target: &str, owner: u32) -> R
     let name = CString::new(name.as_os_str().as_bytes())
         .map_err(|_| Error("invalid symlink name".into()))?;
     let target = CString::new(target).map_err(|_| Error("invalid symlink target".into()))?;
-    let observe = || -> Result<Option<(u64, u64, u32, u32, u64, i64, i64)>> {
+    // Device, inode, mode, owner, link count and ctime of the member, if present.
+    type Observation = Option<(u64, u64, u32, u32, u64, i64, i64)>;
+    let observe = || -> Result<Observation> {
+        // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
         let mut s: libc::stat = unsafe { std::mem::zeroed() };
+        // SAFETY: `name` is NUL-terminated, `s` is a writable `libc::stat`, and `parent` stays
+        // open.
         if unsafe {
             libc::fstatat(
                 parent.as_raw_fd(),
@@ -774,12 +929,16 @@ pub fn symlink_member(parent: &File, name: &Path, target: &str, owner: u32) -> R
     let temp = CString::new(format!(".enzimos-link-{}", random_hex(16)?))
         .map_err(|_| Error("invalid generated native name".into()))?;
     require(
+        // SAFETY: Both paths are NUL-terminated CStrings and `parent` keeps the descriptor open for
+        // the call.
         unsafe { libc::symlinkat(target.as_ptr(), parent.as_raw_fd(), temp.as_ptr()) } == 0,
         "private symlink creation failed",
     )?;
     let result = (|| {
         require(observe()? == before, "symlink publication member changed")?;
         require(
+            // SAFETY: Both names are NUL-terminated CStrings and `parent` keeps the descriptor open
+            // for the call.
             unsafe {
                 libc::renameat2(
                     parent.as_raw_fd(),
@@ -798,19 +957,34 @@ pub fn symlink_member(parent: &File, name: &Path, target: &str, owner: u32) -> R
         parent.sync_all()?;
         Ok(())
     })();
+    // SAFETY: `temp` is a NUL-terminated CString and `parent` keeps the descriptor open for the
+    // call.
     unsafe { libc::unlinkat(parent.as_raw_fd(), temp.as_ptr(), 0) };
     result
 }
 impl Lock {
+    /// Acquire the lock at `path`, failing when another holder owns it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when another process holds the lock, or on the checks of [`Lock::try_acquire`].
     pub fn acquire(path: &Path, owner: u32) -> Result<Self> {
         Self::try_acquire(path, owner)?
             .ok_or_else(|| Error("another operation owns the lock".into()))
     }
     /// Only a kernel-reported competing flock is retryable. Path, permissions,
     /// descriptor and filesystem errors remain errors, never apparent busyness.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (flock, geteuid).")]
+    ///
+    /// # Errors
+    ///
+    /// Fails unless the caller's effective UID is `owner`, or when the lock file is unsafe,
+    /// replaced, or cannot be opened.
+    #[allow(unsafe_code, reason = "Linux syscall ABI (flock).")]
     pub fn try_acquire(path: &Path, owner: u32) -> Result<Option<Self>> {
-        require(unsafe { libc::geteuid() } == owner, "lock owner mismatch")?;
+        require(
+            crate::process_identity::effective_uid() == owner,
+            "lock owner mismatch",
+        )?;
         let parent = directory(
             path.parent()
                 .ok_or_else(|| Error("missing parent".into()))?,
@@ -828,6 +1002,7 @@ impl Lock {
             m.is_file() && m.uid() == owner && m.mode() & 0o077 == 0 && m.nlink() == 1,
             "unsafe lock file",
         )?;
+        // SAFETY: flock takes no pointers and `file` keeps the descriptor open for the call.
         if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
             let error = std::io::Error::last_os_error();
             if error.raw_os_error() == Some(libc::EWOULDBLOCK) {
@@ -857,11 +1032,16 @@ impl Lock {
             file,
         }))
     }
+    /// The locked file.
     pub fn as_file(&self) -> &File {
         &self.file
     }
     /// Duplicate the actual original open description; never reacquire by name.
     /// Closing one lease keeps flock exclusion until the last duplicate closes.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the lock no longer passes [`Lock::recheck`] or duplication fails.
     pub fn duplicate(&self) -> Result<Self> {
         self.recheck()?;
         let other = Self {
@@ -878,6 +1058,11 @@ impl Lock {
     }
     /// Verify the original named inode, parent, mount and actual exclusion. An
     /// identical replacement cannot turn a stale descriptor into authorization.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the named lock file, its parent or mount changed, or the description lost
+    /// exclusion.
     #[allow(unsafe_code, reason = "Linux syscall ABI (flock).")]
     pub fn recheck(&self) -> Result<()> {
         use std::os::fd::AsFd;
@@ -914,6 +1099,7 @@ impl Lock {
             "original lock inode replaced, changed or remounted",
         )?;
         crate::flock_identity::exclusive(&self.file)?;
+        // SAFETY: flock takes no pointers and `named` keeps the descriptor open for the call.
         let rc = unsafe { libc::flock(named.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
         let error = std::io::Error::last_os_error();
         require(

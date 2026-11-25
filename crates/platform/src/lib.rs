@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+//! Linux system primitives for enzimOS services: descriptor-relative files, bounded processes,
+//! retained identities, and Restic execution.
 pub mod accounts;
 pub mod alpm_sections;
 pub mod backup_rules;
@@ -23,8 +25,10 @@ pub mod publication;
 pub mod secret;
 pub mod stream_copy;
 
+/// Result with the crate's [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Error carrying a short refusal message, without OS diagnostics or input text.
 #[derive(Debug)]
 pub struct Error(pub String);
 
@@ -44,6 +48,11 @@ impl From<serde_json::Error> for Error {
         Self("invalid JSON document".into())
     }
 }
+/// Return `Err` with `message` unless `value` holds.
+///
+/// # Errors
+///
+/// Fails when `value` is false.
 pub fn require(value: bool, message: &str) -> Result<()> {
     if value {
         Ok(())

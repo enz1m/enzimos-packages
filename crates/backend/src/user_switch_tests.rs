@@ -160,7 +160,6 @@ impl Unit {
     }
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
 async fn actual_private_bus_switch_start_refusal_and_provider_revocation() {
     let work = std::path::Path::new(
         &std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -198,7 +197,7 @@ async fn actual_private_bus_switch_start_refusal_and_provider_revocation() {
     .unwrap();
     assert!(line.starts_with(&address));
     let state = State {
-        uid: unsafe { libc::getuid() },
+        uid: enzimos_platform::process_identity::real_uid(),
         locked: Arc::new(AtomicBool::new(true)),
         remote: Arc::new(AtomicBool::new(false)),
         visible: Arc::new(AtomicBool::new(true)),

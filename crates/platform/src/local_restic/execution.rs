@@ -12,7 +12,11 @@ pub(super) fn execute_role(
         task, image, repository, credential, None, None, scratch, boundary,
     )
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, fstatfs, geteuid).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each descriptor fills a distinct, closed Restic role."
+)]
 pub(super) fn execute_role_extended(
     task: Consumer,
     image: &File,
@@ -37,7 +41,7 @@ pub(super) fn execute_role_extended(
     let original_target = target
         .map(|file| -> Result<_> {
             let m = file.metadata()?;
-            let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+            let flags = crate::files::status_flags(&file);
             require(
                 m.is_dir()
                     && m.ino() == 256
@@ -58,7 +62,7 @@ pub(super) fn execute_role_extended(
     let extra = next
         .map(|file| -> Result<_> {
             let m = file.metadata()?;
-            let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+            let flags = crate::files::status_flags(&file);
             let current = credential.metadata()?;
             require(
                 m.is_file()
@@ -80,12 +84,13 @@ pub(super) fn execute_role_extended(
         })
         .transpose()?;
     require(
-        unsafe { libc::geteuid() } == 0,
+        crate::process_identity::effective_uid() == 0,
         "Root local consumer required",
     )?;
     let r = repository.metadata()?;
     let c = credential.metadata()?;
     let s = scratch.metadata()?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
     require(
         r.is_dir()
@@ -112,12 +117,13 @@ pub(super) fn execute_role_extended(
             }
             && c.nlink() == 1
             && (1..=4096).contains(&c.len())
-            && unsafe { libc::fcntl(credential.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
+            && crate::files::status_flags(&credential) & libc::O_ACCMODE
                 == libc::O_RDONLY
             && s.is_dir()
             && s.uid() == 0
             && s.gid() == 0
             && s.mode() & 0o7777 == 0o700
+            // SAFETY: `fs` is a writable `libc::statfs` and `scratch` keeps the descriptor open.
             && unsafe { libc::fstatfs(scratch.as_raw_fd(), &mut fs) } == 0
             && fs.f_type == 0x01021994,
         "original protected local Restic descriptors required",
@@ -139,8 +145,8 @@ pub(super) fn execute_role_extended(
         mount_identity::id(credential.as_fd(), true)?,
         mount_identity::id(scratch.as_fd(), true)?,
     ];
-    let status = [image, repository, credential, scratch]
-        .map(|file| unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) });
+    let status =
+        [image, repository, credential, scratch].map(|file| crate::files::status_flags(&file));
     require(
         status.iter().all(|flags| *flags >= 0),
         "original Restic descriptor flags unavailable",
@@ -150,7 +156,7 @@ pub(super) fn execute_role_extended(
             let m = target.metadata()?;
             require(
                 (m.dev(), m.ino(), m.mode(), m.uid(), m.gid()) == shape
-                    && unsafe { libc::fcntl(target.as_raw_fd(), libc::F_GETFL) } == expected_flags
+                    && crate::files::status_flags(&target) == expected_flags
                     && mount_identity::id(target.as_fd(), true)? == mount,
                 "original system staging description changed/covered",
             )?;
@@ -160,14 +166,14 @@ pub(super) fn execute_role_extended(
             .zip(status)
         {
             require(
-                unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } == flags,
+                crate::files::status_flags(&file) == flags,
                 "original Restic shared descriptor status changed",
             )?;
         }
         if let (Some(file), Some((epoch, flags, mount))) = (next, extra.as_ref()) {
             require(
                 files::identity(&file.metadata()?) == *epoch
-                    && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } == *flags
+                    && crate::files::status_flags(&file) == *flags
                     && mount_identity::id(file.as_fd(), true)? == *mount,
                 "original next-password inode/status/mount changed; no replay",
             )?;
@@ -286,6 +292,7 @@ pub(crate) unsafe fn confine_child(task: &Consumer) -> std::io::Result<()> {
             | Consumer::RotationRead(..)
             | Consumer::RotationPrepare(..)
     ) {
+        // SAFETY: This runs in the same pre_exec child that `confine_child` requires.
         unsafe {
             backup_capabilities(matches!(
                 task,
@@ -293,6 +300,7 @@ pub(crate) unsafe fn confine_child(task: &Consumer) -> std::io::Result<()> {
             ))?;
         }
     }
+    // SAFETY: The path is a NUL-terminated C string literal.
     let fd = unsafe {
         libc::open(
             c"/proc/thread-self/attr/apparmor/exec".as_ptr(),
@@ -329,8 +337,10 @@ pub(crate) unsafe fn confine_child(task: &Consumer) -> std::io::Result<()> {
         Consumer::RotationPrepare(..) => b"exec enzimos-restic-native-rotation-prepare",
         Consumer::Backup(_) => b"exec enzimos-restic-native-backup",
     };
+    // SAFETY: `name` is a static byte string passed with its exact length, and `fd` is open.
     let written = unsafe { libc::write(fd, name.as_ptr().cast(), name.len()) };
     let error = std::io::Error::last_os_error();
+    // SAFETY: `fd` was opened by this function and is closed exactly once.
     unsafe { libc::close(fd) };
     if written != name.len() as isize {
         return Err(error);
@@ -351,8 +361,11 @@ pub(crate) unsafe fn confine_child(task: &Consumer) -> std::io::Result<()> {
         rlim_cur: file_limit,
         rlim_max: file_limit,
     };
+    // SAFETY: `core` is a valid rlimit that outlives the call.
     if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &core) } != 0
+        // SAFETY: `size` is a valid rlimit that outlives the call.
         || unsafe { libc::setrlimit(libc::RLIMIT_FSIZE, &size) } != 0
+        // SAFETY: prctl(PR_SET_DUMPABLE) takes no pointers.
         || unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0
     {
         return Err(std::io::Error::last_os_error());
@@ -393,6 +406,7 @@ unsafe fn backup_capabilities(restore: bool) -> std::io::Result<()> {
         permitted: 0,
         inheritable: 0,
     }; 2];
+    // SAFETY: `header` and the two-element `data` array match the kernel capability ABI version.
     if unsafe { libc::syscall(libc::SYS_capget, &header, data.as_mut_ptr()) } != 0 {
         return Err(std::io::Error::last_os_error());
     }
@@ -400,6 +414,7 @@ unsafe fn backup_capabilities(restore: bool) -> std::io::Result<()> {
         if capability == 1 || restore && matches!(capability, 0 | 3 | 4 | 31) {
             continue;
         }
+        // SAFETY: prctl(PR_CAPBSET_DROP) takes no pointers.
         if unsafe { libc::prctl(libc::PR_CAPBSET_DROP, capability, 0, 0, 0) } != 0 {
             let error = std::io::Error::last_os_error();
             if error.raw_os_error() == Some(libc::EINVAL) {
@@ -417,7 +432,9 @@ unsafe fn backup_capabilities(restore: bool) -> std::io::Result<()> {
         permitted: 0,
         inheritable: 0,
     };
+    // SAFETY: `header` and the two-element `data` array match the kernel capability ABI version.
     if unsafe { libc::syscall(libc::SYS_capset, &header, data.as_ptr()) } != 0
+        // SAFETY: prctl(PR_CAP_AMBIENT) takes no pointers.
         || unsafe {
             libc::prctl(
                 libc::PR_CAP_AMBIENT,

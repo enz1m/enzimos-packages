@@ -101,9 +101,8 @@ fn status_valid(header: &Header, device: u64, uuid: &str) -> Result<()> {
         "actual DM status differs from original active writable owned mapper",
     )
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let f = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let f = enzimos_platform::files::status_flags(&file);
     require(
         f >= 0 && f & libc::O_ACCMODE == libc::O_RDONLY,
         "original DM observation read-only descriptor",
@@ -194,7 +193,6 @@ struct OriginalName {
     retired: bool,
 }
 impl OriginalName {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn observe(mapper: &Path) -> Result<Self> {
         let parent = files::directory(Path::new("/dev/mapper"), Some(0))?;
         let link = link_description(&parent)?;
@@ -219,7 +217,7 @@ impl OriginalName {
                 && target == format!("../{name}").as_bytes(),
             "original fixed mapper symlink must identify the actual kernel dm node",
         )?;
-        let link_flags = unsafe { libc::fcntl(link.as_raw_fd(), libc::F_GETFL) };
+        let link_flags = enzimos_platform::files::status_flags(&link);
         require(
             link_flags >= 0 && link_flags & libc::O_PATH != 0,
             "retained actual mapper symlink description required",
@@ -238,7 +236,6 @@ impl OriginalName {
         result.recheck()?;
         Ok(result)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self) -> Result<()> {
         let parent = files::directory(Path::new("/dev/mapper"), Some(0))?;
         if self.retired {
@@ -251,8 +248,7 @@ impl OriginalName {
                     && mount_identity::id(self.parent.as_fd(), true)? == self.mount
                     && files::identity(&self.link.metadata()?) == self.link_epoch
                     && mount_identity::id(self.link.as_fd(), true)? == self.mount
-                    && unsafe { libc::fcntl(self.link.as_raw_fd(), libc::F_GETFL) }
-                        == self.link_flags
+                    && enzimos_platform::files::status_flags(&self.link) == self.link_flags
                     && link_value(&self.link)? == self.target,
                 "actual retired original mapper symlink or parent changed",
             );
@@ -268,7 +264,7 @@ impl OriginalName {
                 && files::identity(&named.metadata()?) == self.link_epoch
                 && mount_identity::id(self.link.as_fd(), true)? == self.mount
                 && mount_identity::id(named.as_fd(), true)? == self.mount
-                && unsafe { libc::fcntl(self.link.as_raw_fd(), libc::F_GETFL) } == self.link_flags
+                && enzimos_platform::files::status_flags(&self.link) == self.link_flags
                 && link_value(&self.link)? == self.target
                 && link_value(&named)? == self.target,
             "original fixed mapper symlink or parent replaced, covered or modified",

@@ -1,5 +1,10 @@
 use super::*;
+pub(super) type Observer<'a> = &'a mut dyn FnMut(&[u8]) -> Result<()>;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Private core shared by the `run_*` entry points."
+)]
 pub(super) fn run_context(
     program: &str,
     args: &[&str],
@@ -28,6 +33,10 @@ pub(super) fn run_context(
     )
 }
 #[allow(unsafe_code, reason = "Fork-child setup must run before exec.")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Private core shared by the `run_*` entry points."
+)]
 pub(super) fn run_observed_context(
     program: &str,
     args: &[&str],
@@ -37,7 +46,7 @@ pub(super) fn run_observed_context(
     descriptors: &[BorrowedFd<'_>],
     offline_cryptsetup: bool,
     image: Option<&std::fs::File>,
-    mut observer: Option<&mut dyn FnMut(&[u8]) -> Result<()>>,
+    mut observer: Option<Observer<'_>>,
     isolated_network: bool,
     local_restic: Option<crate::local_restic::Consumer>,
     mut boundary: Option<&mut dyn FnMut() -> Result<()>>,
@@ -60,8 +69,10 @@ pub(super) fn run_observed_context(
     require(descriptors.len() <= 8, "inherited descriptor bound")?;
     let mut inherited = Vec::<OwnedFd>::new();
     for file in descriptors {
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `file` keeps the source descriptor open.
         let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(fd >= 0, "inherited descriptor duplication failed")?;
+        // SAFETY: `fd` is a fresh duplicate owned by nothing else.
         inherited.push(unsafe { OwnedFd::from_raw_fd(fd) });
     }
     let mapping = inherited.iter().map(AsRawFd::as_raw_fd).collect::<Vec<_>>();
@@ -108,8 +119,10 @@ pub(super) fn run_observed_context(
         })
         .collect::<Result<Vec<_>>>()?;
     let image_alias = if let Some(file) = image {
+        // SAFETY: F_DUPFD_CLOEXEC takes no pointers and `file` keeps the source descriptor open.
         let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 64) };
         require(fd >= 0, "pinned executable descriptor duplication failed")?;
+        // SAFETY: `fd` is a fresh duplicate owned by nothing else.
         Some(unsafe { OwnedFd::from_raw_fd(fd) })
     } else {
         None
@@ -216,6 +229,8 @@ pub(super) fn run_observed_context(
         None
     };
     let parent = std::process::id() as libc::pid_t;
+    // SAFETY: The pre_exec closure uses only async-signal-safe syscalls and the child-entry
+    // functions whose contracts require exactly this pre_exec context.
     unsafe {
         command.pre_exec(move || {
             if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 || libc::getppid() != parent
@@ -414,7 +429,10 @@ pub(super) fn run_observed_context(
         if !exited {
             // Keep the exited leader unreaped until group cleanup, preventing its
             // PID from being reused between observation and the final signal.
+            // SAFETY: `libc::siginfo_t` is a plain C struct, for which all-zero bytes are a valid
+            // value.
             let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            // SAFETY: `info` is a writable siginfo_t and the call does not reap the child.
             let rc = unsafe {
                 libc::waitid(
                     libc::P_PID,
@@ -426,6 +444,7 @@ pub(super) fn run_observed_context(
             if rc < 0 {
                 return Err(std::io::Error::last_os_error().into());
             }
+            // SAFETY: `info` was zeroed and then filled by waitid, so its si_pid field is initialized.
             exited = unsafe { info.si_pid() } != 0;
             if exited {
                 exited_at = Some(std::time::Instant::now());
@@ -440,12 +459,16 @@ pub(super) fn run_observed_context(
             && !group_killed
             && exited_at.is_some_and(|at| at.elapsed() >= Duration::from_secs(2))
         {
+            // SAFETY: kill takes no pointers; the child called setsid, so the negative ID names
+            // only its own group.
             unsafe {
                 libc::kill(-(child.0.id() as i32), libc::SIGKILL);
             }
             group_killed = true;
         }
         if exited && out_done && err_done {
+            // SAFETY: kill takes no pointers; the child called setsid, so the negative ID names
+            // only its own group.
             unsafe {
                 libc::kill(-(child.0.id() as i32), libc::SIGKILL);
             }

@@ -17,7 +17,6 @@ struct Directory<'a> {
     mount: u64,
 }
 impl<'a> Directory<'a> {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn retain(file: &'a File) -> Result<Self> {
         let metadata = file.metadata()?;
         let epoch = files::identity(&metadata);
@@ -26,8 +25,7 @@ impl<'a> Directory<'a> {
                 && epoch.8 == 0
                 && epoch.9 == 0
                 && epoch.7 & 0o7022 == 0
-                && unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
-                    == libc::O_RDONLY,
+                && enzimos_platform::files::status_flags(&file) & libc::O_ACCMODE == libc::O_RDONLY,
             "original protected readonly archive descriptor required",
         )?;
         let this = Self {

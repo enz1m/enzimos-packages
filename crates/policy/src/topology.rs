@@ -162,10 +162,9 @@ pub fn walk<F: FnMut(Device) -> Result<Node>>(roots: &[Device], mut reader: F) -
     }
     Ok(graph)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 pub fn observe(roots: &[Device]) -> Result<Graph> {
     require(
-        unsafe { libc::geteuid() } == 0,
+        enzimos_platform::process_identity::effective_uid() == 0,
         "root authorization required",
     )?;
     require(

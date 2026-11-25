@@ -73,9 +73,8 @@ impl Change {
         )
     }
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let result = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let result = enzimos_platform::files::status_flags(&file);
     require(
         result >= 0 && result & libc::O_ACCMODE == libc::O_RDONLY,
         "original remaining descriptor flags",

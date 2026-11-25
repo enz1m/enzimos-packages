@@ -180,14 +180,14 @@ impl Layout {
     }
     /// Consume only the original captured members. Each syscall uses the held
     /// parent and exact original inode; unknown members are retained on refusal.
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid, unlinkat).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (unlinkat).")]
     pub(crate) fn empty_original(
         mut self,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<Self> {
         authorize()?;
         require(
-            unsafe { libc::geteuid() } == self.owner,
+            enzimos_platform::process_identity::effective_uid() == self.owner,
             "original layout writer authority",
         )?;
         self.recheck()?;

@@ -71,7 +71,6 @@ struct Esp {
     flags: i32,
 }
 impl Esp {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, major, minor).")]
     fn observe(uuid: &str) -> Result<Self> {
         let block = Block::by_uuid(uuid, true)?;
         let directory = files::directory(Path::new(ESP), Some(0))?;
@@ -106,7 +105,7 @@ impl Esp {
             }),
             "nested or aliased complete EFI mount refused",
         )?;
-        let flags = unsafe { libc::fcntl(directory.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&directory);
         require(
             flags >= 0 && flags & (libc::O_ACCMODE | libc::O_PATH) == libc::O_RDONLY,
             "EFI original description role",
@@ -122,7 +121,6 @@ impl Esp {
         this.recheck()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self) -> Result<()> {
         self.block.recheck()?;
         let named = files::directory(Path::new(ESP), Some(0))?;
@@ -133,7 +131,7 @@ impl Esp {
             )?;
         }
         require(
-            unsafe { libc::fcntl(self.directory.as_raw_fd(), libc::F_GETFL) } == self.flags,
+            enzimos_platform::files::status_flags(&self.directory) == self.flags,
             "EFI shared flags changed",
         )?;
         let rows = storage_runtime::rows()?;
@@ -183,7 +181,6 @@ impl Input {
             bytes,
         })
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self, parent: &File, name: &str) -> Result<()> {
         let named = files::open_relative(parent, Path::new(name))?;
         require(
@@ -191,7 +188,7 @@ impl Input {
                 && files::identity(&named.metadata()?) == self.epoch
                 && mount_identity::id(named.as_fd(), true)? == self.mount
                 && mount_identity::id(self.file.as_fd(), true)? == self.mount
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) }
+                && enzimos_platform::files::status_flags(&self.file)
                     & (libc::O_ACCMODE | libc::O_PATH)
                     == libc::O_RDONLY,
             "original complete boot input changed/replaced",

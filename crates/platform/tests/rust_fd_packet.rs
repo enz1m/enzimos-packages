@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Packet sockets carrying descriptors and kernel credentials between processes.
 use enzimos_platform::{fd_packet::Packet, files, memfile};
 use std::{
     os::fd::{AsFd, AsRawFd},
@@ -6,7 +7,7 @@ use std::{
 };
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 #[test]
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, getegid, geteuid).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn packet_passes_sealed_descriptor_and_actual_kernel_sender_with_close_on_exec() {
     let _serial = SERIAL.lock().unwrap();
     let (sender, receiver) = Packet::pair().unwrap();
@@ -17,9 +18,16 @@ fn packet_passes_sealed_descriptor_and_actual_kernel_sender_with_close_on_exec()
     let message = receiver.receive(64, 1, Duration::from_secs(1)).unwrap();
     assert_eq!(message.body, b"review");
     assert_eq!(message.sender.pid, std::process::id());
-    assert_eq!(message.sender.uid, unsafe { libc::geteuid() });
-    assert_eq!(message.sender.gid, unsafe { libc::getegid() });
+    assert_eq!(
+        message.sender.uid,
+        enzimos_platform::process_identity::effective_uid()
+    );
+    assert_eq!(
+        message.sender.gid,
+        enzimos_platform::process_identity::effective_gid()
+    );
     assert_ne!(
+        // SAFETY: F_GETFD takes no pointers and the received OwnedFd keeps the descriptor open.
         unsafe { libc::fcntl(message.files[0].as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
         0
     );
@@ -29,6 +37,7 @@ fn packet_passes_sealed_descriptor_and_actual_kernel_sender_with_close_on_exec()
         b"immutable payload"
     );
     assert_ne!(
+        // SAFETY: F_GET_SEALS takes no pointers and `received` keeps the descriptor open.
         unsafe { libc::fcntl(received.as_raw_fd(), libc::F_GET_SEALS) } & libc::F_SEAL_WRITE,
         0
     );
@@ -68,6 +77,7 @@ fn inherited_socket_reports_actual_child_sender_instead_of_socket_creator() {
     command
         .args(["--ignored", "--exact", "packet_child_sender", "--nocapture"])
         .env("ENZIMOS_TEST_PACKET_FD", "198");
+    // SAFETY: The pre_exec closure only calls dup2, which is async-signal-safe.
     unsafe {
         command.pre_exec(move || {
             if libc::dup2(source, 198) < 0 {
@@ -99,6 +109,7 @@ fn packet_child_sender() {
         .parse()
         .unwrap();
     assert_eq!(descriptor, 198);
+    // SAFETY: The parent placed this inherited descriptor at 198 for this child alone.
     let socket = Packet::from_file(unsafe { std::fs::File::from_raw_fd(descriptor) }).unwrap();
     socket
         .send(b"actual-child", &[], Duration::from_secs(1))

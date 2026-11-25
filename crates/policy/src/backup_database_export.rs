@@ -91,7 +91,7 @@ fn new_descriptor(
         }
         let actual = unsafe { File::from_raw_fd(raw) };
         if !before.existed(fd, &actual, access)?
-            && unsafe { libc::fcntl(actual.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE == access
+            && enzimos_platform::files::status_flags(&actual) & libc::O_ACCMODE == access
             && files::identity(&actual.metadata()?) == expected
             && mount_identity::id(actual.as_fd(), true)? == mount
         {
@@ -106,7 +106,6 @@ fn new_descriptor(
         Error("SQLite did not retain the original admitted file; no pathname adoption".into())
     })
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn copy(
     path: &Path,
     input: &File,
@@ -117,7 +116,7 @@ fn copy(
     boundary()?;
     let proc = files::directory(
         &PathBuf::from(format!("/proc/{}/fd", std::process::id())),
-        Some(unsafe { libc::geteuid() }),
+        Some(enzimos_platform::process_identity::effective_uid()),
     )?;
     let before = backup_package_capture::DescriptorSnapshot::capture(&proc)?;
     let source = sql(Connection::open_with_flags(
@@ -241,7 +240,6 @@ pub struct Completed<'a, 'g> {
     registry_shape: Shape,
 }
 impl<'a, 'g> Completed<'a, 'g> {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.attempt.evidence()?;
@@ -260,8 +258,7 @@ impl<'a, 'g> Completed<'a, 'g> {
                 && files::identity(&self.file.metadata()?) == self.epoch
                 && files::identity(&named.metadata()?) == self.epoch
                 && files::identity(&self.readonly.metadata()?) == self.epoch
-                && unsafe { libc::fcntl(self.readonly.as_raw_fd(), libc::F_GETFL) }
-                    & libc::O_ACCMODE
+                && enzimos_platform::files::status_flags(&self.readonly) & libc::O_ACCMODE
                     == libc::O_RDONLY
                 && mount_identity::id(self.file.as_fd(), true)? == self.parent_shape.5
                 && mount_identity::id(self.readonly.as_fd(), true)? == self.parent_shape.5
@@ -470,7 +467,6 @@ impl Retired<'_, '_> {
 mod tests {
     use super::*;
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn actual_sqlite_backup_uses_original_files_and_exclusive_private_output() {
         use std::os::unix::fs::PermissionsExt;
         let work = Path::new(
@@ -480,7 +476,7 @@ mod tests {
         .to_path_buf();
         let temp = tempfile::tempdir_in(work).unwrap();
         std::fs::set_permissions(temp.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-        let owner = unsafe { libc::geteuid() };
+        let owner = enzimos_platform::process_identity::effective_uid();
         let parent = files::directory(temp.path(), Some(owner)).unwrap();
         let path = temp.path().join("source.db");
         let db = Connection::open(&path).unwrap();

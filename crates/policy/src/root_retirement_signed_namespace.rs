@@ -24,10 +24,9 @@ struct Directory {
     flags: i32,
 }
 impl Directory {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn retain(file: File, mount: u64) -> Result<Self> {
         let m = file.metadata()?;
-        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&file);
         require(
             m.is_dir()
                 && m.uid() == 0
@@ -44,12 +43,11 @@ impl Directory {
             flags,
         })
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self, named: &File, mount: u64) -> Result<()> {
         require(
             files::identity(&self.file.metadata()?) == self.epoch
                 && files::identity(&named.metadata()?) == self.epoch
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&self.file) == self.flags
                 && mount_identity::id(self.file.as_fd(), true)? == mount
                 && mount_identity::id(named.as_fd(), true)? == mount,
             "original signing namespace directory changed/replaced/covered",
@@ -176,7 +174,6 @@ pub struct Prepared<'a> {
     created: bool,
 }
 impl<'a> Original<'a> {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -225,7 +222,7 @@ impl<'a> Original<'a> {
                     total <= 4 * 1024 * 1024 * 1024,
                     "original signing namespace byte bound",
                 )?;
-                let flags = unsafe { libc::fcntl(artifact.file.as_raw_fd(), libc::F_GETFL) };
+                let flags = enzimos_platform::files::status_flags(&artifact.file);
                 require(
                     flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
                     "original signing member read-only description required",
@@ -287,7 +284,6 @@ impl<'a> Original<'a> {
         self.volume.writable()?;
         authorize()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn original_members(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         for (name, sibling) in &self.siblings {
             sibling.recheck(
@@ -298,8 +294,7 @@ impl<'a> Original<'a> {
         }
         for (name, member) in &self.members {
             require(
-                unsafe { libc::fcntl(member.file.as_raw_fd(), libc::F_GETFL) }
-                    == self.member_flags[name],
+                enzimos_platform::files::status_flags(&member.file) == self.member_flags[name],
                 "original signing member description flags changed",
             )?;
             member.recheck()?;
@@ -425,14 +420,13 @@ impl<'a> Original<'a> {
     }
 }
 impl<'a> Prepared<'a> {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn parent_barrier(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.original.source_barrier(authorize)?;
         let named = self.original.volume.directory(Path::new(PARENT))?;
         require(
             files::identity(&self.original.parent.file.metadata()?) == self.parent_epoch
                 && files::identity(&named.metadata()?) == self.parent_epoch
-                && unsafe { libc::fcntl(self.original.parent.file.as_raw_fd(), libc::F_GETFL) }
+                && enzimos_platform::files::status_flags(&self.original.parent.file)
                     == self.original.parent.flags
                 && mount_identity::id(named.as_fd(), true)? == self.original.volume.unique
                 && mount_identity::id(self.original.parent.file.as_fd(), true)?
@@ -441,8 +435,7 @@ impl<'a> Prepared<'a> {
             "actual prepared signing parent changed/replaced/covered",
         )?;
         require(
-            unsafe { libc::fcntl(self.folder.file.as_raw_fd(), libc::F_GETFL) }
-                == self.folder.flags
+            enzimos_platform::files::status_flags(&self.folder.file) == self.folder.flags
                 && mount_identity::id(self.folder.file.as_fd(), true)?
                     == self.original.volume.unique
                 && same_object(
@@ -571,7 +564,6 @@ impl<'a> Prepared<'a> {
         result.recheck(authorize)?;
         Ok(result)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn require_original(
         &self,
         original: &Original<'_>,
@@ -581,7 +573,7 @@ impl<'a> Prepared<'a> {
         self.original.same_original(original, authorize)?;
         require(
             files::identity(&original.parent.file.metadata()?) == self.parent_epoch
-                && unsafe { libc::fcntl(original.parent.file.as_raw_fd(), libc::F_GETFL) }
+                && enzimos_platform::files::status_flags(&original.parent.file)
                     == original.parent.flags
                 && mount_identity::id(original.parent.file.as_fd(), true)?
                     == self.original.volume.unique,
@@ -590,8 +582,7 @@ impl<'a> Prepared<'a> {
         if let Some(folder) = &original.folder {
             require(
                 files::identity(&folder.file.metadata()?) == self.folder.epoch
-                    && unsafe { libc::fcntl(folder.file.as_raw_fd(), libc::F_GETFL) }
-                        == folder.flags,
+                    && enzimos_platform::files::status_flags(&folder.file) == folder.flags,
                 "known preparation differs from independently held original directory",
             )?;
         }
@@ -642,7 +633,6 @@ impl Published<'_> {
             .recheck(&named, self.prepared.original.volume.unique)?;
         self.prepared.parent_barrier(authorize)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn require_original(
         &self,
         original: &Original<'_>,
@@ -652,7 +642,7 @@ impl Published<'_> {
         self.prepared.original.same_original(original, authorize)?;
         require(
             files::identity(&original.parent.file.metadata()?) == self.prepared.parent_epoch
-                && unsafe { libc::fcntl(original.parent.file.as_raw_fd(), libc::F_GETFL) }
+                && enzimos_platform::files::status_flags(&original.parent.file)
                     == original.parent.flags
                 && mount_identity::id(original.parent.file.as_fd(), true)?
                     == self.prepared.original.volume.unique,
@@ -661,8 +651,7 @@ impl Published<'_> {
         if let Some(folder) = &original.folder {
             require(
                 files::identity(&folder.file.metadata()?) == self.folder.epoch
-                    && unsafe { libc::fcntl(folder.file.as_raw_fd(), libc::F_GETFL) }
-                        == folder.flags,
+                    && enzimos_platform::files::status_flags(&folder.file) == folder.flags,
                 "known signer publication differs from independently original directory",
             )?;
         }

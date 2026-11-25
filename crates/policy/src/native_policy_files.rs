@@ -81,7 +81,6 @@ pub struct Original {
     hashes: Value,
 }
 impl Original {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn retain() -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -89,7 +88,7 @@ impl Original {
         let path = Path::new("/usr/lib/enzimos-native");
         let directory = files::directory(path, Some(0))?;
         let epoch = files::identity(&directory.metadata()?);
-        let directory_flags = unsafe { libc::fcntl(directory.as_raw_fd(), libc::F_GETFL) };
+        let directory_flags = enzimos_platform::files::status_flags(&directory);
         require(
             directory_flags >= 0 && directory_flags & libc::O_ACCMODE == libc::O_RDONLY,
             "original installed runtime directory read-only description required",
@@ -145,7 +144,7 @@ impl Original {
                     "installed x86_64 native runtime ELF required",
                 )?;
             }
-            let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+            let flags = enzimos_platform::files::status_flags(&file);
             require(
                 flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
                 "installed native runtime read-only description required",
@@ -168,14 +167,12 @@ impl Original {
         this.recheck()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn recheck(&self) -> Result<()> {
         use std::os::fd::{AsFd, AsRawFd};
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
         require(
-            unsafe { libc::fcntl(self.directory.as_raw_fd(), libc::F_GETFL) }
-                == self.directory_flags,
+            enzimos_platform::files::status_flags(&self.directory) == self.directory_flags,
             "original installed runtime directory description flags changed",
         )?;
         let named = files::directory(Path::new("/usr/lib/enzimos-native"), Some(0))?;
@@ -199,7 +196,7 @@ impl Original {
             require(
                 files::identity(&original.metadata()?) == *epoch
                     && files::identity(&named.metadata()?) == *epoch
-                    && unsafe { libc::fcntl(original.as_raw_fd(), libc::F_GETFL) } == *flags
+                    && enzimos_platform::files::status_flags(&original) == *flags
                     && enzimos_platform::mount_identity::id(original.as_fd(), true)? == self.mount
                     && enzimos_platform::mount_identity::id(named.as_fd(), true)? == self.mount
                     && enzimos_platform::json::sha256(&files::read_file(

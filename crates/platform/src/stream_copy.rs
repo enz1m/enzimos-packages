@@ -20,12 +20,17 @@ pub const STREAM_BOUND: u64 = 2 * 1024 * 1024 * 1024;
 /// Hash an immutable descriptor without moving its shared open-file offset.
 /// Empty files are legitimate manifest members; positive-byte callers retain
 /// their separate size requirements.
+///
+/// # Errors
+///
+/// Fails when the file is not a regular file within `max` bytes owned by `owner`, or changes while
+/// hashed.
 pub fn hash_borrowed(file: &File, max: u64, owner: Option<u32>) -> Result<(u64, String)> {
     hash_borrowed_with_checkpoint(file, max, owner, &mut || Ok(()))
 }
 /// Bounded descriptor hash with fresh authorization between each read. Shared
 /// open-file offsets remain unchanged and the original full epoch must persist.
-pub fn hash_borrowed_with_checkpoint(
+pub(crate) fn hash_borrowed_with_checkpoint(
     file: &File,
     max: u64,
     owner: Option<u32>,
@@ -63,6 +68,12 @@ pub fn hash_borrowed_with_checkpoint(
     )?;
     Ok((offset, format!("{:x}", sum.finalize())))
 }
+/// Hash a file from its start, returning its size and lowercase hex SHA-256.
+///
+/// # Errors
+///
+/// Fails when the file is not a regular file within `max` bytes owned by `owner`, or grows or
+/// changes while hashed.
 pub fn hash(file: &mut File, max: u64, owner: Option<u32>) -> Result<(u64, String)> {
     let before = file.metadata()?;
     require(
@@ -95,6 +106,10 @@ pub fn hash(file: &mut File, max: u64, owner: Option<u32>) -> Result<(u64, Strin
     Ok((total, format!("{:x}", sum.finalize())))
 }
 /// The output remains at its exclusive temporary name on every incomplete path.
+///
+/// # Errors
+///
+/// As [`verified_with_checkpoint`].
 pub fn verified(
     input: &mut File,
     parent: &File,
@@ -105,12 +120,16 @@ pub fn verified(
 ) -> Result<()> {
     verified_with_checkpoint(input, parent, name, bytes, digest, owner, &mut || Ok(()))
 }
+/// Copy exactly `bytes` bytes of `input` into a new file `name` in `parent` and publish it only
+/// when its SHA-256 equals `digest`.
+///
+/// # Errors
+///
+/// Fails unless the caller's effective UID is `owner`, when the bounds are invalid, the source
+/// changes or grows, the digest differs, `checkpoint` fails, or the name already exists.
 /// Fresh caller/resource checks surround each bounded copy write and publication.
 /// Refusal retains the exclusive partial file; this helper grants no replay.
-#[allow(
-    unsafe_code,
-    reason = "Linux syscall ABI (geteuid, openat, renameat2)."
-)]
+#[allow(unsafe_code, reason = "Linux syscall ABI (openat, renameat2).")]
 pub fn verified_with_checkpoint(
     input: &mut File,
     parent: &File,
@@ -135,7 +154,7 @@ pub fn verified_with_checkpoint(
         "copy target bounds",
     )?;
     require(
-        unsafe { libc::geteuid() } == owner && parent.metadata()?.uid() == owner,
+        crate::process_identity::effective_uid() == owner && parent.metadata()?.uid() == owner,
         "copy writer authority",
     )?;
     let before = input.metadata()?;
@@ -148,6 +167,7 @@ pub fn verified_with_checkpoint(
         .map_err(|_| Error("invalid generated native name".into()))?;
     let destination = CString::new(name).map_err(|_| Error("copy filename".into()))?;
     checkpoint()?;
+    // SAFETY: `temporary` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let fd = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -157,6 +177,7 @@ pub fn verified_with_checkpoint(
         )
     };
     require(fd >= 0, "exclusive copy creation failed")?;
+    // SAFETY: `fd` was just returned by openat and is owned by nothing else.
     let mut out = unsafe { File::from_raw_fd(fd) };
     let mut hash = Sha256::new();
     let mut total = 0u64;
@@ -194,6 +215,7 @@ pub fn verified_with_checkpoint(
         "original copy source changed before publication",
     )?;
     require(
+        // SAFETY: Both names are NUL-terminated CStrings and `parent` keeps the descriptor open.
         unsafe {
             libc::renameat2(
                 parent.as_raw_fd(),
@@ -211,11 +233,19 @@ pub fn verified_with_checkpoint(
 fn hash_file(file: &mut File, bytes: u64, owner: u32) -> Result<(u64, String)> {
     hash(file, bytes, Some(owner))
 }
+/// Stream exactly `bytes` bytes from `input` into `name` in `parent` with `mode`, publishing only
+/// when the SHA-256 equals `digest`, and return the published read-only file.
+///
+/// # Errors
+///
+/// Fails when the size, mode or name is out of bounds, the caller is not `owner`, the stream is
+/// short, long or has another digest, or the destination exists while `replace` is unset.
 /// Publish a measured archive member without loading its executable into RAM.
 /// A preexisting regular destination remains pinned until the replacement rename.
-#[allow(
-    unsafe_code,
-    reason = "Linux syscall ABI (fchmod, geteuid, openat, renameat2)."
+#[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, openat, renameat2).")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Measured size, digest and publication mode are independent inputs."
 )]
 pub fn verified_reader(
     input: &mut impl Read,
@@ -247,7 +277,7 @@ pub fn verified_reader(
         m.is_dir()
             && m.uid() == owner
             && m.mode() & 0o022 == 0
-            && unsafe { libc::geteuid() } == owner,
+            && crate::process_identity::effective_uid() == owner,
         "stream publication parent authority",
     )?;
     let shape = (m.dev(), m.ino(), m.mode(), m.uid(), m.gid());
@@ -274,6 +304,7 @@ pub fn verified_reader(
     let temp = CString::new(format!(".copy-{}", files::random_hex(16)?))
         .map_err(|_| Error("invalid generated native name".into()))?;
     let name_c = CString::new(name).map_err(|_| Error("stream filename encoding".into()))?;
+    // SAFETY: `temp` is a NUL-terminated CString and `parent` keeps the descriptor open.
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -283,6 +314,7 @@ pub fn verified_reader(
         )
     };
     require(raw >= 0, "exclusive stream destination creation failed")?;
+    // SAFETY: `raw` was just returned by openat and is owned by nothing else.
     let mut output = unsafe { File::from_raw_fd(raw) };
     let mut total = 0u64;
     let mut sum = Sha256::new();
@@ -309,6 +341,7 @@ pub fn verified_reader(
         "stream member readback differs",
     )?;
     require(
+        // SAFETY: fchmod takes no pointers and `output` keeps the descriptor open.
         unsafe { libc::fchmod(output.as_raw_fd(), mode) } == 0,
         "stream member mode publication failed",
     )?;
@@ -331,6 +364,7 @@ pub fn verified_reader(
         _ => return Err(Error("stream destination appeared or disappeared".into())),
     }
     require(
+        // SAFETY: Both names are NUL-terminated CStrings and `parent` keeps the descriptor open.
         unsafe {
             libc::renameat2(
                 parent.as_raw_fd(),
@@ -350,6 +384,11 @@ pub fn verified_reader(
     )?;
     Ok(output)
 }
+/// Open a regular file below `parent` by relative path.
+///
+/// # Errors
+///
+/// As [`files::open_relative`].
 pub fn open(parent: &File, name: &str) -> Result<File> {
     files::open_relative(parent, Path::new(name))
 }
@@ -366,7 +405,6 @@ mod authorization_tests {
         tempfile::tempdir_in(work).unwrap()
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn source_mutation_after_first_write_prevents_publication() {
         let temp = fixture();
         let source = temp.path().join("source");
@@ -374,7 +412,7 @@ mod authorization_tests {
         std::fs::create_dir(&output).unwrap();
         let bytes = vec![7; 512 * 1024];
         std::fs::write(&source, &bytes).unwrap();
-        let owner = unsafe { libc::geteuid() };
+        let owner = crate::process_identity::effective_uid();
         let parent = files::directory(&output, Some(owner)).unwrap();
         let digest = crate::json::sha256(&bytes);
         let mut input = File::open(&source).unwrap();

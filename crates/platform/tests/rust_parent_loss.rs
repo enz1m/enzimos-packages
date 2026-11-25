@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Bounded children are killed when their owning process dies.
 use std::{
     os::fd::{AsRawFd, FromRawFd},
     process::{Child, Command, Stdio},
@@ -22,6 +23,7 @@ struct Reaper(libc::c_int);
 impl Drop for Reaper {
     #[allow(unsafe_code, reason = "Linux syscall ABI (prctl).")]
     fn drop(&mut self) {
+        // SAFETY: prctl(PR_SET_CHILD_SUBREAPER) takes no pointers.
         unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, self.0) };
     }
 }
@@ -38,6 +40,7 @@ impl Drop for Scope {
             let _ = self.parent.wait();
         }
         if let Some((fd, pid)) = &self.child {
+            // SAFETY: The siginfo pointer is null and `fd` keeps the pidfd open.
             unsafe {
                 libc::syscall(
                     libc::SYS_pidfd_send_signal,
@@ -47,6 +50,7 @@ impl Drop for Scope {
                     0,
                 )
             };
+            // SAFETY: A null status pointer is allowed by waitpid.
             unsafe { libc::waitpid(*pid, std::ptr::null_mut(), 0) };
         }
     }
@@ -59,9 +63,11 @@ impl Drop for Scope {
 fn abrupt_owner_loss_kills_its_actual_bounded_child() {
     let mut previous = 0;
     assert_eq!(
+        // SAFETY: `previous` is a writable int for PR_GET_CHILD_SUBREAPER.
         unsafe { libc::prctl(libc::PR_GET_CHILD_SUBREAPER, &mut previous) },
         0
     );
+    // SAFETY: prctl(PR_SET_CHILD_SUBREAPER) takes no pointers.
     assert_eq!(unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1) }, 0);
     let _reaper = Reaper(previous);
     let parent = Command::new(std::env::current_exe().unwrap())
@@ -94,8 +100,10 @@ fn abrupt_owner_loss_kills_its_actual_bounded_child() {
                 if scope.child.is_some() {
                     break;
                 }
+                // SAFETY: pidfd_open takes no pointers.
                 let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) as i32 };
                 assert!(fd >= 0);
+                // SAFETY: `fd` was just returned by pidfd_open and is owned by nothing else.
                 scope.child = Some((unsafe { std::fs::File::from_raw_fd(fd) }, pid));
             }
             if scope.child.is_some() {
@@ -122,12 +130,14 @@ fn abrupt_owner_loss_kills_its_actual_bounded_child() {
         events: libc::POLLIN,
         revents: 0,
     };
+    // SAFETY: `poll` is one writable pollfd and the count is 1.
     assert_eq!(unsafe { libc::poll(&mut poll, 1, 5000) }, 1);
     assert!(
         poll.revents & libc::POLLIN != 0,
         "owned descendant survived its caller"
     );
     let mut status = 0;
+    // SAFETY: `status` is a writable int.
     assert_eq!(unsafe { libc::waitpid(*pid, &mut status, 0) }, *pid);
     assert!(libc::WIFSIGNALED(status));
     assert_eq!(libc::WTERMSIG(status), libc::SIGKILL);

@@ -25,12 +25,12 @@ struct Parent {
     start: u64,
 }
 impl Parent {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getppid, syscall).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
     fn open(sender: &Credentials, request: &Request) -> Result<Self> {
         require(
             sender.uid == 0
                 && sender.gid == 0
-                && sender.pid == unsafe { libc::getppid() } as u32
+                && sender.pid == enzimos_platform::process_identity::parent_pid() as u32
                 && sender.pid == request.supervisor_pid,
             "delivery Root sender is not original parent",
         )?;
@@ -44,7 +44,7 @@ impl Parent {
         this.recheck()?;
         Ok(this)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getppid, poll).")]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (poll).")]
     fn recheck(&self) -> Result<()> {
         let mut poll = libc::pollfd {
             fd: self.file.as_raw_fd(),
@@ -54,7 +54,7 @@ impl Parent {
         require(
             unsafe { libc::poll(&mut poll, 1, 0) } == 0
                 && process_identity::pidfd_target(self.file.as_fd())? == self.pid
-                && unsafe { libc::getppid() } as u32 == self.pid,
+                && enzimos_platform::process_identity::parent_pid() as u32 == self.pid,
             "original delivery parent exited or changed",
         )?;
         let bytes = files::read_kernel(
@@ -156,7 +156,6 @@ fn group(request: &Request) -> Result<()> {
         "delivery worker is outside its original private group",
     )
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn descriptors(request: &Request, source: &File, home: &File) -> Result<()> {
     let m = home.metadata()?;
     require(
@@ -165,16 +164,17 @@ fn descriptors(request: &Request, source: &File, home: &File) -> Result<()> {
             && mount_identity::id(home.as_fd(), true)? == request.home_mount
             && files::identity(&source.metadata()?) == request.source
             && mount_identity::id(source.as_fd(), true)? == request.source_mount
-            && unsafe { libc::fcntl(source.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
-                == libc::O_RDONLY
-            && unsafe { libc::fcntl(home.as_raw_fd(), libc::F_GETFL) } & libc::O_ACCMODE
-                == libc::O_RDONLY,
+            && enzimos_platform::files::status_flags(&source) & libc::O_ACCMODE == libc::O_RDONLY
+            && enzimos_platform::files::status_flags(&home) & libc::O_ACCMODE == libc::O_RDONLY,
         "delivery original descriptor epochs or rights differ",
     )
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (getegid, geteuid, prctl).")]
+#[allow(unsafe_code, reason = "Linux syscall ABI (prctl).")]
 pub fn entry(channel: Packet) -> Result<()> {
-    privileges(unsafe { libc::geteuid() }, unsafe { libc::getegid() })?;
+    privileges(
+        enzimos_platform::process_identity::effective_uid(),
+        enzimos_platform::process_identity::effective_gid(),
+    )?;
     require(
         unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0,
         "delivery worker dump protection unavailable",
@@ -182,14 +182,13 @@ pub fn entry(channel: Packet) -> Result<()> {
     channel.send(HELLO, &[], DEADLINE)?;
     run(channel)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (getppid).")]
 fn run(channel: Packet) -> Result<()> {
     let message = channel.receive(crate::delivery_copy_request::LIMIT.min(128), 3, DEADLINE)?;
     require(
         message.body == FRAME
             && message.sender.uid == 0
             && message.sender.gid == 0
-            && message.sender.pid == unsafe { libc::getppid() } as u32,
+            && message.sender.pid == enzimos_platform::process_identity::parent_pid() as u32,
         "delivery handoff kernel sender or frame refused",
     )?;
     let mut descriptors_received = message.files.into_iter();

@@ -723,12 +723,15 @@ mod tests {
             .tempdir_in(work)
             .unwrap()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
     fn store(dir: &tempfile::TempDir) -> Store<'static> {
-        let f = files::directory(dir.path(), Some(unsafe { libc::getuid() })).unwrap();
+        let f = files::directory(
+            dir.path(),
+            Some(enzimos_platform::process_identity::real_uid()),
+        )
+        .unwrap();
         Store::retained(
             dir.path(),
-            unsafe { libc::getuid() },
+            enzimos_platform::process_identity::real_uid(),
             mount_identity::id(f.as_fd(), true).unwrap(),
             Box::new(|| Ok(())),
         )
@@ -826,14 +829,13 @@ mod tests {
         assert_eq!(s.records[&format!("{NEXT}.json")].value["state"], "running");
     }
     #[test]
-    #[allow(unsafe_code, reason = "Linux syscall ABI (getuid).")]
     fn an_unproven_scope_keeps_an_uncertain_attempt_blocking() {
         let dir = fixture();
         let attempts = dir.path().join("backup-attempts");
         std::fs::create_dir(&attempts).unwrap();
         std::fs::set_permissions(&attempts, std::fs::Permissions::from_mode(0o700)).unwrap();
         // SAFETY: getuid has no preconditions.
-        let uid = unsafe { libc::getuid() };
+        let uid = enzimos_platform::process_identity::real_uid();
         let held = files::directory(&attempts, Some(uid)).unwrap();
         let mut s = Store::retained(
             &attempts,

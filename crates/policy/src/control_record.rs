@@ -39,7 +39,6 @@ impl Predecessor {
     pub(crate) fn require_original_observation(&self, original: &Observation) -> Result<()> {
         self.require_original_retained(&original.original)
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub(crate) fn require_original_retained(&self, old: &Retained) -> Result<()> {
         self.recheck()?;
         require(
@@ -48,7 +47,7 @@ impl Predecessor {
                 && old.owner == self.owner
                 && old.bytes == self.bytes
                 && files::identity(&old.file.metadata()?) == self.identity
-                && unsafe { libc::fcntl(old.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&old.file) == self.flags
                 && mount_identity::id(old.file.as_fd(), true)? == self.mount
                 && files::read_file(&old.file, old.limit, Some(old.owner), false)? == self.bytes
                 && files::identity(&old.file.metadata()?) == self.identity,
@@ -56,11 +55,10 @@ impl Predecessor {
         )?;
         self.recheck()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub(crate) fn recheck(&self) -> Result<()> {
         require(
             files::identity(&self.file.metadata()?) == self.identity
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&self.file) == self.flags
                 && mount_identity::id(self.file.as_fd(), true)? == self.mount
                 && files::read_file(&self.file, self.limit, Some(self.owner), false)? == self.bytes
                 && files::identity(&self.file.metadata()?) == self.identity,
@@ -309,12 +307,11 @@ impl Retained {
         self.value = next.clone();
         self.recheck()
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub(crate) fn replace_with_predecessor(&mut self, next: &Value) -> Result<Predecessor> {
         self.recheck()?;
         let file = self.file.try_clone()?;
         let before = self.identity;
-        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        let flags = enzimos_platform::files::status_flags(&file);
         require(
             flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
             "original predecessor read-only description required",

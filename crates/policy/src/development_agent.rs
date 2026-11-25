@@ -173,7 +173,7 @@ pub(crate) fn sender(path: &Path, owner: u32) -> Result<u32> {
                 && message.msg_flags & (libc::MSG_TRUNC | libc::MSG_CTRUNC) == 0
                 && credentials.pid > 1
                 && credentials.uid == owner
-                && credentials.gid == unsafe { libc::getegid() },
+                && credentials.gid == enzimos_platform::process_identity::effective_gid(),
             "development agent greeting credentials differ",
         )?;
         let pid = credentials.pid as u32;

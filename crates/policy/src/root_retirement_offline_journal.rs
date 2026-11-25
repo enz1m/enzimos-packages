@@ -96,9 +96,8 @@ fn cursor_data(prepared: &Value, index: usize, inflight: bool) -> Result<Value> 
     });
     Ok(result)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "original offline journal folder flags",

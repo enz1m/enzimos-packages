@@ -48,7 +48,6 @@ struct Fixture {
     finished: bool,
 }
 impl Fixture {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn new(journal: &Value) -> Self {
         let root = tempfile::tempdir_in(
             std::env::var_os("ENZIMOS_TEST_TMPDIR")
@@ -69,7 +68,7 @@ impl Fixture {
                 &path,
                 journal["before_files"][name].as_str().unwrap().as_bytes(),
                 0o600,
-                Some(unsafe { libc::geteuid() }),
+                Some(enzimos_platform::process_identity::effective_uid()),
                 false,
             )
             .unwrap();
@@ -92,7 +91,6 @@ impl enzimos_policy::root_rebind_apply::Adapter for Fixture {
             "fixture authority or root lineage changed",
         )
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn files(&mut self) -> enzimos_platform::Result<Texts> {
         self.names
             .iter()
@@ -100,7 +98,7 @@ impl enzimos_policy::root_rebind_apply::Adapter for Fixture {
                 let body = enzimos_platform::files::read(
                     &self.root.path().join(name),
                     boot_entries::MAX_TEXT,
-                    Some(unsafe { libc::geteuid() }),
+                    Some(enzimos_platform::process_identity::effective_uid()),
                     true,
                 )?;
                 Ok((name.clone(), String::from_utf8(body).unwrap()))
@@ -110,14 +108,13 @@ impl enzimos_policy::root_rebind_apply::Adapter for Fixture {
     fn catalog(&mut self) -> enzimos_platform::Result<Value> {
         Ok(self.catalog.clone())
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
     fn write_file(&mut self, name: &str, body: &str) -> enzimos_platform::Result<()> {
         self.writes += 1;
         enzimos_platform::files::atomic(
             &self.root.path().join(name),
             body.as_bytes(),
             0o600,
-            Some(unsafe { libc::geteuid() }),
+            Some(enzimos_platform::process_identity::effective_uid()),
             true,
         )
     }

@@ -49,18 +49,16 @@ fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
 impl Directory {
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn observe(volume: &Volume, relative: &str) -> Result<Self> {
         let file = volume.directory(Path::new(relative))?;
         Ok(Self {
             shape: shape(&file)?,
-            flags: unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) },
+            flags: enzimos_platform::files::status_flags(&file),
             names: names(&file)?,
             file,
             relative: relative.into(),
         })
     }
-    #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     fn recheck(&self, volume: &Volume, pending: Option<&str>) -> Result<()> {
         let named = volume.directory(Path::new(&self.relative))?;
         let mut expected = self.names.clone();
@@ -73,7 +71,7 @@ impl Directory {
         require(
             shape(&self.file)? == self.shape
                 && shape(&named)? == self.shape
-                && unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_GETFL) } == self.flags
+                && enzimos_platform::files::status_flags(&self.file) == self.flags
                 && mount_identity::id(self.file.as_fd(), true)? == volume.unique
                 && mount_identity::id(named.as_fd(), true)? == volume.unique
                 && names(&self.file)? == expected

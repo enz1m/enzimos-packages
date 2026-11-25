@@ -329,7 +329,6 @@ pub fn configure(root: &Path, everyday: bool) -> Result<Value> {
 pub fn configure_keyring(root: &Path) -> Result<Value> {
     configure_mode(root, false, true)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (geteuid).")]
 fn configure_mode(root: &Path, everyday: bool, keyring_only: bool) -> Result<Value> {
     require(
         // Keyring PAM setup also runs from the oo7 pacman hook on the
@@ -345,7 +344,7 @@ fn configure_mode(root: &Path, everyday: bool, keyring_only: bool) -> Result<Val
         "host root alias refused",
     )?;
     require(
-        target.metadata()?.uid() == unsafe { libc::geteuid() },
+        target.metadata()?.uid() == enzimos_platform::process_identity::effective_uid(),
         "target owner required",
     )?;
     let target = Arc::new(Target {
@@ -402,7 +401,7 @@ fn configure_mode(root: &Path, everyday: bool, keyring_only: bool) -> Result<Val
             )?;
             let m = f.metadata()?;
             require(
-                m.uid() == unsafe { libc::geteuid() }
+                m.uid() == enzimos_platform::process_identity::effective_uid()
                     && m.gid() == target_meta.gid()
                     && m.mode() & 0o7022 == 0,
                 "configuration owner/group/mode requires review",
@@ -550,10 +549,7 @@ struct KeyringSocket {
     before: std::fs::Metadata,
 }
 impl KeyringSocket {
-    #[allow(
-        unsafe_code,
-        reason = "Linux syscall ABI (geteuid, openat, readlinkat)."
-    )]
+    #[allow(unsafe_code, reason = "Linux syscall ABI (openat, readlinkat).")]
     fn observe(target: Arc<Target>) -> Result<Option<Self>> {
         use std::os::fd::{AsRawFd, FromRawFd};
         target.recheck()?;
@@ -582,7 +578,8 @@ impl KeyringSocket {
         let original = unsafe { File::from_raw_fd(fd) };
         let before = original.metadata()?;
         require(
-            before.file_type().is_symlink() && before.uid() == unsafe { libc::geteuid() },
+            before.file_type().is_symlink()
+                && before.uid() == enzimos_platform::process_identity::effective_uid(),
             "administrator keyring activation requires review",
         )?;
         let mut link = [0u8; 4096];

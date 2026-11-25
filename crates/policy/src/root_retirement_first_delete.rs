@@ -28,9 +28,8 @@ pub(crate) fn selector(id: u64) -> Result<[u64; 512]> {
     args[7] = id; // subvolid union, offset56. No name or other flag.
     Ok(args)
 }
-#[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 fn flags(file: &File) -> Result<i32> {
-    let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+    let flags = enzimos_platform::files::status_flags(&file);
     require(
         flags >= 0 && flags & libc::O_ACCMODE == libc::O_RDONLY,
         "original first deletion read-only descriptors required",

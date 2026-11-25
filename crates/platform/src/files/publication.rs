@@ -1,5 +1,10 @@
 use super::*;
 
+/// [`atomic_bounded`] with a 2 MiB limit.
+///
+/// # Errors
+///
+/// As [`atomic_bounded`].
 pub fn atomic(
     path: &Path,
     body: &[u8],
@@ -9,6 +14,14 @@ pub fn atomic(
 ) -> Result<()> {
     atomic_bounded(path, body, mode, owner, replace, 2 * 1024 * 1024)
 }
+/// Write `body` to a temporary sibling and rename it over `path` with `mode`.
+///
+/// # Errors
+///
+/// Fails when `mode` is not 0o600, 0o640 or 0o644, `body` exceeds the limit (at most 32 MiB),
+/// `name` is not one component, the parent or an existing member is unsafe for `owner`, the caller
+/// is not `owner`, or the member changes before the rename. With `replace` unset, an existing
+/// member also fails.
 pub fn atomic_bounded(
     path: &Path,
     body: &[u8],
@@ -37,11 +50,17 @@ pub fn atomic_bounded(
 }
 /// Public files on a protected FAT ESP have a kernel-synthesized private mode.
 /// Keep the writer's exact mode check; do not make private publications permissive.
+///
+/// # Errors
+///
+/// Fails when the parent filesystem cannot be queried.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
 pub fn public_file_mode(parent: &File) -> Result<u32> {
     directory_ok(parent, None)?;
+    // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut filesystem: libc::statfs = unsafe { std::mem::zeroed() };
     require(
+        // SAFETY: `filesystem` is a writable `libc::statfs` and `parent` keeps the descriptor open.
         unsafe { libc::fstatfs(parent.as_raw_fd(), &mut filesystem) } == 0,
         "public publication filesystem unavailable",
     )?;
@@ -53,6 +72,10 @@ pub fn public_file_mode(parent: &File) -> Result<u32> {
 }
 
 /// Directory mode synthesized by the same retained public publication volume.
+///
+/// # Errors
+///
+/// As [`public_file_mode`].
 pub fn public_directory_mode(parent: &File) -> Result<u32> {
     Ok(if public_file_mode(parent)? == 0o600 {
         0o700
@@ -62,6 +85,13 @@ pub fn public_directory_mode(parent: &File) -> Result<u32> {
 }
 
 /// Publish beneath a retained parent, without reopening any ancestor by name.
+///
+/// # Errors
+///
+/// Fails when `mode` is not 0o600, 0o640 or 0o644, `body` exceeds the limit (at most 32 MiB),
+/// `name` is not one component, the parent or an existing member is unsafe for `owner`, the caller
+/// is not `owner`, or the member changes before the rename. With `replace` unset, an existing
+/// member also fails.
 pub fn atomic_relative(
     parent: &File,
     name: &Path,
@@ -75,6 +105,13 @@ pub fn atomic_relative(
 }
 /// Return the actual published read-only inode, retaining it across the caller's
 /// next boundary. Named and writer descriptors must identify that same inode.
+///
+/// # Errors
+///
+/// Fails when `mode` is not 0o600, 0o640 or 0o644, `body` exceeds the limit (at most 32 MiB),
+/// `name` is not one component, the parent or an existing member is unsafe for `owner`, the caller
+/// is not `owner`, or the member changes before the rename. With `replace` unset, an existing
+/// member also fails.
 pub fn atomic_relative_retained(
     parent: &File,
     name: &Path,
@@ -87,6 +124,13 @@ pub fn atomic_relative_retained(
     atomic_original(parent, name, body, mode, owner, replace, limit, None)
 }
 /// Replace only the caller's retained original member, never an adopted name.
+///
+/// # Errors
+///
+/// Fails when `mode` is not 0o600, 0o640 or 0o644, `body` exceeds the limit (at most 32 MiB),
+/// `name` is not one component, the parent or an existing member is unsafe for `owner`, the caller
+/// is not `owner`, or the member changes before the rename. With `replace` unset, an existing
+/// member also fails. Fails also when the current member is not `original`.
 pub fn atomic_replace_original(
     parent: &File,
     name: &Path,
@@ -100,7 +144,11 @@ pub fn atomic_replace_original(
 }
 #[allow(
     unsafe_code,
-    reason = "Linux syscall ABI (fchmod, geteuid, renameat2, unlinkat)."
+    reason = "Linux syscall ABI (fchmod, renameat2, unlinkat)."
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Private core shared by the public atomic publication entry points."
 )]
 fn atomic_original(
     parent: &File,
@@ -118,7 +166,10 @@ fn atomic_original(
     )?;
     directory_ok(parent, owner)?;
     if let Some(owner) = owner {
-        require(unsafe { libc::geteuid() } == owner, "writer owner mismatch")?;
+        require(
+            crate::process_identity::effective_uid() == owner,
+            "writer owner mismatch",
+        )?;
     }
     require(
         name.components().count() == 1
@@ -158,6 +209,7 @@ fn atomic_original(
     )?;
     let result = (|| {
         require(
+            // SAFETY: fchmod takes no pointers and `file` keeps the descriptor open.
             unsafe { libc::fchmod(file.as_raw_fd(), mode) } == 0,
             "set private file mode failed",
         )?;
@@ -181,6 +233,7 @@ fn atomic_original(
                 "atomic replacement original inode changed before rename",
             )?;
         }
+        // SAFETY: Both names are NUL-terminated CStrings and `parent` keeps the descriptor open.
         let rc = unsafe {
             libc::renameat2(
                 parent.as_raw_fd(),
@@ -228,6 +281,7 @@ fn atomic_original(
         Path::new(std::ffi::OsStr::from_bytes(temp.as_bytes())),
     ) && matches!((named.metadata(),file.metadata()),(Ok(a),Ok(b)) if identity(&a) == identity(&b))
     {
+        // SAFETY: `temp` is a NUL-terminated CString and `parent` keeps the descriptor open.
         unsafe {
             libc::unlinkat(parent.as_raw_fd(), temp.as_ptr(), 0);
         }
