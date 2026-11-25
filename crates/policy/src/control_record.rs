@@ -72,6 +72,11 @@ pub struct Observation {
     original: Retained,
 }
 impl Observation {
+    /// Open and retain the control record `name` in `parent` on mount `mount`.
+    ///
+    /// # Errors
+    ///
+    /// As [`read`].
     pub fn open(parent: &File, name: &Path, limit: usize, mount: u64) -> Result<Self> {
         Ok(Self {
             original: Retained::open(parent, name, limit, mount)?,
@@ -85,6 +90,11 @@ impl Observation {
     ) -> Result<Option<Self>> {
         Ok(Retained::optional_open(parent, name, limit, mount)?.map(|original| Self { original }))
     }
+    /// Verify the record is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()
     }
@@ -107,6 +117,11 @@ impl Observation {
         self.original.recheck()?;
         Ok(&self.original.file)
     }
+    /// The record value.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed.
     pub fn value(&self) -> Result<&Value> {
         self.original.value()
     }
@@ -420,6 +435,12 @@ impl Retained {
         Self::from_file(parent, name, limit, mount, 0, file)
     }
 }
+/// Read the JSON control record `name` of at most `limit` bytes in `parent` on mount `mount`.
+///
+/// # Errors
+///
+/// Fails when the name or directory is unsafe, the record is on another mount, too large, invalid,
+/// or changes while read.
 pub fn read(parent: &File, name: &Path, limit: usize, mount: u64) -> Result<Value> {
     require(
         name.components().count() == 1

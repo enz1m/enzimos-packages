@@ -37,6 +37,7 @@ impl Role {
         }
     }
 }
+/// The network share rotation journal.
 pub struct Journal<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -234,6 +235,11 @@ impl<'a> Journal<'a> {
         self.recheck()?;
         authorize()
     }
+    /// The journal record file.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the journal state is incomplete.
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         match (&self.original, &self.owned) {

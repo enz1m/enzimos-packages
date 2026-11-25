@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! enzimOS system policy: storage, boot, backup, recovery and update transactions that run as Root.
 pub mod authority;
 pub mod authority_build;
 pub mod authority_check;

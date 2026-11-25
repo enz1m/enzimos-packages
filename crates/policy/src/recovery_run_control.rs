@@ -24,6 +24,11 @@ fn selection(body: &Value) -> Result<(&str, &str, &str, &str, &str)> {
     require(matches!(exit, "reboot" | "poweroff"), "recovery exit mode")?;
     Ok((id, digest, image, flavor, exit))
 }
+/// The staging observation for request `body`.
+///
+/// # Errors
+///
+/// Fails when the plan is not an exact unused run plan.
 pub fn observation(body: &Value) -> Result<Value> {
     crate::namespaces::initial()?;
     let (id, digest, image, _, _) = selection(body)?;
@@ -73,6 +78,11 @@ pub fn observation(body: &Value) -> Result<Value> {
     idle.recheck()?;
     Ok(result)
 }
+/// Stage the run in request `body` if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the plan or ESP changed, `authorize` fails, or staging fails.
 pub fn stage<F: FnMut() -> Result<()>>(
     body: &Value,
     expected: &Value,

@@ -21,6 +21,7 @@ fn directory_shape(file: &File) -> Result<Value> {
         value!({"device":m.dev(),"inode":m.ino(),"uid":m.uid(),"gid":m.gid(),"mode":m.mode(),"mount":mount_identity::id(file.as_fd(),true)?}),
     )
 }
+/// The durable record of one update apply.
 pub struct Store<'a> {
     guard: Guard,
     lock: &'a files::Lock,
@@ -76,6 +77,11 @@ fn retire_finished(directory: &File) -> Result<()> {
     Ok(())
 }
 impl<'a> Store<'a> {
+    /// Create the apply record for `document` run by `image` while `lock` is held.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a record exists or cannot be written.
     pub fn create(document: &Value, image: &File, lock: &'a files::Lock) -> Result<Self> {
         Self::create_authorized(document, image, lock, None, &mut || lock.recheck())
     }
@@ -208,6 +214,7 @@ impl<'a> Store<'a> {
             .as_str()
             .expect("update records are validated with a string id")
     }
+    /// The current record.
     pub fn current(&self) -> &Value {
         &self.current
     }

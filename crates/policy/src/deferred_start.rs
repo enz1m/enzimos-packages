@@ -4,6 +4,11 @@ use crate::{deferred, identity};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
 pub(crate) const MAXIMUM: usize = 256;
+/// Identifier of the start request for `action` owed by `marker`.
+///
+/// # Errors
+///
+/// Fails when the marker is invalid.
 pub fn id(action: &str, marker: &Value) -> Result<String> {
     deferred::validate(marker, action)?;
     Ok(format!(
@@ -11,6 +16,11 @@ pub fn id(action: &str, marker: &Value) -> Result<String> {
         json::sha256(&json::canonical(marker)?)
     ))
 }
+/// Validate deferred start record `key`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(record: &Value, key: &str) -> Result<()> {
     json::fields(record, "schema id action boot_id marker phase")?;
     require(
@@ -38,6 +48,11 @@ pub fn validate(record: &Value, key: &str) -> Result<()> {
         "current boot debt cannot restart",
     )
 }
+/// Require that `after` is a valid successor of `before`.
+///
+/// # Errors
+///
+/// Fails when the record skips its intent, replays, or alters the intent.
 pub fn transition(before: Option<&Value>, after: &Value, key: &str) -> Result<()> {
     validate(after, key)?;
     match before {

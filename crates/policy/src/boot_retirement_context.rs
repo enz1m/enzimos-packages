@@ -397,6 +397,7 @@ impl std::ops::Deref for TransactionActor {
         }
     }
 }
+/// The retained boot inventory of a generation's retirement.
 pub struct Context<'a, 'g> {
     guard: &'g Guard,
     lock: &'a files::Lock,
@@ -418,6 +419,11 @@ pub struct Context<'a, 'g> {
     root_loader_directory: Option<(files::FileIdentity, i32)>,
 }
 impl<'a, 'g: 'a> Context<'a, 'g> {
+    /// Observe the boot inventory of `generation`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the inventory cannot be retained or `authorize` fails.
     pub fn observe(
         guard: &'g Guard,
         lock: &'a files::Lock,
@@ -751,6 +757,11 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
         }
         Ok(result)
     }
+    /// Verify the boot inventory is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         require(
             self.current(authorize)? == self.original,

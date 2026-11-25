@@ -269,6 +269,11 @@ pub struct Stored<'a> {
     original: Value,
 }
 impl<'a> Stored<'a> {
+    /// Open the recovery copy confirmation of `configuration`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the copy needs a fresh review or a file is unsafe.
     pub fn open(
         configuration: &'a Configuration,
         pin: &'a crate::backup_admission::StoredPin<'a>,
@@ -303,6 +308,11 @@ impl<'a> Stored<'a> {
             value!({"destination_uuid":self.configuration.value()["destination_uuid"],"configuration_sha256":json::sha256(self.configuration.public_bytes()?),"destination_pin_sha256":json::sha256(self.pin.public_bytes()?),"credential_identity":self.credential.binding(self.pin.storage())?}),
         )
     }
+    /// Verify the confirmation is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.exported.recheck()?;
         self.confirmed.recheck()?;

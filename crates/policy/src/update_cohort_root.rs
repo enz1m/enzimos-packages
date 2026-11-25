@@ -14,6 +14,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+/// The admitted update cohort with its configuration, receipt and authority.
 pub struct Admitted {
     guard: Guard,
     authority: Authority,
@@ -29,6 +30,11 @@ pub struct Admitted {
     authority_files: Vec<(String, File, files::FileIdentity)>,
 }
 impl Admitted {
+    /// Admit the offline update cohort under the fixed configuration and authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the configuration, receipt or authority is unsafe, changed or invalid.
     pub fn observe() -> Result<Self> {
         operation::root_only()?;
         let guard = Guard::observe()?;
@@ -102,15 +108,23 @@ impl Admitted {
         admitted.recheck()?;
         Ok(admitted)
     }
+    /// The admitted cohort.
     pub fn source(&self) -> &Cohort {
         &self.source
     }
+    /// The admission receipt.
     pub fn receipt(&self) -> &Value {
         &self.document
     }
+    /// The storage guard the cohort was admitted on.
     pub fn guard(&self) -> &Guard {
         &self.guard
     }
+    /// Verify the configuration, receipt and authority are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.authority.recheck(&self.guard)?;

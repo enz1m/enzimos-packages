@@ -54,6 +54,7 @@ impl Metadata {
         )
     }
 }
+/// The owned one-shot EFI entry variable of a finished retirement.
 pub struct Original<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -69,6 +70,11 @@ pub struct Original<'a> {
     owned: bool,
 }
 impl<'a> Original<'a> {
+    /// Observe the one-shot entry variable set by the coordinator in `journal`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the variable is not the coordinator's or cannot be retained.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -191,6 +197,11 @@ impl<'a> Original<'a> {
         }
         self.barrier(authorize)
     }
+    /// JSON evidence for the variable.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let metadata = self
@@ -207,6 +218,11 @@ impl<'a> Original<'a> {
             serde_json::json!({"directory_epoch":self.epoch,"directory_flags":self.directory_flags,"mount":self.mount,"members":metadata,"one_shot_sha256":self.one_shot.as_ref().map(|row|enzimos_platform::json::sha256(&row.bytes)),"clear_owned_one_shot":self.owned,"deletion_authorized":false}),
         )
     }
+    /// Clear the one-shot entry variable.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the variable changed or the write fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat, write).")]
     pub fn clear(
         mut self,
@@ -316,6 +332,7 @@ impl<'a> Original<'a> {
         Ok(result)
     }
 }
+/// The one-shot entry variable after clearing.
 pub struct Completed<'a> {
     original: Original<'a>,
     retired_epoch: Option<files::FileIdentity>,

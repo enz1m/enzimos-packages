@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! UKI payload binding to the selected boot artifacts.
 use enzimos_policy::secure_artifacts;
 fn fixture() -> Vec<u8> {
     let mut body = vec![0; 512];

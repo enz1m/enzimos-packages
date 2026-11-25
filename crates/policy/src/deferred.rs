@@ -10,6 +10,11 @@ pub(crate) const ACTIONS: [(&str, &str); 4] = [
     ("authority", "enzimos-authority-refresh.service"),
 ];
 pub(crate) const MAX_DEFERRALS: u64 = 100_000;
+/// Systemd unit that runs the deferred `action`.
+///
+/// # Errors
+///
+/// Fails for unknown actions.
 pub fn unit(action: &str) -> Result<&'static str> {
     ACTIONS
         .iter()
@@ -17,6 +22,11 @@ pub fn unit(action: &str) -> Result<&'static str> {
         .map(|(_, unit)| *unit)
         .ok_or_else(|| Error("unknown deferred action".into()))
 }
+/// Validate the deferred marker of `action`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(record: &Value, action: &str) -> Result<()> {
     unit(action)?;
     json::fields(
@@ -44,6 +54,11 @@ pub fn validate(record: &Value, action: &str) -> Result<()> {
     )?;
     Ok(())
 }
+/// The deferred marker after another contended attempt at `now`.
+///
+/// # Errors
+///
+/// Fails when `previous` is invalid or the clock moved backwards.
 pub fn next(previous: Option<&Value>, action: &str, boot: &str, now: u64) -> Result<Value> {
     unit(action)?;
     identity::uuid(boot)?;
@@ -89,9 +104,16 @@ pub(crate) fn previous_boot_actions(
 }
 /// There is deliberately no public `record(error)` or command to manufacture debt.
 pub enum Admission {
+    /// The operation lock was free and is now held.
     Entered(enzimos_platform::files::Lock),
+    /// The lock was contended; the deferred marker was recorded.
     Deferred(Value),
 }
+/// Take the operation lock for `action`, or record that it is owed.
+///
+/// # Errors
+///
+/// Fails for unknown actions, outside the initial namespace, or when the marker cannot be written.
 pub fn admit(action: &str) -> Result<Admission> {
     unit(action)?;
     operation::root_only()?;
@@ -108,6 +130,10 @@ pub fn admit(action: &str) -> Result<Admission> {
 }
 /// The initial-namespace supervisor receives an authenticated update-hook notice.
 /// A free lock is an error here; it never manufactures owed work or clears a marker.
+///
+/// # Errors
+///
+/// Fails for unknown actions, when the lock is free, or the marker cannot be written.
 pub fn defer_if_contended(action: &str) -> Result<Value> {
     unit(action)?;
     operation::root_only()?;

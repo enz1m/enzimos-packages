@@ -14,6 +14,7 @@ use std::{
 };
 const FOLDER: &str = "root-retirements";
 const LIMIT: usize = 2 * 1024 * 1024;
+/// The offline retirement receipt, retained with its folder and mount.
 pub struct Journal<'a, 's> {
     control: &'a Control<'a, 's>,
     folder: File,
@@ -32,10 +33,12 @@ struct State {
     predecessors: Vec<Predecessor>,
     uncertain: bool,
 }
+/// The receipt after durable entry into execution.
 pub struct Entered<'j, 'a, 's> {
     original: &'j Journal<'a, 's>,
     sealed: &'j crate::root_retirement_seal::Installed<'a, 's>,
 }
+/// The receipt with one step durably in flight.
 pub struct StepEntered<'j, 'a, 's> {
     original: Entered<'j, 'a, 's>,
 }
@@ -276,6 +279,11 @@ impl<'a, 's> Journal<'a, 's> {
         }
         self.recheck()
     }
+    /// JSON evidence for the receipt.
+    ///
+    /// # Errors
+    ///
+    /// Fails while a publication is active or the receipt changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let state = self
@@ -316,6 +324,11 @@ impl<'j, 'a, 's> Entered<'j, 'a, 's> {
             "actual entered receipt no longer has its original owned lineage",
         )
     }
+    /// JSON evidence of this step; it grants no further mutation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -507,6 +520,11 @@ impl<'j, 'a, 's> StepEntered<'j, 'a, 's> {
             "actual original first in-flight receipt no longer has its owned lineage",
         )
     }
+    /// JSON evidence of this step; it grants no further mutation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

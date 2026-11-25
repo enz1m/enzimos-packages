@@ -11,6 +11,7 @@ use crate::{
 };
 use enzimos_platform::publication::Prepared;
 
+/// Loader cleanup owed after a coordinated retirement.
 pub struct Cleanup<'a, 'g> {
     context: Context<'a, 'g>,
     receipt: Observation,

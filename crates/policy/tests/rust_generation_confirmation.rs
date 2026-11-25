@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Generation boot confirmation records.
 use enzimos_platform::json;
 use enzimos_policy::{catalog, generation_confirmation::observation};
 use serde_json::{Value, json as v};

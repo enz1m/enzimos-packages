@@ -5,9 +5,11 @@ use crate::{
 };
 use enzimos_platform::{Error, Result, require};
 use std::collections::BTreeMap;
+/// What a recovery attempt must remove from the loader before running.
 pub struct Detachment {
     pub(crate) defaults: String,
     pub(crate) bios: String,
+    /// Whether the one-shot UEFI entry is removed.
     pub remove_uefi: bool,
     pub(crate) image: Option<String>,
 }

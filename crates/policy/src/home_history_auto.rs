@@ -79,6 +79,11 @@ impl Gate {
         }
     }
 }
+/// Create a scheduled home history snapshot when enabled and there is room.
+///
+/// # Errors
+///
+/// Fails when the snapshot cannot be created.
 pub fn create() -> Result<Value> {
     let gate = Gate::open()?;
     gate.admit(|| {
@@ -112,10 +117,18 @@ fn busy() -> Value {
     json!({"status":"operation-lock-busy","retry":true})
 }
 /// Forgets an earlier space check; the guard calls this before checking.
+///
+/// # Errors
+///
+/// Fails when the marker cannot be removed.
 pub fn forget_room_check() -> Result<()> {
     take_room_check().map(drop)
 }
 /// Records that the guard made room for the next automatic snapshot.
+///
+/// # Errors
+///
+/// Fails when the marker cannot be written.
 pub fn record_room_check() -> Result<()> {
     operation::root_only()?;
     files::ensure_directory(Path::new("/run/enzimos"), 0o700, 0)?;

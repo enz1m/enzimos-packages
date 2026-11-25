@@ -60,6 +60,11 @@ pub struct Released<'s, 'cfg, 'g> {
 impl<'s, 'cfg, 'g> Released<'s, 'cfg, 'g> {
     /// Consume one original aggregate after its original inventory stage is gone.
     /// Boot retires before snapshots because it retains the original root capture.
+    ///
+    /// # Errors
+    ///
+    /// Fails when retirement was already entered, the closed transfer differs, or a snapshot cannot
+    /// be removed.
     pub fn retire(
         mut self,
         stage: &crate::backup_inventory_stage::Retired<'s, 'g>,
@@ -213,6 +218,11 @@ impl<'s, 'cfg, 'g> Released<'s, 'cfg, 'g> {
 }
 /// Captures each configured dataset exactly once. Unknown outcomes leave original
 /// intents and snapshots for review; there is no retry, deletion or Drop cleanup.
+///
+/// # Errors
+///
+/// Fails when the identifier or a dataset is out of bounds, the registry left the control mount, or
+/// a snapshot fails.
 pub fn capture<'s, 'cfg, 'g, F: FnMut() -> Result<()>>(
     inventory: &'s Inventory<'cfg, 'g>,
     attempt: &'s Attempt<'g>,

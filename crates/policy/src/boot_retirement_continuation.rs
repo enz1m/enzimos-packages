@@ -597,6 +597,11 @@ impl Approval {
         journal.recheck()
     }
 }
+/// Review interrupted boot retirement `id`.
+///
+/// # Errors
+///
+/// Fails when the journal or its objects cannot be retained.
 pub fn review_locked(guard: &Guard, lock: &files::Lock, id: &str) -> Result<Value> {
     Admission::observe(guard, lock, id)?.evidence()
 }

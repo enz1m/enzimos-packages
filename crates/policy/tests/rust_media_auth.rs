@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! The confined media password verifier.
 use std::{
     io::Write,
     process::{Command, Stdio},

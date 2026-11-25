@@ -50,6 +50,11 @@ pub(crate) fn coordinator(v: &Value) -> Result<()> {
     )?;
     records::command_line(records::text(v, "options")?)
 }
+/// Validate root retirement record `id`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(v: &Value, id: &str) -> Result<()> {
     let base =
         "schema id phase filesystem_uuid created_boot birth targets next_step inflight plan_sha256";

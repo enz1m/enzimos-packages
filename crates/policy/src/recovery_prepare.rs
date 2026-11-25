@@ -16,6 +16,11 @@ fn selection(body: &Value) -> Result<(&str, &str)> {
         identity::safe_id(text("generation")?)?,
     ))
 }
+/// The preparation observation for request `body`.
+///
+/// # Errors
+///
+/// Fails when the registry or its lock is missing, or a record is invalid.
 pub fn observation(body: &Value) -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;
@@ -51,6 +56,12 @@ pub fn observation(body: &Value) -> Result<Value> {
     original.recheck()?;
     Ok(view)
 }
+/// Prepare recovery for request `body` as `request_id` if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the request is invalid, the observation changed, `authorize` fails, or preparation
+/// fails.
 pub fn prepare<F: FnMut() -> Result<()>>(
     body: &Value,
     request_id: &str,

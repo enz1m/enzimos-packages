@@ -232,6 +232,11 @@ fn scan(
     }
     Ok(rows)
 }
+/// Review an overlay archive against its `declared` manifest.
+///
+/// # Errors
+///
+/// Fails when the manifest or archive is malformed, exceeds a bound, or differs.
 pub fn review(file: &File, declared: &Value) -> Result<Value> {
     let expected = declared
         .as_object()
@@ -263,6 +268,10 @@ pub fn review(file: &File, declared: &Value) -> Result<Value> {
     Ok(value!({"schema":1,"members":rows}))
 }
 /// Refuse insufficient descriptor headroom before an origin intent or file write.
+///
+/// # Errors
+///
+/// Fails when the review is malformed or a member is invalid.
 #[allow(unsafe_code, reason = "Linux syscall ABI (getrlimit).")]
 pub fn resources(reviewed: &Value) -> Result<()> {
     json::fields(reviewed, "schema members")?;
@@ -294,6 +303,11 @@ pub fn resources(reviewed: &Value) -> Result<()> {
     )
 }
 /// The caller holds its independent lifetime throughout both passes and every write.
+///
+/// # Errors
+///
+/// Fails when the review changed, a member is unreviewed or repeated, `guard` fails, or extraction
+/// fails.
 pub fn extract(
     file: &File,
     declared: &Value,
@@ -484,6 +498,10 @@ pub fn extract(
 /// Read an exact regular/link inode without following its destination. This
 /// observer permits protected configuration paths; extraction still applies
 /// the stricter archive write registry in path_name before any publication.
+///
+/// # Errors
+///
+/// Fails when `name` is not a canonical installation member or cannot be retained.
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
     require(

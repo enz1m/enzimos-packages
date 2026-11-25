@@ -182,6 +182,11 @@ fn snapshot(s: &str) -> bool {
         && s.bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
+/// Validate backup attempt record `id`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(v, "schema id boot_id started_unix state snapshot_id")?;
     require(
@@ -554,6 +559,7 @@ impl<'g> Store<'g> {
         Ok(v)
     }
 }
+/// One backup attempt recorded on the control mount.
 pub struct Attempt<'g> {
     store: RefCell<Store<'g>>,
     id: String,
@@ -565,6 +571,12 @@ impl<'g> Attempt<'g> {
     pub(crate) fn same_actor(&self, other: &Attempt<'_>) -> bool {
         std::ptr::from_ref(self).cast::<()>() == std::ptr::from_ref(other).cast::<()>()
     }
+    /// Record a new backup attempt.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the journal is outside the control mount, the clock is unavailable, or the record
+    /// cannot be written.
     pub fn begin(guard: &'g crate::storage_runtime::Guard, lock: &'g files::Lock) -> Result<Self> {
         guard.recheck()?;
         lock.recheck()?;

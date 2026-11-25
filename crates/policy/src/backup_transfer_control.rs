@@ -11,14 +11,18 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{collections::BTreeSet, time::Duration};
+/// Caller-side state of one worker control loop: sequence, used nonces and outcome.
 pub struct State {
     sequence: u64,
     nonces: BTreeSet<String>,
     failed: bool,
     finished: bool,
 }
+/// A packet received from the worker.
 pub enum Event {
+    /// A checkpoint challenge was answered.
     Checkpoint,
+    /// The worker reported.
     Observed(Observation),
 }
 fn challenge(message: &Message, request: &Value, sequence: u64) -> Result<Value> {
@@ -45,6 +49,7 @@ impl Default for State {
     }
 }
 impl State {
+    /// A loop at sequence zero with no nonces used.
     pub fn new() -> Self {
         Self {
             sequence: 0,
@@ -53,6 +58,12 @@ impl State {
             finished: false,
         }
     }
+    /// Receive the next packet from the reserved worker and answer a checkpoint challenge.
+    ///
+    /// # Errors
+    ///
+    /// Fails after the loop ended or exceeded its bound, on a reused nonce or bad sequence, when
+    /// the sender is not the reserved worker, or when `authorize` fails.
     pub fn receive(
         &mut self,
         reserved: &Reserved<'_, '_, '_, '_, '_, '_, '_>,

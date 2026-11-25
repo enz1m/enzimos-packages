@@ -15,6 +15,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+/// The ready native image a retirement boots into.
 pub struct Image<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -30,6 +31,11 @@ pub struct Image<'a> {
     record: Value,
 }
 impl<'a> Image<'a> {
+    /// Observe the ready native image named by `journal`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the image receipt is missing, not ready, or differs from the installed runtime.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,

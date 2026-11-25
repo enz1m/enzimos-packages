@@ -32,6 +32,10 @@ fn free(destination: &Destination<'_>, minimum: u64) -> Result<()> {
 /// Internal bring-up entry, invoked only in a fresh disposable guest. It performs
 /// real capture/staging, durably fences the unfinished attempt, and intentionally
 /// preserves original snapshots/staging for review. It never reports a backup.
+///
+/// # Errors
+///
+/// Fails when `authorize` or `progress` fails, or a capture step fails.
 pub fn stage_review(
     lock: &files::Lock,
     progress: &mut dyn FnMut(&str) -> Result<()>,

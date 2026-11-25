@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! PID 1 of the independent recovery and root retirement environment.
 use enzimos_platform::{Error, Result, files};
 use enzimos_policy::{
     native_boot_dispatch::{self, Parameters},

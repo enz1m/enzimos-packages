@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Independent recovery entry points refuse ordinary processes.
 #[test]
 fn independent_entrypoints_refuse_ordinary_processes_before_kernel_mutations() {
     for binary in [

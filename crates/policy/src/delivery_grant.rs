@@ -253,9 +253,18 @@ fn retire(lock: &files::Lock) {
 }
 /// Read-only: it never takes the operation lock (that would make concurrent
 /// operations fail) and never retires rows; `grant` retires near capacity.
+///
+/// # Errors
+///
+/// Fails when the request is invalid or the export cannot be read.
 pub fn observation(body: &Value) -> Result<Value> {
     Scope::open(body)?.view()
 }
+/// Grant the delivery in request `body` if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the review changed, `authorize` fails, or the grant cannot be written.
 pub fn grant<F: FnMut() -> Result<()>>(
     body: &Value,
     expected: &Value,

@@ -4,7 +4,9 @@
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::{BTreeMap, BTreeSet};
+/// Collection ID of the Flathub remote.
 pub const COLLECTION: &str = "org.flathub.Stable";
+/// URL of the Flathub repository.
 pub const URL: &str = "https://dl.flathub.org/repo/";
 /// The enzimOS repository's OSTree collection.
 pub(crate) const ENZIMOS_COLLECTION: &str = "org.enzimos.Apps";
@@ -74,6 +76,11 @@ impl Source {
         }
     }
 }
+/// Validate a sideload repository configuration.
+///
+/// # Errors
+///
+/// Fails when it is too large, not UTF-8, or names an external remote or repeated section.
 pub fn repository(bytes: &[u8]) -> Result<()> {
     require(
         !bytes.is_empty() && bytes.len() <= 64 * 1024 && !bytes.contains(&0),
@@ -116,6 +123,7 @@ pub fn repository(bytes: &[u8]) -> Result<()> {
     )
 }
 
+/// Whether `name` is a valid Flatpak application ID.
 pub fn app_id(name: &str) -> bool {
     let parts = name.split('.').collect::<Vec<_>>();
     name.len() <= 255
@@ -128,6 +136,12 @@ pub fn app_id(name: &str) -> bool {
                 })
         })
 }
+/// Validate the offline application list of `source` against `declared`.
+///
+/// # Errors
+///
+/// Fails when the list is too large, not UTF-8, or names an invalid, repeated or undeclared
+/// application.
 pub fn applications(source: Source, bytes: &[u8], declared: &Value) -> Result<Vec<String>> {
     require(
         bytes.len() <= 64 * 1024 && !bytes.contains(&0),
@@ -158,6 +172,11 @@ pub fn applications(source: Source, bytes: &[u8], declared: &Value) -> Result<Ve
     )?;
     Ok(apps)
 }
+/// Validate the remote policy of `source` and return it as JSON.
+///
+/// # Errors
+///
+/// Fails when the policy is too large, not UTF-8, or has unknown or repeated sections or fields.
 pub fn remote(source: Source, bytes: &[u8]) -> Result<Value> {
     require(
         !bytes.is_empty() && bytes.len() <= 128 * 1024 && !bytes.contains(&0),

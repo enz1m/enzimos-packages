@@ -15,6 +15,7 @@ use std::{fs::File, os::fd::AsFd, time::Duration};
 /// caller process is alive (pidfd) and its handoff stays valid, exactly like a
 /// captured backup transfer. A dead caller still ends the wait immediately.
 pub(crate) const CALLER_WINDOW: Duration = Duration::from_secs(120);
+/// The worker side of the checkpoint exchange with its caller.
 pub struct Checkpoint {
     channel: Packet,
     sequence: u64,
@@ -49,6 +50,12 @@ impl Checkpoint {
             failed: false,
         }
     }
+    /// Ask the caller to approve continuing.
+    ///
+    /// # Errors
+    ///
+    /// Fails after the checkpoint loop ended or exceeded its bound, or when the caller does not
+    /// approve.
     pub fn recheck(&mut self, handoff: &crate::backup_worker_handoff::Handoff) -> Result<()> {
         require(
             !self.failed && self.sequence < 10000,
@@ -74,6 +81,11 @@ impl Checkpoint {
         self.failed = false;
         Ok(())
     }
+    /// Send the worker result to the caller.
+    ///
+    /// # Errors
+    ///
+    /// Fails without a fresh approval or when a provision result lacks its header.
     pub fn report(
         &mut self,
         handoff: &crate::backup_worker_handoff::Handoff,

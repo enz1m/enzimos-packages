@@ -40,6 +40,7 @@ impl<'a> Directory<'a> {
         )
     }
 }
+/// The archive inputs of one backup.
 pub struct Inputs<'a, 'c, 's, 'cfg, 'g> {
     capture: &'a Released<'s, 'cfg, 'g>,
     stage: &'a Staged<'c, 's, 'cfg, 'g>,
@@ -47,6 +48,11 @@ pub struct Inputs<'a, 'c, 's, 'cfg, 'g> {
     scope: Value,
 }
 impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
+    /// Collect the archive inputs of `capture` and `stage`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input is repeated or missing.
     pub fn observe(
         capture: &'a Released<'s, 'cfg, 'g>,
         stage: &'a Staged<'c, 's, 'cfg, 'g>,

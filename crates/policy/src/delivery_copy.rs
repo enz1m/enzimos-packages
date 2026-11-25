@@ -17,6 +17,10 @@ fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
 }
 /// The returned actual output file is retained for the supervisor's independent verification.
 /// No path, historical owner or JSON value grants permission to create output.
+///
+/// # Errors
+///
+/// Fails when the source size or digest differs, or the copy cannot be created in `home`.
 pub fn copy_owned(
     home: &File,
     source: &File,

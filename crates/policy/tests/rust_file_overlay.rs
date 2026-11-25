@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! File overlay review and extraction.
 use enzimos_platform::{files, json};
 use enzimos_policy::file_overlay;
 use serde_json::json as v;

@@ -270,6 +270,10 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     }
     /// One original admitted execution. Existing unfinished receipts cannot be
     /// adopted, and no replay entry point reconstructs these retained actors.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent differs, a reference appeared, `authorize` fails, or a step fails.
     pub fn retire(
         self,
         references: &dyn runtime::References,
@@ -282,6 +286,10 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     /// Keep original signature authority and source/output descriptors through
     /// actual known removals. This check supplies no new deletion authority;
     /// only original Artifact actors paired with actual Removed witnesses join.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a retired artifact changed or `authorize` fails.
     pub fn recheck_signed_owned_retirements(
         &self,
         retired: &BTreeMap<std::path::PathBuf, crate::boot_volume::RetiredArtifact>,
@@ -317,6 +325,11 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
             .bind_existing_receipt_registry(registry, &format!("boot-{}.json", self.generation))?;
         self.recheck(authorize)
     }
+    /// Require that every recovery reference is concluded in `observation`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a recovery journal is incomplete or `authorize` fails.
     pub fn bind_recovery_conclusions(
         &self,
         observation: &crate::recovery_conclusions::Observation<'_>,
@@ -333,6 +346,10 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     }
     /// Preserve the closed boot-retirement plan result fields. A failed fresh
     /// preflight produces a non-retirable preview, with no intent or step grant.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn preview_plan(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let disclosed = if self.firmware["observable"] == false {
@@ -384,6 +401,11 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
     }
     /// Calculate a closed intent only from actual retained preflight objects.
     /// Backend reference completion and executor admission remain separate gates.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a live recovery reference protects the generation, the running generation is
+    /// ambiguous, or `authorize` fails.
     pub fn planned_intent(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -476,6 +498,11 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
         self.original["pins"] = self.pins.evidence()?;
         self.recheck(authorize)
     }
+    /// JSON evidence for the retirement context.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.original)

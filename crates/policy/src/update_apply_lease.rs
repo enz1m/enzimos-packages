@@ -18,6 +18,7 @@ fn shape(directory: &File) -> Result<Value> {
         value!({"device":m.dev(),"inode":m.ino(),"uid":m.uid(),"gid":m.gid(),"mode":m.mode(),"mount":mount_identity::id(directory.as_fd(),true)?}),
     )
 }
+/// An update worker's lease on its apply intent.
 pub struct Lease {
     guard: Guard,
     path: PathBuf,
@@ -29,6 +30,11 @@ pub struct Lease {
     request: Value,
 }
 impl Lease {
+    /// Retain the apply intent named by `request`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry is unsafe or on another mount, or the intent is missing or invalid.
     pub fn observe(request: &Value) -> Result<Self> {
         crate::update_worker_record::execution_request(request)?;
         let id = enzimos_platform::json::string(&request["id"])?;
@@ -82,9 +88,15 @@ impl Lease {
         lease.recheck()?;
         Ok(lease)
     }
+    /// The apply intent document.
     pub fn document(&self) -> &Value {
         &self.document
     }
+    /// Verify the intent and its directory are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when either changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let directory = files::directory(

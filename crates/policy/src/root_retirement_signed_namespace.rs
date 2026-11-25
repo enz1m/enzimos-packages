@@ -167,6 +167,7 @@ impl<'a> Namespace<'a> {
         }
     }
 }
+/// The signing namespace after its directory was prepared.
 pub struct Prepared<'a> {
     original: Original<'a>,
     folder: Directory,
@@ -589,6 +590,11 @@ impl<'a> Prepared<'a> {
         }
         self.recheck(authorize)
     }
+    /// JSON evidence for the prepared directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -671,6 +677,11 @@ impl Published<'_> {
         self.recheck(authorize)?;
         self.wrapped.text(authorize)
     }
+    /// JSON evidence for the signed output.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(json!({"directory_created":self.prepared.created,

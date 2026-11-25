@@ -349,6 +349,10 @@ fn retire_snapshots(
 /// One automatic run (see the module documentation). A receipt that started
 /// deleting and then failed stops the run with `stopped` set; it stays for
 /// review (`root-retire status`, `delete`, `finish` or `abandon`).
+///
+/// # Errors
+///
+/// Fails when the operation cannot be observed or a retirement fails.
 pub fn retain_locked(
     guard: &Guard,
     lock: &files::Lock,

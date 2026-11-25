@@ -511,6 +511,11 @@ impl Runtime<'_, '_> {
         )
     }
 }
+/// Resume interrupted boot retirement `id` reviewed as `review_sha256`.
+///
+/// # Errors
+///
+/// Fails when the review changed or a step fails.
 pub fn resume_locked(
     guard: &Guard,
     lock: &files::Lock,

@@ -3,15 +3,27 @@
 use enzimos_platform::{Result, json, mount_identity, require};
 use serde_json::Value;
 use std::{fs::File, os::fd::AsFd};
+/// Descriptors a backup worker caller sends.
 pub struct Inputs<'a> {
+    /// Repository directory.
     pub repository: &'a File,
+    /// Repository credential.
     pub credential: &'a File,
+    /// Pinned Restic image.
     pub restic: &'a File,
+    /// Outer encrypted header, when the request has one.
     pub outer: Option<&'a File>,
+    /// Configuration, when the request has one.
     pub configuration: Option<&'a File>,
+    /// Sealed temporary input, when the request has one.
     pub temporary: Option<&'a File>,
 }
 impl Inputs<'_> {
+    /// Require that these descriptors are the request's retained inputs on `source` and `owned`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a descriptor is missing, extra, or differs from the request.
     pub fn recheck(
         &self,
         request: &Value,

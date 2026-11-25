@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! The ephemeral development package signer.
 use enzimos_platform::{files, process};
 use enzimos_policy::{
     authority, authority_build,

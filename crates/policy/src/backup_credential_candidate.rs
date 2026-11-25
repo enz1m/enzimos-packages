@@ -15,6 +15,11 @@ pub struct Candidate<'g> {
     original: Value,
 }
 impl<'g> Candidate<'g> {
+    /// Retain the stored and staged credential files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a file is unsafe.
     pub fn observe(guard: &'g Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;

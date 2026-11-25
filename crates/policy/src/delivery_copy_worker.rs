@@ -179,6 +179,11 @@ fn descriptors(request: &Request, source: &File, home: &File) -> Result<()> {
         "delivery original descriptor epochs or rights differ",
     )
 }
+/// Run the delivery copy worker on `channel`.
+///
+/// # Errors
+///
+/// Fails when confinement or the copy fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (prctl).")]
 pub fn entry(channel: Packet) -> Result<()> {
     privileges(

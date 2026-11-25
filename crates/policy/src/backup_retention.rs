@@ -170,6 +170,11 @@ pub(crate) fn publish_status(kind: &str, outcome: &Value) -> Result<()> {
     )
 }
 
+/// The current backup retention policy.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be read.
 pub fn observation() -> Result<Value> {
     crate::namespaces::initial()?;
     let policy = policy()?;
@@ -177,6 +182,10 @@ pub fn observation() -> Result<Value> {
 }
 
 /// Publish a new policy. Existing backups change only at the next cleanup.
+///
+/// # Errors
+///
+/// Fails when the plan changed, `authorize` fails, or the write fails.
 pub fn set<F: FnMut() -> Result<()>>(
     selection: &Value,
     expected: &Value,

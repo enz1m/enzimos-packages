@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Validated storage configuration and the storage guard.
 use crate::{filesystem, identity, operation};
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::Value;
@@ -7,6 +8,11 @@ use std::{
     path::Path,
     time::Duration,
 };
+/// Validate a storage configuration.
+///
+/// # Errors
+///
+/// Fails when a subvolume field is missing or not independent.
 pub fn validate(v: &Value) -> Result<()> {
     require(v.is_object(), "storage configuration object required")?;
     let mut names = std::collections::BTreeSet::new();
@@ -32,6 +38,11 @@ pub fn validate(v: &Value) -> Result<()> {
     )?;
     Ok(())
 }
+/// The validated storage configuration.
+///
+/// # Errors
+///
+/// Fails when the file is unsafe or invalid.
 pub fn config() -> Result<Value> {
     let bytes = files::read(
         Path::new("/etc/enzimos/storage.json"),
@@ -43,6 +54,11 @@ pub fn config() -> Result<Value> {
     validate(&v)?;
     Ok(v)
 }
+/// Observe the control storage mount and filesystem.
+///
+/// # Errors
+///
+/// Fails outside the initial namespace or when the control storage is unsafe or differs.
 pub fn storage_guard() -> Result<Value> {
     operation::root_only()?;
     require(

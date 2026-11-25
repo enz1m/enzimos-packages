@@ -123,9 +123,19 @@ fn safe_roots(plan: &Plan) -> Result<()> {
     transaction.recheck()?;
     plan.admitted().recheck()
 }
+/// Apply the planned update while `lock` is held.
+///
+/// # Errors
+///
+/// As [`apply_locked_with_progress`].
 pub fn apply_locked(lock: &files::Lock) -> Result<Value> {
     apply_locked_with_progress(lock, &mut |_| Ok(()))
 }
+/// Apply the planned update, reporting each phase to `progress`.
+///
+/// # Errors
+///
+/// Fails when the plan is stale or a step fails.
 pub fn apply_locked_with_progress(
     lock: &files::Lock,
     progress: &mut dyn FnMut(&str) -> Result<()>,
@@ -143,6 +153,10 @@ pub(crate) fn apply_authorized(
 }
 /// The backend job owns this request ID and reviewed plan. Fresh observation
 /// under the same original lock must match before durable apply intent is made.
+///
+/// # Errors
+///
+/// Fails when the plan is not the backend's reviewed plan, or as [`apply_locked_with_progress`].
 pub fn apply_reviewed_backend(
     lock: &files::Lock,
     expected: &Value,

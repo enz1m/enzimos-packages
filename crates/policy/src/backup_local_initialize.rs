@@ -156,6 +156,10 @@ impl<'a> Empty<'a> {
 }
 /// Unknown outcomes leave the original durable attempt and refuse another call.
 /// This standalone entry does not enable backup scheduling or publish an opt-in.
+///
+/// # Errors
+///
+/// Fails when a destination is already bound, `authorize` fails, or initialization fails.
 pub fn initialize_locked(
     source: &storage_runtime::Guard,
     lock: &files::Lock,

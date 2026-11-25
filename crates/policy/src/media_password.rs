@@ -35,6 +35,11 @@ impl Drop for Scratch {
         }
     }
 }
+/// Verify a NUL-separated `user` and `password` frame against the account hash.
+///
+/// # Errors
+///
+/// Fails when the frame is malformed or the password is wrong.
 #[allow(unsafe_code, reason = "libcrypt ABI.")]
 pub fn verify(bytes: &[u8]) -> Result<()> {
     require(
@@ -87,6 +92,11 @@ pub fn verify(bytes: &[u8]) -> Result<()> {
         "administrator password incorrect",
     )
 }
+/// Confine this process before verifying a password.
+///
+/// # Errors
+///
+/// Fails when a limit or privilege drop cannot be applied.
 #[allow(
     unsafe_code,
     reason = "Linux syscall ABI (prctl, setgroups and others)."

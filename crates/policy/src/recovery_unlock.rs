@@ -434,6 +434,11 @@ impl<'s> CreatedMapping<'s> {
         self.recheck()?;
         Ok(self.mapper.file.as_fd())
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<serde_json::Value> {
         self.recheck()?;
         let result = serde_json::json!({"source":self.source_identity,"mapper":self.mapper_identity,
@@ -444,6 +449,10 @@ impl<'s> CreatedMapping<'s> {
     }
     /// Only this actual produced mapping can enter explicit close. Caller must
     /// first normally unmount and release all its filesystem descriptions.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the mapping cannot be closed.
     pub fn close(self) -> Result<()> {
         self.recheck()?;
         close(self.source, self.mapper)?;

@@ -80,6 +80,7 @@ pub(crate) fn membership_value(nonce: &str) -> Result<String> {
     )?;
     Ok(format!("{MEMBERSHIP}/delivery-{nonce}"))
 }
+/// A fresh cgroup for one delivery worker.
 pub struct Group {
     parent: File,
     parent_shape: (u64, u64, u32, u32, u32, u64),
@@ -191,6 +192,10 @@ impl Group {
         Ok(result)
     }
     /// Only the owned pre-exec child writes the constant "0\n" to this actual FD.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the membership file differs.
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn membership(&self) -> Result<File> {
         self.recheck()?;

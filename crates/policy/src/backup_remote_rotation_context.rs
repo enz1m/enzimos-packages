@@ -125,6 +125,7 @@ fn next(phase: &str, state: &[Option<&str>; 7]) -> Result<(Option<usize>, Option
         _ => Err(enzimos_platform::Error("remote rotation phase".into())),
     }
 }
+/// Network share rotation state, retained for review and advance.
 pub struct Context<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -135,6 +136,11 @@ pub struct Context<'a> {
     restic: Image,
 }
 impl<'a> Context<'a> {
+    /// Observe the rotation inputs and journal.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input or the journal is unsafe or invalid, or `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -159,6 +165,11 @@ impl<'a> Context<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
+    /// Verify the inputs and journal are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         self.guard.recheck()?;
@@ -241,6 +252,11 @@ impl<'a> Context<'a> {
         self.recheck(authorize)?;
         Ok(state)
     }
+    /// The review document of the next rotation step.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn review(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         let state = self.state(authorize)?;
         let record = self.record.value()?;
@@ -498,6 +514,10 @@ impl<'a> Context<'a> {
     }
     /// Explicit exact-argv Root entry only. The original legacy journal and
     /// original inputs stay alive across vendor checks and owned v2 publication.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the journal or inputs are invalid or cannot be updated.
     pub fn migrate_metadata(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -618,6 +638,10 @@ impl<'a> Context<'a> {
     }
     /// Consumes the original context and exact reviewed action. No decoded row
     /// or newly opened inode can replace its live inventory during execution.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the review changed, the action does not match it, or a step fails.
     pub fn advance(
         mut self,
         sha: &str,

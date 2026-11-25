@@ -65,6 +65,11 @@ fn text(volume: &Volume, path: &str) -> Result<String> {
     file.recheck()?;
     String::from_utf8(body).map_err(|_| Error("recovery run loader text encoding".into()))
 }
+/// Stage recovery run `id` reviewed as `digest` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the review changed or staging fails.
 pub fn stage_locked(
     id: &str,
     digest: &str,

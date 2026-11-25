@@ -4,16 +4,32 @@ use crate::{birth, catalog, identity, storage};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
 use std::collections::BTreeSet;
+/// Most recovery jobs kept at once.
 pub const MAX_JOBS: usize = 16;
+/// The string field `k` of `v`.
+///
+/// # Errors
+///
+/// Fails when the field is missing or not a string.
 pub fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str> {
     v[k].as_str()
         .ok_or_else(|| Error("recovery text field".into()))
 }
+/// Require a recovery job identifier within its length bound.
+///
+/// # Errors
+///
+/// Fails for an unsafe or overlong identifier.
 pub fn job_id(id: &str) -> Result<&str> {
     identity::safe_id(id)?;
     require(id.len() <= 48, "recovery job ID bound")?;
     Ok(id)
 }
+/// Require a FAT volume serial written as `XXXX-XXXX`.
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn fat_uuid(id: &str) -> Result<()> {
     require(
         id.len() == 9
@@ -27,12 +43,22 @@ pub fn fat_uuid(id: &str) -> Result<()> {
         "invalid FAT recovery boot UUID",
     )
 }
+/// Require a supported kernel flavor (`linux` or `linux-lts`).
+///
+/// # Errors
+///
+/// Fails for any other flavor.
 pub fn flavor(s: &str) -> Result<()> {
     require(
         matches!(s, "linux" | "linux-lts"),
         "invalid recovery kernel flavor",
     )
 }
+/// Require that `v[key]` is the SHA-256 of `v` without that field.
+///
+/// # Errors
+///
+/// Fails when the digest is missing or differs.
 pub fn digest(v: &Value, key: &str) -> Result<()> {
     let expected = identity::sha(text(v, key)?)?;
     let mut material = v.clone();
@@ -56,6 +82,11 @@ pub(crate) fn media_origin(v: &Value) -> Result<()> {
     identity::sha(text(v, "policy_sha256")?)?;
     Ok(())
 }
+/// Validate a recovery plan document.
+///
+/// # Errors
+///
+/// Fails when the schema, a field or its digest is invalid.
 pub fn plan(v: &Value) -> Result<()> {
     let schema = v["schema"]
         .as_u64()
@@ -143,6 +174,11 @@ pub fn plan(v: &Value) -> Result<()> {
     )?;
     digest(v, "plan_sha256")
 }
+/// Validate recovery job record `identifier`.
+///
+/// # Errors
+///
+/// Fails when a field, phase or nested record is invalid.
 pub fn job(v: &Value, identifier: &str) -> Result<()> {
     job_id(identifier)?;
     json::fields(v, "plan phase stage_boot root history")?;
@@ -202,6 +238,11 @@ pub fn job(v: &Value, identifier: &str) -> Result<()> {
     }
     Ok(())
 }
+/// Loader entry file name and title of the recovery run `identifier`.
+///
+/// # Errors
+///
+/// Fails for an invalid identifier.
 pub fn run_entry_names(identifier: &str) -> Result<(String, String)> {
     job_id(identifier)?;
     let digest = json::sha256(identifier.as_bytes());
@@ -224,12 +265,22 @@ pub(crate) fn literal_entry(s: &str) -> Result<()> {
         "invalid literal UEFI default",
     )
 }
+/// Require a kernel command line within the recovery bounds.
+///
+/// # Errors
+///
+/// Fails for an empty, oversized or unsafe command line.
 pub fn command_line(s: &str) -> Result<()> {
     require(
         s.len() <= 4096 && s.bytes().all(|b| (32..127).contains(&b)),
         "invalid recovery command line",
     )
 }
+/// Validate recovery run record `identifier`.
+///
+/// # Errors
+///
+/// Fails when a field, phase or nested record is invalid.
 pub fn run(v: &Value, identifier: &str) -> Result<()> {
     json::fields(
         v,

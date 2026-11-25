@@ -209,6 +209,11 @@ impl Runtime<'_> {
         self.verify()
     }
 }
+/// Publish generation `generation` from `source` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when a publication step fails.
 pub fn publish_locked(source: &Stage, generation: &str, lock: &files::Lock) -> Result<Value> {
     publish_authorized(source, generation, lock, &mut || lock.recheck())
 }

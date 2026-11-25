@@ -85,6 +85,11 @@ pub(crate) fn reports(body: &[u8], uid: u32) -> Result<Value> {
     }
     Ok(value!({"schema":1,"reports":reports,"raw_core_access":false}))
 }
+/// Crash report metadata of the caller's real UID.
+///
+/// # Errors
+///
+/// Fails when run as Root or journalctl fails.
 pub fn read() -> Result<Value> {
     let uid = enzimos_platform::process_identity::real_uid();
     require(

@@ -202,6 +202,10 @@ fn claim_first_boot<'a>(parent: &'a File, body: &[u8], owner: u32) -> Result<Fir
 }
 /// Automatic first boot claims one durable attempt before invoking any builder.
 /// Failures retain the attempt; an administrator may separately review/build.
+///
+/// # Errors
+///
+/// Fails when the first-boot image cannot be built.
 pub fn first_boot_locked(release: &str, options: &str, lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     identity::safe_id(release)?;
@@ -223,6 +227,11 @@ pub fn first_boot_locked(release: &str, options: &str, lock: &files::Lock) -> Re
     claim.finish()?;
     Ok(result)
 }
+/// Build a recovery image for `release` with `options` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when a package transaction is running, inputs are stale, or the build fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 pub fn build_locked(release: &str, options: &str, lock: &files::Lock) -> Result<Value> {
     identity::safe_id(release)?;

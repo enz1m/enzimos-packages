@@ -14,6 +14,11 @@ use std::{
 const LIMIT: usize = 128 * 1024;
 const BEGIN: &str = "# BEGIN enzimOS desktop integration";
 const END: &str = "# END enzimOS desktop integration";
+/// PAM stack `body` for `service` with the greeter and keyring rules applied.
+///
+/// # Errors
+///
+/// Fails when the stack is malformed or the service unknown.
 pub fn pam(body: &str, service: &str) -> Result<String> {
     bounded(body)?;
     let rules: &[&str] = match service {
@@ -111,6 +116,11 @@ const CUPS: &[(&str, &[&str])] = &[
     ("MaxJobs", &["100"]),
     ("MaxJobsPerUser", &["20"]),
 ];
+/// CUPS configuration `body` restricted to local listeners.
+///
+/// # Errors
+///
+/// Fails when the configuration is malformed or includes other files or listeners.
 pub fn cups(body: &str) -> Result<String> {
     bounded(body)?;
     let mut depth = 0usize;
@@ -159,6 +169,10 @@ pub fn cups(body: &str) -> Result<String> {
     Ok(out)
 }
 /// Strict INI parser: preserve unrelated values, reject duplicate sections/options.
+///
+/// # Errors
+///
+/// Fails when the INI text is malformed or repeats a section or option.
 pub fn ini(body: &str, overrides: &[(&str, &[(&str, &str)])]) -> Result<String> {
     bounded(body)?;
     let mut sections: Vec<(String, Vec<(String, String)>)> = Vec::new();
@@ -331,10 +345,19 @@ impl Edit {
         }
     }
 }
+/// Apply the desktop configuration below `root`, for an everyday account when `everyday` is set.
+///
+/// # Errors
+///
+/// Fails when a configuration file is unsafe, malformed, or cannot be written.
 pub fn configure(root: &Path, everyday: bool) -> Result<Value> {
     configure_mode(root, everyday, false)
 }
 /// Configure the installed login stacks that exist on an Arch-based system.
+///
+/// # Errors
+///
+/// Fails when a PAM file is unsafe, malformed, or cannot be written.
 pub fn configure_keyring(root: &Path) -> Result<Value> {
     configure_mode(root, false, true)
 }

@@ -7,12 +7,18 @@ use crate::{
 use enzimos_platform::{Result, files, require};
 use serde_json::Value;
 use std::fs::File;
+/// Proof that the worker authenticated the sealed input against the repository.
 pub struct Authenticated<'g, 'i> {
     intent: Completed<'g>,
     input: &'i Validated,
     original: Value,
 }
 impl<'g, 'i> Authenticated<'g, 'i> {
+    /// Build the proof from a completed worker intent and the validated input.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent is not a completed input authentication of this input.
     pub fn from_completed(intent: Intent<'g>, input: &'i Validated) -> Result<Self> {
         let intent = intent.into_completed()?;
         intent.recheck()?;
@@ -40,6 +46,11 @@ impl<'g, 'i> Authenticated<'g, 'i> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the witnesses are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     pub fn recheck(&self) -> Result<()> {
         self.intent.recheck()?;
         self.input.recheck()?;
@@ -80,6 +91,11 @@ fn pair(first: &Value, second: &Value, first_key: &str, second_key: &str) -> Res
     )
 }
 impl<'a, 'g, 'i> Confirmed<'a, 'g, 'i> {
+    /// Pair two authentications of the same input as a confirmation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they disagree or changed.
     pub fn new(
         first: &'a Authenticated<'g, 'i>,
         second: &'a Authenticated<'g, 'i>,
@@ -116,10 +132,20 @@ impl<'a, 'g, 'i> Confirmed<'a, 'g, 'i> {
         self.recheck()?;
         self.second.input()
     }
+    /// Repository key ID the input opened.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Confirmed::recheck`].
     pub fn key_id(&self) -> Result<&str> {
         self.recheck()?;
         self.second.key_id()
     }
+    /// Require that the confirmation belongs to `plan`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it belongs to another plan.
     pub fn matches_plan(&self, plan: &crate::backup_setup_plan::Plan<'_, '_, '_>) -> Result<()> {
         plan.recheck_identity()?;
         require(

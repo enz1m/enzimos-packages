@@ -120,6 +120,11 @@ pub(crate) fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
     )?;
     Ok(out.into_bytes())
 }
+/// The current home retention policy.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be read.
 pub fn observation() -> Result<Value> {
     let source = Source::observe()?;
     let policy = policy(source.configuration_bytes()?)?;
@@ -127,6 +132,11 @@ pub fn observation() -> Result<Value> {
         value!({"source":source.evidence()?,"configuration_parent":source.configuration_context()?,"policy":policy}),
     )
 }
+/// Apply home retention `selection` if the state still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the plan changed, `authorize` fails, or the outcome differs.
 pub fn set<F: FnMut() -> Result<()>>(
     selection: &Value,
     expected: &Value,

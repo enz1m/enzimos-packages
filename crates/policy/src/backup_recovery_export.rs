@@ -247,6 +247,10 @@ fn current_key(guard: &Guard, authorize: &mut dyn FnMut() -> Result<()>) -> Resu
 pub(crate) type Mounted<'a> = dyn FnMut(&mut dyn FnMut() -> Result<String>) -> Result<String> + 'a;
 /// Export under the held operation lock. Returns the public result and the
 /// sealed copy for `uid`.
+///
+/// # Errors
+///
+/// Fails when the binding changed, `authorize` fails, or the export cannot be delivered.
 pub fn export_locked(
     guard: &Guard,
     lock: &files::Lock,
@@ -296,6 +300,10 @@ pub fn export_locked(
 }
 /// Record the owner's statement for the export it names, under the held lock.
 /// Repeating the same confirmation returns it unchanged.
+///
+/// # Errors
+///
+/// Fails when the export is missing, the ticket or assertion is invalid, or the binding changed.
 pub fn confirm_locked(
     guard: &Guard,
     lock: &files::Lock,

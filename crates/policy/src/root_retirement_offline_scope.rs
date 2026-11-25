@@ -171,6 +171,7 @@ fn shape(file: &File) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
+/// The single-threaded PID 1 on the RAM root with its process census.
 pub struct Scope {
     root: File,
     proc: File,
@@ -282,6 +283,11 @@ impl Scope {
             "offline census or original PID1 identity changed",
         )
     }
+    /// JSON evidence for the scope.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let result = value!({"boot":self.boot,"pid":1,"start_ticks":self.start,
@@ -444,6 +450,11 @@ impl<'a> Mounts<'a> {
         }
         self.scope.recheck()
     }
+    /// JSON evidence for the scope and mounts.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let result = value!({"scope":self.scope.evidence()?,"filesystem":self.filesystem,

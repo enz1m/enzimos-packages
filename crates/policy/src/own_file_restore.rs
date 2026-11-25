@@ -9,6 +9,7 @@ pub(crate) fn destination_name(path: &str, id: &str) -> Result<String> {
     enzimos_platform::delivery_name::restored(path, id)
 }
 
+/// The caller and home a selective export is restored for.
 pub struct Prepared<'g> {
     guard: &'g Guard,
     recipient: Recipient,
@@ -21,6 +22,11 @@ pub struct Prepared<'g> {
 impl<'g> Prepared<'g> {
     // UID comes from the Root service's authoritative caller and original ledger,
     // not selection JSON. The actual local account and home stay retained.
+    /// Observe the recipient of `selection` for `uid`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the selection is invalid or not in the caller's home.
     pub fn observe(guard: &'g Guard, selection: &Value, uid: u32) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -52,6 +58,11 @@ impl<'g> Prepared<'g> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the caller account and home are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when either changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.recipient.recheck(self.guard)?;
@@ -64,6 +75,11 @@ impl<'g> Prepared<'g> {
             enzimos_platform::json::string(&self.selection["id"])?,
         )
     }
+    /// JSON evidence for the recipient.
+    ///
+    /// # Errors
+    ///
+    /// Fails on recheck.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -71,6 +87,11 @@ impl<'g> Prepared<'g> {
             "recipient":self.recipient.evidence(self.guard)?,"grant_registry_sha256":json::fingerprint(&self.registry.evidence(self.guard)?)?,"selection":self.selection}),
         )
     }
+    /// Record a grant of the completed export to the recipient.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the export or recipient changed, the registry is full, or `authorize` fails.
     pub fn grant(
         mut self,
         completed: &crate::backup_selective_export::Completed<'_, '_, 'g>,

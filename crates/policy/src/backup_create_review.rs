@@ -18,6 +18,10 @@ use std::path::Path;
 /// drive that is attached but not mounted is validated read-only by its pinned
 /// identity without mounting. Both bind the same mount-independent evidence,
 /// so execution may borrow the mount or own a fresh temporary one.
+///
+/// # Errors
+///
+/// Fails when the inputs cannot be observed.
 pub fn observe(guard: &Guard) -> Result<Value> {
     if primary::primary() == Some(primary::SHARE) {
         return observe_share(guard);
@@ -108,6 +112,10 @@ fn share_evidence(
 /// A review document supplies no capture, worker or cleanup authority. Running
 /// compares this measurement under the already-owned operation lock, before a
 /// durable attempt, and retains the actual measured configuration/source actors.
+///
+/// # Errors
+///
+/// Fails when the destination or configuration differ from the retained inputs.
 pub fn measure(
     guard: &Guard,
     lock: &files::Lock,

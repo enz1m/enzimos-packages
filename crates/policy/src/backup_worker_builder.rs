@@ -36,6 +36,11 @@ fn base(
         "credential":null,"reader":null,"restic":restic.evidence()?,"outer":null,"configuration":null,"consumer_input":null}),
     )
 }
+/// Worker request authenticating `input` for the adoption in `plan`.
+///
+/// # Errors
+///
+/// Fails when the input belongs to another owner or a resource differs.
 pub fn input(
     plan: &Plan<'_, '_, '_>,
     scope: &Scope<'_, '_, '_>,
@@ -74,6 +79,11 @@ pub fn input(
     input.recheck()?;
     Ok(v)
 }
+/// Worker request provisioning the repository for `plan`.
+///
+/// # Errors
+///
+/// Fails when the publications differ from the reviewed plan.
 pub fn provision(
     plan: &Plan<'_, '_, '_>,
     scope: &Scope<'_, '_, '_>,

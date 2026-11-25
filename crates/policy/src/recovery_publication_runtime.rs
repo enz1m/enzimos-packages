@@ -362,12 +362,22 @@ impl Admission {
         )
     }
 }
+/// Review continuation of publication `id` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the journal is missing or invalid.
 pub fn review_locked(id: &str, lock: &files::Lock) -> Result<Value> {
     let original = Admission::observe(id, lock)?;
     let data = original.review();
     original.recheck(lock, None, None)?;
     Ok(data)
 }
+/// Resume publication `id` reviewed as `digest`.
+///
+/// # Errors
+///
+/// Fails when the review changed or a step fails.
 pub fn resume_locked(id: &str, digest: &str, lock: &files::Lock) -> Result<Value> {
     Admission::observe(id, lock)?.execute(digest, lock)
 }

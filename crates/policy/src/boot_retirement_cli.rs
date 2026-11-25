@@ -22,6 +22,11 @@ impl References for Joined<'_, '_> {
             .require_unmentioned_with_conclusions(generation, &self.conclusions)
     }
 }
+/// Retire `generation` reviewed as `sha` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the review changed or a step fails.
 pub fn retire_locked(
     guard: &Guard,
     lock: &files::Lock,
@@ -57,6 +62,11 @@ pub fn retire_locked(
     context.retire(&joined, sha, &mut permission, progress)
 }
 
+/// Status of boot retirement journals.
+///
+/// # Errors
+///
+/// Fails when a journal cannot be read.
 pub fn status_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     crate::operation::root_only()?;
     crate::namespaces::initial()?;

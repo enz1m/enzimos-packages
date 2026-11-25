@@ -914,6 +914,11 @@ pub struct Retired<'s, 'g> {
     output: RetiredTree,
 }
 impl Retired<'_, '_> {
+    /// JSON evidence for the retired boot capture.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry or receipt changed.
     pub fn evidence(&self) -> Result<Value> {
         self.guard.recheck()?;
         self.lock.recheck()?;

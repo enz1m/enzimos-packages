@@ -56,6 +56,7 @@ impl DefaultDirectory {
         )
     }
 }
+/// The original loader directory and default files of one root staging publication.
 pub struct Original<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -334,6 +335,11 @@ impl<'a> Original<'a> {
         }
         authorize()
     }
+    /// JSON evidence for the original loader files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -453,6 +459,11 @@ impl<'a> PendingEntry<'a> {
         )?;
         Ok(result)
     }
+    /// JSON evidence for the pending entry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -590,6 +601,11 @@ impl<'a> CommittedEntry<'a> {
         )?;
         Ok(result)
     }
+    /// JSON evidence for the committed entry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -683,6 +699,11 @@ impl<'a> PendingDefaults<'a> {
         )?;
         Ok(result)
     }
+    /// JSON evidence for the committed defaults.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(

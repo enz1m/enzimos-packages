@@ -45,6 +45,7 @@ pub(crate) struct Source<'a, 's> {
     identity: Value,
     uuid: String,
 }
+/// The LUKS source verified before and after unlocking.
 pub struct Verified<'b, 'a, 's> {
     original: &'b Source<'a, 's>,
     mapping: CreatedMapping<'b>,
@@ -162,6 +163,11 @@ impl<'b, 'a, 's> Verified<'b, 'a, 's> {
         )?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

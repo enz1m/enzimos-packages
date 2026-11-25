@@ -10,6 +10,10 @@ use serde_json::{Value, json as value};
 use std::{collections::BTreeMap, os::fd::AsFd, path::Path};
 
 /// Pure binding check; every supplied observation is measured by confirm_locked.
+///
+/// # Errors
+///
+/// Fails when a measurement is missing or inconsistent.
 #[expect(
     clippy::too_many_arguments,
     reason = "Each argument is one independently observed boot fact."
@@ -86,6 +90,12 @@ pub fn observation(
     )
 }
 
+/// Confirm the running generation while `_lock` is held.
+///
+/// # Errors
+///
+/// Fails when a package transaction is active, the boot is not a managed generation, or the record
+/// cannot be written.
 pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
     namespaces::initial()?;
     let snapshot = Snapshot::online()?;

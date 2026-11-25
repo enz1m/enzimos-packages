@@ -12,13 +12,20 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+/// Files that take part in a network share rotation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
+    /// Current share configuration.
     CurrentConfiguration,
+    /// Staged replacement configuration.
     StagedConfiguration,
+    /// Retired configuration.
     RetiredConfiguration,
+    /// Current repository password.
     CurrentPassword,
+    /// Staged repository password.
     StagedPassword,
+    /// Retired repository password.
     RetiredPassword,
     /// The share password; rotation keeps the share and its account.
     SharePassword,
@@ -63,6 +70,7 @@ fn shape(parent: &File) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
+/// One rotation input retained by its identity, never read.
 pub struct Object {
     role: Role,
     parent: File,
@@ -198,6 +206,7 @@ impl Object {
         self.recheck(guard)?;
         Ok(&self.file)
     }
+    /// The input's role.
     pub fn role(&self) -> Role {
         self.role
     }

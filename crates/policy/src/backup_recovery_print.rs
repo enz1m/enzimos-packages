@@ -212,6 +212,11 @@ fn footer(context: *mut c_void, page: u32) -> Result<()> {
     }
     Ok(())
 }
+/// Render the recovery text in `input` as a PDF into `output`.
+///
+/// # Errors
+///
+/// Fails when the descriptors are not private RAM files of the caller or rendering fails.
 #[allow(unsafe_code, reason = "Cairo/Pango rendering ABI.")]
 pub fn render(input: File, output: File) -> Result<Value> {
     let core = libc::rlimit {

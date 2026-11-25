@@ -87,6 +87,7 @@ struct Root {
     identity: Value,
     readonly: bool,
 }
+/// Subvolumes protected by the restored configuration.
 pub struct Protection<'a, 's> {
     control: &'a Control<'a, 's>,
     mounts: &'a Mounts<'s>,
@@ -288,6 +289,11 @@ impl<'a, 's> Protection<'a, 's> {
         unmentioned(&self.configuration, &identities, targets.rows()?)?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

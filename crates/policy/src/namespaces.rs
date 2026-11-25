@@ -13,7 +13,13 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+/// Namespace kinds compared against the initial namespaces.
 pub const KINDS: &[&str] = &["mnt", "pid", "user", "net", "uts", "ipc", "cgroup"];
+/// Release of the running kernel.
+///
+/// # Errors
+///
+/// Fails when uname fails or the release is not UTF-8.
 #[allow(unsafe_code, reason = "Linux syscall ABI (uname).")]
 pub fn kernel_release() -> Result<String> {
     let mut data = std::mem::MaybeUninit::<libc::utsname>::uninit();
@@ -34,6 +40,11 @@ pub fn kernel_release() -> Result<String> {
 fn path(pid: u32, relative: &str) -> PathBuf {
     PathBuf::from(format!("/proc/{pid}/{relative}"))
 }
+/// Device and inode of namespace `kind` of process `pid`.
+///
+/// # Errors
+///
+/// Fails for an unknown kind or when the namespace cannot be read.
 pub fn identity(pid: u32, kind: &str) -> Result<(u64, u64)> {
     require(KINDS.contains(&kind), "unqualified kernel namespace kind")?;
     // Only fixed numeric kernel namespace links are followed here.
@@ -91,6 +102,12 @@ fn ticks(body: &str, pid: u32) -> Result<u64> {
         .parse::<u64>()
         .map_err(|_| Error("namespace process start identity".into()))
 }
+/// Require that the caller is in every initial namespace with the initial user mappings, returning
+/// their identities.
+///
+/// # Errors
+///
+/// Fails in any other namespace or with other ID mappings.
 pub fn initial() -> Result<Vec<(u64, u64)>> {
     operation::root_only()?;
     let own = std::process::id();
@@ -118,18 +135,26 @@ pub fn initial() -> Result<Vec<(u64, u64)>> {
     }
     Ok(identities)
 }
+/// One mount namespace and its mounts, observed through a representative process.
 pub struct View {
+    /// PID through which the namespace was read.
     pub representative: u32,
+    /// Device and inode of the namespace.
     pub identity: (u64, u64),
+    /// SHA-256 of the canonical mount table.
     pub sha: String,
+    /// Mounts of the namespace.
     pub mounts: Vec<mountinfo::Row>,
     // Retain the actual nsfs object: its inode cannot be recycled during use.
     _namespace: File,
 }
+/// Every mount namespace with a live process.
 pub struct Observation {
+    /// Observed namespaces.
     pub views: Vec<View>,
 }
 impl Observation {
+    /// JSON form of the observation.
     pub fn json(&self) -> Value {
         value!({"departed_processes":[],"namespaces":self.views.iter().map(|v| value!({"namespace":format!("mnt:[{}]",v.identity.1),"representative_pid":v.representative,"sha256":v.sha,"mounts":v.mounts.iter().map(|r| value!({"id":r.id,"parent":r.parent,"major":r.major,"minor":r.minor,"root":r.root,"target":r.target,"fstype":r.filesystem,"options":r.options})).collect::<Vec<_>>()})).collect::<Vec<_>>()})
     }
@@ -290,6 +315,11 @@ fn stable<T>(mut sample: impl FnMut() -> std::result::Result<T, ScanError>) -> R
         "complete namespace observation repeatedly crossed an original process exit: {last}"
     )))
 }
+/// Observe every mount namespace, retrying while processes exit mid-sample.
+///
+/// # Errors
+///
+/// Fails unless the caller is Root, or when no stable sample can be taken.
 pub fn observe() -> Result<Observation> {
     operation::root_only()?;
     // Retry only fresh read-only samples. Never retain a partial namespace map,
@@ -300,6 +330,10 @@ pub fn observe() -> Result<Observation> {
 /// Only original thread-pidfd-confirmed death permits thread exclusion; whole
 /// groups are excluded only after original group-pidfd death. An unknown
 /// numeric PID occupant still discards the complete sample.
+///
+/// # Errors
+///
+/// Fails unless the caller is Root, or when no stable sample can be taken.
 pub fn observe_active() -> Result<Observation> {
     operation::root_only()?;
     stable(|| observe_once(Sampling::Active))

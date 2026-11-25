@@ -178,6 +178,7 @@ fn created_row(
         "created snapshot escaped original source inventory",
     )
 }
+/// Every configured backup source and nested subvolume.
 pub struct Inventory<'a, 'g> {
     configuration: &'a dyn SourceScope,
     guard: &'g Guard,
@@ -188,6 +189,11 @@ pub struct Inventory<'a, 'g> {
     reviewed: BTreeSet<String>,
 }
 impl<'a, 'g> Inventory<'a, 'g> {
+    /// Observe the source inventory.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a source aliases another or the subvolume inventory cannot be read.
     pub fn observe(configuration: &'a dyn SourceScope, guard: &'g Guard) -> Result<Self> {
         configuration.recheck()?;
         guard.recheck()?;
@@ -260,6 +266,11 @@ impl<'a, 'g> Inventory<'a, 'g> {
         }
         Ok(result)
     }
+    /// Verify the inventory is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "source-inventory", || self.recheck_fresh())
     }

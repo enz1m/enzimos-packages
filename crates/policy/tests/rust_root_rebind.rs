@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Root rebind planning and application.
 use enzimos_platform::json;
 use enzimos_policy::{
     boot_entries, catalog,

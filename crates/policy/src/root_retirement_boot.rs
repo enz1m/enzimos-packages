@@ -7,6 +7,11 @@ use crate::{
 use enzimos_platform::{Result, files, require};
 use serde_json::{Value, json};
 use std::{os::fd::AsFd, path::Path};
+/// Run the root retirement described by `parameters` as PID 1 on the RAM root.
+///
+/// # Errors
+///
+/// Fails when the parameters differ from the boot, the control is not writable, or a step fails.
 pub fn run(parameters: &Parameters) -> Result<Value> {
     bootstrap::quiet()?;
     crate::recovery_devices::coldplug()?;

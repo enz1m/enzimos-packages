@@ -3,6 +3,11 @@
 use crate::{catalog, identity, recovery_records};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
+/// Validate root rebind record `id`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(
         v,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Generation registry transitions.
 use enzimos_platform::json;
 use enzimos_policy::catalog;
 use serde_json::{Value, json as v};

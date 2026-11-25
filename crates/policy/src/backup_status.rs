@@ -114,6 +114,7 @@ impl PublicFile {
         }
     }
 }
+/// Redacted backup status observed from the configuration files and storage.
 pub struct Status<'a> {
     guard: &'a Guard,
     local: PublicFile,
@@ -121,6 +122,11 @@ pub struct Status<'a> {
     configuration: Option<Configuration>,
 }
 impl<'a> Status<'a> {
+    /// Observe the backup configuration on `guard`'s storage.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a configuration file is unsafe or changes while observed.
     pub fn observe(guard: &'a Guard) -> Result<Self> {
         guard.recheck()?;
         let local = PublicFile::observe("/etc/enzimos/backup.json")?;
@@ -144,6 +150,11 @@ impl<'a> Status<'a> {
         result.recheck()?;
         Ok(result)
     }
+    /// Verify the observed configuration is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.local.recheck()?;
@@ -153,9 +164,15 @@ impl<'a> Status<'a> {
         }
         Ok(())
     }
+    /// Whether a local or network backup is configured.
     pub fn configured(&self) -> bool {
         self.configuration.is_some()
     }
+    /// Whether scheduled backups are enabled.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the opt-in or configuration cannot be read.
     pub fn schedule_enabled(&self) -> Result<bool> {
         self.recheck()?;
         let Some(configuration) = &self.configuration else {
@@ -190,6 +207,11 @@ impl<'a> Status<'a> {
     }
     /// Snapshot display is separate from provisioning, capture and restore authority.
     /// It never mounts a repository, creates runtime state, or reads credential bytes here.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the protected runtime directory is unavailable, the credential binding changed,
+    /// or Restic fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
     pub fn points(&self) -> Result<Value> {
         use crate::{backup_credential::Credential, settings_command::Command};
@@ -263,6 +285,11 @@ impl<'a> Status<'a> {
     }
     /// next_run is separately obtained from the pinned initial PID1 manager.
     /// This display document is never an operation admission or receipt.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the schedule is disabled but `next_run` is given, or the status cannot be
+    /// observed.
     pub fn report(&self, last_backup: Value, next_run: Option<String>) -> Result<Value> {
         self.recheck()?;
         let enabled = self.schedule_enabled()?;
@@ -384,6 +411,11 @@ fn public_configuration(bytes: &[u8]) -> Result<()> {
         "backup status configuration must be an object",
     )
 }
+/// Format a timestamp as UTC with second precision.
+///
+/// # Errors
+///
+/// Fails when the time is out of range.
 pub fn timestamp(seconds: i64, nanoseconds: i64) -> Result<String> {
     require(
         (0..253402300799).contains(&seconds) && (0..1_000_000_000).contains(&nanoseconds),

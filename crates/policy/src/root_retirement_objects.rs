@@ -45,6 +45,7 @@ fn path(value: &str) -> Result<()> {
     }
     Ok(())
 }
+/// One retained retirement target.
 pub struct Original {
     path: String,
     role: String,
@@ -138,6 +139,7 @@ impl Original {
     pub(crate) fn readonly(&self) -> bool {
         self.readonly
     }
+    /// JSON evidence for the target.
     pub fn evidence(&self) -> Value {
         value!({"role":self.role,"identity":self.identity,"readonly":self.readonly,
             "mount_id":self.mount})

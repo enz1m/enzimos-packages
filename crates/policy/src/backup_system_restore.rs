@@ -457,6 +457,10 @@ pub(crate) fn stage_locked(
     stage(&Source::Live(guard), lock, snapshot, uuid, false)
 }
 /// Select actual root filesystem type; complete staging admits RAM only.
+///
+/// # Errors
+///
+/// Fails when the root type is unavailable or a complete restore is requested outside RAM recovery.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
 pub fn stage_auto_locked(
     lock: &files::Lock,

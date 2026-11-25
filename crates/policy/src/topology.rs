@@ -7,20 +7,29 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
+/// Block device number as `(major, minor)`.
 pub type Device = (u32, u32);
 const MAX_NODES: usize = 64;
+/// A block device in the storage topology.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
+    /// Sysfs path of the device.
     pub path: PathBuf,
+    /// Devices this device is built on.
     pub dependencies: Vec<Device>,
+    /// Kernel disk sequence number, when reported.
     pub disk_sequence: Option<u64>,
 }
+/// Block devices reachable from a set of roots.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Graph {
+    /// Devices by number.
     pub nodes: BTreeMap<Device, Node>,
+    /// Devices with no dependencies.
     pub leaves: BTreeSet<Device>,
 }
 impl Graph {
+    /// JSON form of the graph.
     pub fn json(&self) -> Value {
         json!({"nodes":self.nodes.iter().map(|(device,n)|json!({"device":[device.0,device.1],"path":n.path,"dependencies":n.dependencies.iter().map(|d|[d.0,d.1]).collect::<Vec<_>>(),"disk_sequence":n.disk_sequence})).collect::<Vec<_>>(),"leaves":self.leaves.iter().map(|d|[d.0,d.1]).collect::<Vec<_>>()})
     }
@@ -81,6 +90,11 @@ fn directory(path: &Path) -> Result<Vec<std::ffi::OsString>> {
     names.sort();
     Ok(names)
 }
+/// Read one device's node from sysfs.
+///
+/// # Errors
+///
+/// Fails when sysfs changes during the read or the device is an unsupported virtual leaf.
 pub fn kernel_node(d: Device) -> Result<Node> {
     let p = resolve(&Path::new("/sys/dev/block").join(format!("{}:{}", d.0, d.1)))?;
     require(device(&p)? == d, "sysfs block identity changed")?;
@@ -120,6 +134,11 @@ pub fn kernel_node(d: Device) -> Result<Node> {
         disk_sequence: sequence,
     })
 }
+/// Build the graph from `roots` using `reader` for each node.
+///
+/// # Errors
+///
+/// Fails on a cycle, a bound, or an invalid node.
 pub fn walk<F: FnMut(Device) -> Result<Node>>(roots: &[Device], mut reader: F) -> Result<Graph> {
     require(
         !roots.is_empty() && roots.len() <= MAX_NODES,
@@ -165,6 +184,12 @@ pub fn walk<F: FnMut(Device) -> Result<Node>>(roots: &[Device], mut reader: F) -
     }
     Ok(graph)
 }
+/// Observe the topology below `roots` from sysfs.
+///
+/// # Errors
+///
+/// Fails unless the caller is Root in the initial mount namespace, or when the topology changes
+/// during observation.
 pub fn observe(roots: &[Device]) -> Result<Graph> {
     require(
         enzimos_platform::process_identity::effective_uid() == 0,
@@ -223,6 +248,11 @@ pub(crate) fn btrfs_roots(uuid: &str) -> Result<Vec<Device>> {
     )?;
     Ok(roots)
 }
+/// Topology of the mounted Btrfs filesystem `uuid`.
+///
+/// # Errors
+///
+/// Fails when its membership changes during observation.
 pub fn mounted_btrfs(uuid: &str) -> Result<Graph> {
     let roots = btrfs_roots(uuid)?;
     let result = observe(&roots)?;

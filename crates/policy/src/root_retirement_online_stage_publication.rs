@@ -62,6 +62,10 @@ pub(crate) fn publish_default(
 /// Compare the reviewed original default-mode plan before the sole durable
 /// coordinator receipt replacement, then consume the actual staged publication.
 /// A copied expected value supplies only equality, never an actor or replay grant.
+///
+/// # Errors
+///
+/// Fails when the receipt, image or protection changed, or a publication step fails.
 #[expect(
     clippy::too_many_arguments,
     reason = "Each argument is a distinct retained input of this step."
@@ -109,6 +113,10 @@ pub fn prepare_and_publish_default(
 
 /// Measurement includes the actual original firmware descriptors before
 /// the coordinator intent. Metadata can compare this value but cannot mint them.
+///
+/// # Errors
+///
+/// Fails when a retained input changed or `authorize` fails.
 #[expect(
     clippy::too_many_arguments,
     reason = "Each argument is a distinct retained input of this step."
@@ -187,6 +195,10 @@ pub(crate) fn publish_one_shot(
     )
 }
 /// Compare the reviewed original one-shot plan before the sole durable intent.
+///
+/// # Errors
+///
+/// Fails when the receipt, image or protection changed, or a publication step fails.
 #[expect(
     clippy::too_many_arguments,
     reason = "Each argument is a distinct retained input of this step."

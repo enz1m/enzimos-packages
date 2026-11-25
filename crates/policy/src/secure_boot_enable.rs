@@ -196,6 +196,10 @@ fn staged_image(name: &str) -> bool {
 /// it blocked. An unfinished enrollment is abandoned too when the firmware db
 /// is provably unchanged. The caller holds the operation lock taken without
 /// the enablement refusal.
+///
+/// # Errors
+///
+/// Fails when the enablement record or a member cannot be removed safely.
 pub fn abandon_locked(lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;
@@ -542,6 +546,12 @@ impl Mask {
     }
 }
 
+/// Enable owner-signed UKIs while `lock` is held.
+///
+/// # Errors
+///
+/// Fails on a non-UEFI system, when already enabled, or when an entry cannot be signed or
+/// published.
 pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;

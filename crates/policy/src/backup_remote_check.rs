@@ -110,6 +110,11 @@ impl Runtime {
         )
     }
 }
+/// Check network share repository metadata while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the pins differ, `authorize` fails, or Restic fails.
 pub fn check_locked(
     guard: &crate::storage_runtime::Guard,
     lock: &enzimos_platform::files::Lock,

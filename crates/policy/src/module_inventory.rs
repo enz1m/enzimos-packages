@@ -237,6 +237,11 @@ pub(crate) fn generation(inventory: &Value, kernel: &str) -> Result<Value> {
 pub(crate) fn digest(inventory: &Value) -> Result<String> {
     json::fingerprint(inventory)
 }
+/// Open `path` as a directory owned by `owner`.
+///
+/// # Errors
+///
+/// Fails when it is not a safe directory.
 pub fn directory(path: &Path, owner: u32) -> Result<File> {
     files::directory(path, Some(owner))
 }

@@ -13,6 +13,11 @@ fn field<'a>(fields: &'a Fields, key: &str) -> Result<&'a str> {
         .map(String::as_str)
         .ok_or_else(|| Error("incomplete signed boot entry".into()))
 }
+/// Digest binding a signed UKI to its kernel, initramfs, command line and owner certificate.
+///
+/// # Errors
+///
+/// Fails when the command line is empty.
 pub fn digest(kernel: &str, initrd: &str, options: &str, certificate: &str) -> Result<String> {
     identity::sha(kernel)?;
     identity::sha(initrd)?;
@@ -23,6 +28,13 @@ pub fn digest(kernel: &str, initrd: &str, options: &str, certificate: &str) -> R
         &value!({"kernel":kernel,"initrd":initrd,"options":options,"certificate":certificate}),
     )
 }
+/// Rewrite a boot entry to load the signed UKI at `relative`, keeping its source binding as a
+/// comment.
+///
+/// # Errors
+///
+/// Fails when the entry lacks its kernel, initramfs or options, or the rewrite would change its
+/// source binding.
 pub fn rewrite(text: &str, relative: &str) -> Result<String> {
     secure_boot::source_path(relative)?;
     let fields = boot_entries::fields(text, false)?;
@@ -161,6 +173,11 @@ impl Verification {
     pub(crate) fn relative(&self) -> &str {
         &self.binding.relative
     }
+    /// Verify the source files, owner certificate and UKI are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         self.binding.recheck()?;
         self.output.recheck()
@@ -184,6 +201,11 @@ impl Verification {
         self.binding.volume.recheck()
     }
 }
+/// Verify a signed entry's UKI against its sources, or `None` for an unsigned entry.
+///
+/// # Errors
+///
+/// Fails when a signed entry has no owner authority or its binding does not match.
 pub fn retain(fields: &Fields) -> Result<Option<Verification>> {
     if !secure_boot::configured()? {
         require(
@@ -205,6 +227,11 @@ pub fn retain(fields: &Fields) -> Result<Option<Verification>> {
     let output = binding.verify()?;
     Ok(Some(Verification { binding, output }))
 }
+/// [`retain`] without keeping the verification.
+///
+/// # Errors
+///
+/// As [`retain`].
 pub fn verify(fields: &Fields) -> Result<()> {
     retain(fields).map(|_| ())
 }
@@ -260,6 +287,11 @@ impl Wrapped {
             self.created.is_some(),
         )))
     }
+    /// Verify the signed output is still the owned UKI of this publication.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the publication is incomplete or the output changed.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         require(
@@ -290,6 +322,11 @@ impl Wrapped {
         }
         authorize()
     }
+    /// Require that this publication was made for exactly the coordinator entry `expected`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the entry differs or on [`Wrapped::recheck`].
     pub fn require_original_entry(
         &self,
         expected: &str,
@@ -313,10 +350,20 @@ impl Wrapped {
         }
         self.recheck(authorize)
     }
+    /// The rewritten entry text.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Wrapped::recheck`].
     pub fn text(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&str> {
         self.recheck(authorize)?;
         Ok(&self.text)
     }
+    /// JSON evidence for the entry and its signed output.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Wrapped::recheck`].
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<serde_json::Value> {
         self.recheck(authorize)?;
         Ok(
@@ -327,10 +374,21 @@ impl Wrapped {
         )
     }
 }
+/// Sign `text` while `lock` is held and return the rewritten entry.
+///
+/// # Errors
+///
+/// As [`wrap_retained_authorized`].
 pub fn wrap_locked(text: &str, lock: &files::Lock) -> Result<String> {
     let wrapped = wrap_retained_authorized(text, lock, &mut || lock.recheck())?;
     Ok(wrapped.text(&mut || lock.recheck())?.to_owned())
 }
+/// Build or verify the signed UKI for entry `text` and retain the publication.
+///
+/// # Errors
+///
+/// Fails when the entry is invalid, the owner authority is missing, `authorize` fails, or signing
+/// fails.
 pub fn wrap_retained_authorized(
     text: &str,
     lock: &files::Lock,
@@ -455,6 +513,10 @@ fn wrap_inner(
     Ok(result)
 }
 /// Observation and activation resume must never create missing UKIs.
+///
+/// # Errors
+///
+/// Fails when the entry is invalid or its signed UKI is missing or differs.
 pub fn render_existing(text: &str) -> Result<String> {
     operation::root_only()?;
     if !secure_boot::configured()? {

@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 const IMAGE: &str = "/usr/lib/enzimos-backend/enzimos-system-backend";
+/// Descriptors received from the backend for one worker request.
 pub struct Handoff {
     request: Value,
     worker: Value,
@@ -90,6 +91,10 @@ impl Handoff {
     /// The owning service must separately prove its registered PID1 MainPID,
     /// invocation and original cgroup before using these borrowed descriptors.
     /// This constructor never creates scratch files, consumes a password or runs a child.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the sender is not the captured worker or the descriptor count differs.
     pub fn receive(
         message: fd_packet::Message,
         scope: &enzimos_platform::backup_worker_scope::Scope,
@@ -177,6 +182,11 @@ impl Handoff {
         }
         Ok(())
     }
+    /// The received request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the handoff changed.
     pub fn request(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.request)
@@ -188,6 +198,10 @@ impl Handoff {
     }
     /// Only after current PID1 admission and a fresh caller checkpoint may the
     /// worker pass this original descriptor to the closed Restic consumer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request has no consumer input or the handoff changed.
     pub fn consumer_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(if self.request["consumer_input"].is_null() {
@@ -198,6 +212,11 @@ impl Handoff {
                 .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
         })
     }
+    /// The received repository descriptor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the handoff changed.
     pub fn repository_descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.files[6])

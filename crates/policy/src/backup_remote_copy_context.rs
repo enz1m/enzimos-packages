@@ -12,9 +12,12 @@ use std::{
     os::fd::{AsFd, BorrowedFd},
     sync::Arc,
 };
+/// Direction of a copy between the local repository and the network share.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
+    /// Local repository to network share.
     Replicate,
+    /// Network share to local repository.
     Retrieve,
 }
 impl Direction {
@@ -25,6 +28,7 @@ impl Direction {
         }
     }
 }
+/// Inputs of one network share copy.
 pub struct Context<'a, 'g> {
     guard: &'g Guard,
     lock: &'a files::Lock,
@@ -43,6 +47,12 @@ pub struct Context<'a, 'g> {
     original: Value,
 }
 impl<'a, 'g: 'a> Context<'a, 'g> {
+    /// Observe the copy inputs for `snapshot` in `direction`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the storage, destination or share configuration is invalid or changes, or
+    /// `authorize` fails.
     #[expect(
         clippy::too_many_arguments,
         reason = "Each argument is a distinct retained input of this step."
@@ -140,12 +150,22 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
         "remote_authenticated":false,"copy_complete":false,"worker_closed":false,"receipt_complete":false,"scheduler_enabled":false,"automatic_retry":false}),
         )
     }
+    /// Verify the inputs are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         require(
             self.current(authorize)? == self.original,
             "original remote copy context changed; no replacement adoption",
         )
     }
+    /// JSON evidence for the copy context.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the context changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.original)

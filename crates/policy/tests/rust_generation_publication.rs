@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Initramfs module inventory checks for generation publication.
 use enzimos_policy::{generation_stage, initramfs};
 #[test]
 fn native_initrd_inventory_refuses_other_releases_hidden_frames_and_truncation() {

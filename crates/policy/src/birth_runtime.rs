@@ -15,11 +15,17 @@ use std::{
     time::Duration,
 };
 pub(crate) const MAX_RECORDS: usize = 64;
+/// Records by id.
 pub type Records = BTreeMap<String, Value>;
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str> {
     v[k].as_str()
         .ok_or_else(|| Error("birth text field".into()))
 }
+/// Parse the Btrfs subvolume inventory into records by subvolume ID.
+///
+/// # Errors
+///
+/// Fails when the inventory is oversized or a row is malformed or ambiguous.
 pub fn parse_inventory(body: &str) -> Result<Records> {
     require(
         body.len() <= catalog::MAX_CATALOG,
@@ -78,6 +84,11 @@ pub fn parse_inventory(body: &str) -> Result<Records> {
     }
     Ok(records)
 }
+/// Report which birth records are ready, retired or still referenced.
+///
+/// # Errors
+///
+/// Fails when a record is invalid or an object is claimed by more than one transaction.
 pub fn evaluate(records: &Records, inventory: &Records, readonly: &Records) -> Result<Value> {
     let mut resources = serde_json::Map::new();
     let mut pending = Vec::new();
@@ -115,24 +126,34 @@ pub fn evaluate(records: &Records, inventory: &Records, readonly: &Records) -> R
         value!({"resources":resources,"pending":pending,"drift":drift,"retirement_enabled":false,"scope":"exact live identity against new-resource birth records; not boot health or deletion authority"}),
     )
 }
+/// The root-birth registry on the control mount.
 pub struct Store {
     guard: Guard,
     path: PathBuf,
     directory: Option<File>,
     mount: Option<u64>,
+    /// Current records by id.
     pub records: Records,
     original_records: BTreeMap<String, crate::control_record::Retained>,
 }
 impl Store {
+    /// Validated storage configuration.
     pub fn configuration(&self) -> &Value {
         &self.guard.configuration
     }
     pub(crate) fn control(&self) -> &File {
         self.guard.control()
     }
+    /// Mount ID of the control mount.
     pub fn control_mount_id(&self) -> u64 {
         self.guard.control_mount_id()
     }
+    /// Open the registry, creating its folder when `create` is set.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the folder is unsafe, not on the control mount, or holds an unknown or
+    /// interrupted record.
     pub fn open(create: bool) -> Result<Self> {
         let guard = Guard::observe()?;
         let path = Path::new(operation::CONTROL).join("root-births");
@@ -204,6 +225,11 @@ impl Store {
         store.recheck()?;
         Ok(store)
     }
+    /// Verify the registry folder and records are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         require(
@@ -234,6 +260,11 @@ impl Store {
         }
         Ok(())
     }
+    /// JSON evidence for the records, folder and mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Store::recheck`].
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let records = self
@@ -259,6 +290,12 @@ impl Store {
             "fallback creation incomplete; explicit ownership review required",
         )
     }
+    /// Save `record` as `identifier`, creating it when `new` is set.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry is missing, the record is invalid, adopted, reused or changed, or
+    /// the write fails.
     pub fn save(&mut self, identifier: &str, record: Value, new: bool) -> Result<()> {
         self.recheck()?;
         require(self.directory.is_some(), "birth registry missing")?;
@@ -306,6 +343,11 @@ impl Store {
         self.recheck()
     }
 }
+/// Current birth status under the operation lock.
+///
+/// # Errors
+///
+/// Fails when the lock is held or the registry or inventory cannot be read.
 pub fn status() -> Result<Value> {
     let _lock = operation::lock()?;
     let store = Store::open(false)?;
@@ -370,6 +412,11 @@ pub(crate) fn normalize_fstab(body: &str, fs_uuid: &str, name: &str) -> Result<S
     require(roots == 1, "one fallback fstab root required")?;
     Ok(format!("{}\n", lines.join("\n")))
 }
+/// Open a birth object below `path` and report whether it is read-only.
+///
+/// # Errors
+///
+/// Fails when the object is unsafe, on another filesystem, or replaced while observed.
 pub fn observe(path: &Path, relative: &str, fs_uuid: &str) -> Result<(File, Value, bool)> {
     let file = files::directory(path, Some(0))?;
     require(
@@ -393,6 +440,11 @@ pub fn observe(path: &Path, relative: &str, fs_uuid: &str) -> Result<(File, Valu
     )?;
     Ok((file, object, readonly))
 }
+/// Mount the Btrfs top level of the registry's storage.
+///
+/// # Errors
+///
+/// As [`crate::storage_runtime::TopMount::open`].
 pub fn top(store: &Store) -> Result<TopMount> {
     TopMount::open(&store.guard)
 }

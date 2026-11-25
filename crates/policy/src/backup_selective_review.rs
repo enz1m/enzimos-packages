@@ -6,9 +6,19 @@ use crate::{
 };
 use enzimos_platform::{Result, json};
 use serde_json::{Value, json as value};
+/// Review document of a file export for `selection`.
+///
+/// # Errors
+///
+/// Fails when the selection is invalid or its context cannot be observed.
 pub fn observe(guard: &Guard, selection: &Value) -> Result<Value> {
     observe_kind(guard, selection, false)
 }
+/// Review document of a tree export for `selection`.
+///
+/// # Errors
+///
+/// Fails when the selection is invalid or its context cannot be observed.
 pub fn observe_tree(guard: &Guard, selection: &Value) -> Result<Value> {
     observe_kind(guard, selection, true)
 }
@@ -41,6 +51,11 @@ fn observe_kind(guard: &Guard, selection: &Value, tree: bool) -> Result<Value> {
         measure(&context, &mut || Ok(()))
     })
 }
+/// Measure the review document for `context`.
+///
+/// # Errors
+///
+/// Fails when the context changed or `authorize` fails.
 pub fn measure(
     context: &Context<'_, '_>,
     authorize: &mut dyn FnMut() -> Result<()>,

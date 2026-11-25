@@ -245,6 +245,11 @@ pub(crate) fn inventory(
     }
     Ok(seen)
 }
+/// One newc archive member `name` with `body` and `mode`, followed by the trailer.
+///
+/// # Errors
+///
+/// Fails when the member is not a bounded regular file.
 pub fn newc(name: &str, body: &[u8], mode: u32) -> Result<Vec<u8>> {
     let name = path(name)?;
     require(
@@ -305,6 +310,10 @@ pub(crate) fn append(base: &[u8], name: &str, body: &[u8], mode: u32) -> Result<
     Ok(output)
 }
 /// Secret-bearing copies are zeroed, including the intermediate newc archive.
+///
+/// # Errors
+///
+/// Fails when the result would exceed its bound or `base` is invalid.
 pub fn append_private(
     base: &[u8],
     name: &str,

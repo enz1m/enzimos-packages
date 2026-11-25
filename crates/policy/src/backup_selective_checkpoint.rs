@@ -11,6 +11,7 @@ use std::{
     os::fd::{AsFd, AsRawFd},
     time::Duration,
 };
+/// The selective export worker side of the checkpoint exchange.
 pub struct Checkpoint {
     channel: Packet,
     sequence: u64,
@@ -40,6 +41,7 @@ fn acknowledgement(message: &Message, challenge: &Value, caller: u32) -> Result<
     )
 }
 impl Checkpoint {
+    /// Start the exchange on `channel`.
     pub fn new(channel: Packet) -> Self {
         Self {
             channel,
@@ -47,6 +49,12 @@ impl Checkpoint {
             failed: false,
         }
     }
+    /// Ask the caller to approve continuing.
+    ///
+    /// # Errors
+    ///
+    /// Fails after the checkpoint loop ended or exceeded its bound, or when the caller does not
+    /// approve.
     pub fn recheck(&mut self, handoff: &Handoff) -> Result<()> {
         require(
             !self.failed && self.sequence < 10000,
@@ -73,6 +81,10 @@ impl Checkpoint {
     }
     /// Report observation only. Original worker retirement and export publication
     /// remain with the caller; a failed report exchange cannot resend the report.
+    ///
+    /// # Errors
+    ///
+    /// Fails without a fresh approval or when the report cannot be sent.
     pub fn report(
         &mut self,
         handoff: &Handoff,

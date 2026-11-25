@@ -6,11 +6,17 @@ use crate::{
 use enzimos_platform::{Result, json, require};
 use serde_json::{Value, json as value};
 use std::sync::Arc;
+/// The last-copy record of a replication, captured before the worker starts.
 pub struct Replication {
     actor: Arc<()>,
     member: Member,
 }
 impl Replication {
+    /// Capture the last-copy record for `context`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `context` is not a replication or `authorize` fails.
     pub fn prepare(
         context: &Context<'_, '_>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -36,6 +42,10 @@ impl Replication {
         })
     }
     /// The original actor and original target member stay held through readback.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed worker is not this replication's or the record cannot be written.
     pub fn complete(
         mut self,
         closed: Closed<'_>,

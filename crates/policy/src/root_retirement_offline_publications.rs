@@ -82,6 +82,7 @@ struct Material {
     mount: u64,
     artifacts: BTreeMap<String, (Artifact, i32)>,
 }
+/// The ready publications and their loader closure.
 pub struct Publications<'a, 's> {
     control: &'a Control<'a, 's>,
     ledgers: &'a Ledgers<'a, 's>,
@@ -274,6 +275,11 @@ impl<'a, 's> Publications<'a, 's> {
         )?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

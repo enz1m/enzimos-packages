@@ -14,6 +14,7 @@ use crate::{
 use enzimos_platform::{Result, files, json, require};
 use serde_json::{Value, json as value};
 
+/// The prepared root's protected targets for online staging.
 pub struct Protected<'a> {
     references: &'a Observation<'a>,
     inventory: &'a Inventory<'a>,
@@ -24,6 +25,11 @@ pub struct Protected<'a> {
     namespaces: crate::namespaces::Observation,
 }
 impl<'a> Protected<'a> {
+    /// Observe the protected targets of the receipt in `journal`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when protection is incomplete or `authorize` fails.
     #[expect(
         clippy::too_many_arguments,
         reason = "Each argument is a distinct retained input of this step."
@@ -376,6 +382,10 @@ impl<'a> Protected<'a> {
     /// Reviewed staging comparison from the actual original image, encrypted
     /// source, receipt, references and complete protected boot/target context.
     /// Returned JSON is comparison data and cannot create any mutation actor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn stage_measurement(
         &self,
         image: &crate::root_retirement_online_image::Image<'_>,
@@ -408,6 +418,11 @@ impl<'a> Protected<'a> {
         self.recheck(authorize)?;
         Ok(result)
     }
+    /// The prepared receipt record.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn record(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.record)

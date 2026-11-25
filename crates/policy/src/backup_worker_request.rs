@@ -5,7 +5,13 @@ use enzimos_platform::{Error, Result, json, local_restic::Task, require};
 use serde_json::Value;
 pub(crate) const LIMIT: usize = 65536;
 pub(crate) const REQUEST_SCHEMA: u64 = 3;
+/// Schema of worker request frames.
 pub const FRAME_SCHEMA: u64 = 1;
+/// Require a fresh worker identifier.
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn id(id: &str) -> Result<()> {
     require(
         id.len() == 32
@@ -283,6 +289,11 @@ pub(crate) fn consumer(v: &Value, id: &str, length: u64) -> Result<()> {
         "consumer input directories/file must share original private tmpfs",
     )
 }
+/// Require that a request carrying a sealed input also carries its consumer descriptor.
+///
+/// # Errors
+///
+/// Fails when the request is invalid or the descriptor is missing.
 pub fn executable(v: &Value) -> Result<()> {
     request(v)?;
     require(
@@ -290,6 +301,11 @@ pub fn executable(v: &Value) -> Result<()> {
         "prepared input request has no original consumer descriptor",
     )
 }
+/// Number of descriptors the request's handoff carries.
+///
+/// # Errors
+///
+/// Fails when the request is invalid.
 pub fn descriptors(v: &Value) -> Result<usize> {
     request(v)?;
     Ok(9 + usize::from(!v["outer"].is_null())

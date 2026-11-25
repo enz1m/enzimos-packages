@@ -44,6 +44,7 @@ fn original(
     )?;
     crate::backup_publication_identity::recheck(folder, "password", file, identity, mount, owner)
 }
+/// A private tmpfs copy of the sealed input for the authentication consumer.
 pub struct Temporary<'i> {
     input: &'i Validated,
     parent: File,
@@ -58,6 +59,11 @@ pub struct Temporary<'i> {
 impl<'i> Temporary<'i> {
     /// The consumer must have its own durable intent and original caller/mount
     /// proof before this boundary. Failures retain unknown input for inspection.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the identifier is invalid, the tmpfs is not the original one, a folder exists, or
+    /// `preflight` fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs, mkdirat, openat).")]
     pub fn create(
         id: &str,
@@ -176,6 +182,11 @@ impl<'i> Temporary<'i> {
             0,
         )
     }
+    /// The temporary input file.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the temporary changed.
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.file)
@@ -197,6 +208,10 @@ impl<'i> Temporary<'i> {
     }
     /// Explicitly retire this known original input after the owned consumer and
     /// all its descendants have exited. Drop never guesses that execution ended.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed scope is not the worker's or the temporary cannot be removed.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fsync, unlinkat).")]
     pub fn retire(
         self,

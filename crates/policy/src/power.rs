@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Critical-battery action in the UPower configuration.
 use crate::{operation, settings_file::Config};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
@@ -170,6 +171,11 @@ fn capabilities() -> BTreeSet<String> {
     }
     available
 }
+/// The configured critical-battery action and the supported actions.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be read.
 pub fn policy() -> Result<Value> {
     let (_, action, risk, checksum) = read()?;
     let available = capabilities();
@@ -177,6 +183,12 @@ pub fn policy() -> Result<Value> {
         value!({"configured_action":ACTIONS.iter().find(|a|a.1==action).ok_or_else(|| enzimos_platform::Error("missing element".into()))?.0,"risky_action_allowed":risk,"supported_actions":ACTIONS.iter().filter(|a|!matches!(a.0,"suspend"|"hibernate")||available.contains(a.0)).map(|a|a.0).collect::<Vec<_>>(),"risk_acknowledgement_required":["ignore","suspend"],"config_sha256":checksum,"effective_after":"next-boot","owner":"UPower"}),
     )
 }
+/// Set the critical-battery `action`, with `risk` acknowledging a risky choice.
+///
+/// # Errors
+///
+/// Fails for unsupported actions, unacknowledged risk, a changed configuration, or failed
+/// authorization.
 pub fn set_action<F: FnMut() -> Result<()>>(
     action: &str,
     risk: bool,
@@ -211,6 +223,11 @@ pub fn set_action<F: FnMut() -> Result<()>>(
         value!({"configured_action":action,"risky_action_allowed":risk,"reboot_required":true,"applied_live":false,"owner":"UPower"}),
     )
 }
+/// The current observation under the operation lock.
+///
+/// # Errors
+///
+/// Fails when the lock is held or the observation fails.
 pub fn plan() -> Result<Value> {
     let lock = operation::lock()?;
     let body = observation()?;
@@ -218,6 +235,10 @@ pub fn plan() -> Result<Value> {
     Ok(body)
 }
 /// Read-only binding also used inside the original setter's existing lock.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be read.
 pub fn observation() -> Result<Value> {
     let config = Config::open(CONFIG, 65536)?;
     let state = policy()?;

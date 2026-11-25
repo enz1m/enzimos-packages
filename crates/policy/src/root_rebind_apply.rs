@@ -10,12 +10,47 @@ use serde_json::{Value, json as value};
 /// Internal runtime adapters must retain storage, authority, root lineage and boot artifacts.
 /// No callback, executable or filesystem path is accepted from IPC.
 pub trait Adapter {
+    /// Verify the journal still matches the system.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the context changed.
     fn verify(&mut self, journal: &Value) -> Result<()>;
+    /// Current loader files by name.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a file cannot be read.
     fn files(&mut self) -> Result<Texts>;
+    /// Current generation registry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry cannot be read.
     fn catalog(&mut self) -> Result<Value>;
+    /// Write loader file `name`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the write fails.
     fn write_file(&mut self, name: &str, body: &str) -> Result<()>;
+    /// Write the generation registry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the write fails.
     fn write_catalog(&mut self, body: &Value) -> Result<()>;
+    /// Record that the journal completed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record cannot be written.
     fn finish(&mut self, journal: &Value) -> Result<()>;
+    /// Check point called before each write.
+    ///
+    /// # Errors
+    ///
+    /// Fails to stop before the write.
     fn boundary(&mut self, _name: &str, _journal: &Value) -> Result<()> {
         Ok(())
     }
@@ -38,6 +73,12 @@ fn observed(adapter: &mut impl Adapter, journal: &Value) -> Result<Texts> {
     )?;
     Ok(actual)
 }
+/// Apply the boot redirection described by `journal`, resuming from whatever part already matches.
+///
+/// # Errors
+///
+/// Fails when the journal is invalid, the current files match neither the before nor the after
+/// state, or a write fails.
 pub fn apply(journal: &Value, adapter: &mut impl Adapter) -> Result<Value> {
     let id = crate::recovery_records::text(journal, "id")?;
     root_rebind_record::validate(journal, id)?;

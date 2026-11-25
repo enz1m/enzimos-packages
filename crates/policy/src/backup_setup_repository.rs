@@ -3,12 +3,18 @@
 use enzimos_platform::{Result, files, require};
 use serde_json::Value;
 use std::{fs::File, path::Path};
+/// The repository directory on the owned setup mount.
 pub struct Repository {
     file: File,
     binding: Value,
     header: Option<crate::backup_repository_header::Header>,
 }
 impl Repository {
+    /// Retain the existing repository directory on `scope`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the directory is missing or unsafe.
     pub fn adopt(scope: &crate::backup_setup_mount::Scope<'_, '_, '_>) -> Result<Self> {
         scope.recheck()?;
         let root = File::from(scope.descriptor()?.try_clone_to_owned()?);
@@ -25,6 +31,11 @@ impl Repository {
     }
     /// Initial directory creation is entered once under the original durable
     /// prepared outer context. Existing encrypted/nonempty repositories are refused.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan is not an initialization or the repository cannot be created exactly as
+    /// prepared.
     pub fn initialize(
         scope: &crate::backup_setup_mount::Scope<'_, '_, '_>,
         context: &crate::backup_setup_context::Prepared<'_, '_, '_, '_>,
@@ -71,6 +82,11 @@ impl Repository {
         }
         Ok(())
     }
+    /// The repository directory while `scope` is live.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the scope or directory changed.
     pub fn descriptor(
         &self,
         scope: &crate::backup_setup_mount::Scope<'_, '_, '_>,

@@ -39,10 +39,20 @@ pub struct WorkflowObservation {
     header: Option<(crate::backup_repository_header::Header, File)>,
 }
 impl WorkflowObservation {
+    /// Descriptor of the retained repository header, if the workflow read one.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the header changed.
     pub fn header_descriptor(&self) -> Result<Option<&File>> {
         self.value()?;
         Ok(self.header.as_ref().map(|(header, _)| header.descriptor()))
     }
+    /// The workflow report.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained header changed.
     pub fn value(&self) -> Result<&Value> {
         if let Some((header, repository)) = &self.header {
             header.recheck(repository)?;
@@ -77,6 +87,7 @@ fn observed(task: Task, code: Option<i32>, stdout: &[u8]) -> Result<Observed> {
         Observed::MetadataChecked
     })
 }
+/// A private tmpfs job directory with the pinned Restic image for one backup job.
 pub struct Runtime {
     image: Command,
     path: PathBuf,
@@ -115,6 +126,11 @@ pub struct Image {
     command: Command,
 }
 impl Image {
+    /// Open and pin the installed Restic image.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the executable is missing or unsafe.
     pub fn open() -> Result<Self> {
         crate::namespaces::initial()?;
         Ok(Self {
@@ -124,6 +140,11 @@ impl Image {
     pub(crate) fn evidence(&self) -> Result<Value> {
         self.command.evidence()
     }
+    /// The pinned image file.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the image changed.
     pub fn descriptor(&self) -> Result<&File> {
         self.command.descriptor()
     }
@@ -239,6 +260,11 @@ impl Runtime {
     }
     /// Selected repository output only; original whole-worker closure and private
     /// filesystem publication remain with the caller. No historical metadata is applied.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input or the consumer image differs from the original handoff, `boundary`
+    /// fails, or a Restic command fails or is uncertain. Commands are never replayed.
     pub fn selective_export(
         &self,
         handoff: &crate::backup_selective_handoff::Handoff,
@@ -323,6 +349,11 @@ impl Runtime {
     }
     /// Five fixed commands, admitted original handoff and fresh checkpoints.
     /// This observes keys and metadata without completing the enrollment.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input or the consumer image differs from the original handoff, `boundary`
+    /// fails, or a Restic command fails or is uncertain. Commands are never replayed.
     pub fn credential_review(
         &self,
         handoff: &crate::backup_credential_handoff::Handoff,
@@ -446,6 +477,12 @@ impl Runtime {
             pin,
         })
     }
+    /// Copy a snapshot between the local repository and the network share as the handoff describes.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input or the consumer image differs from the original handoff, `boundary`
+    /// fails, or a Restic command fails or is uncertain. Commands are never replayed.
     pub fn remote_copy<'h>(
         &self,
         handoff: &'h crate::backup_remote_handoff::Handoff<'_>,
@@ -583,6 +620,12 @@ impl Runtime {
             intent,
         )
     }
+    /// Create the private job directory for job `id` on the original tmpfs.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `preflight` fails, the directories are not on the original tmpfs, or the job
+    /// directory exists.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fstatfs).")]
     pub fn create(id: &str, preflight: &mut dyn FnMut() -> Result<()>) -> Result<Self> {
         crate::namespaces::initial()?;
@@ -686,12 +729,22 @@ impl Runtime {
             "original native backup scratch changed",
         )
     }
+    /// JSON evidence for the pinned Restic image.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the image changed.
     pub fn image_evidence(&self) -> Result<Value> {
         self.recheck()?;
         self.image.evidence()
     }
     /// One original service performs all fixed provision steps. The original
     /// encrypted header is retained across child boundaries and idle intervals.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input or the consumer image differs from the original handoff, `boundary`
+    /// fails, or a Restic command fails or is uncertain. Commands are never replayed.
     pub fn workflow(
         &self,
         work: crate::backup_worker_task::Work,

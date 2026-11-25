@@ -6,6 +6,11 @@ use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
 pub(crate) const MAX_RECORDS: usize = 32;
+/// Validate a retirement intent document.
+///
+/// # Errors
+///
+/// Fails when a field, step or digest is invalid.
 pub fn intent(v: &Value) -> Result<()> {
     json::fields(
         v,
@@ -74,6 +79,11 @@ pub fn intent(v: &Value) -> Result<()> {
         "retirement requires resource removal and terminal tombstone",
     )
 }
+/// Validate retirement record `id`.
+///
+/// # Errors
+///
+/// Fails when the intent, phase or progress is invalid or inconsistent.
 pub fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(v, "intent phase next_step inflight")?;
     intent(&v["intent"])?;
@@ -109,10 +119,35 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
 /// Implemented only by trusted native code. save must persist and fsync before
 /// returning; apply must use anchored objects under its exclusive execution barrier.
 pub trait Executor {
+    /// Current records by id.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the records cannot be read.
     fn records(&mut self) -> Result<Records>;
+    /// Durably save `next` over `previous`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record cannot be written.
     fn save(&mut self, next: &Value, previous: Option<&Value>) -> Result<()>;
+    /// Verify the intent still matches the system.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the context changed.
     fn verify_context(&mut self, intent: &Value) -> Result<()>;
+    /// Current state of a step's object.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the object cannot be observed.
     fn observe(&mut self, step: &Value) -> Result<String>;
+    /// Perform one step.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the step cannot be applied.
     fn apply(&mut self, step: &Value) -> Result<()>;
 }
 fn unchanged(executor: &mut impl Executor, id: &str, record: &Value) -> Result<()> {
@@ -132,6 +167,12 @@ fn checkpoint(
     executor.save(next, Some(previous))?;
     unchanged(executor, id, next)
 }
+/// Record and run a new retirement `intended`.
+///
+/// # Errors
+///
+/// Fails when the id was used, the registry is full, another retirement is incomplete, or a step
+/// fails.
 pub fn start(executor: &mut impl Executor, intended: &Value) -> Result<Value> {
     intent(intended)?;
     let id = records::text(intended, "id")?;
@@ -153,6 +194,11 @@ pub fn start(executor: &mut impl Executor, intended: &Value) -> Result<Value> {
     unchanged(executor, id, &record)?;
     Ok(record)
 }
+/// Resume retirement `id` from its recorded progress.
+///
+/// # Errors
+///
+/// Fails when the record is missing, the context changed, or a step fails.
 pub fn replay(executor: &mut impl Executor, id: &str) -> Result<Value> {
     identity::safe_id(id)?;
     let mut record = executor

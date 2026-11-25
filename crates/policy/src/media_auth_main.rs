@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Confined verifier of recovery media account passwords.
 use std::io::Read;
 use zeroize::Zeroizing;
 fn run() -> enzimos_platform::Result<()> {

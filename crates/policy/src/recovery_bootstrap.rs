@@ -91,6 +91,11 @@ fn mount(
         &format!("independent {kind} filesystem mount failed"),
     )
 }
+/// Set up the independent RAM root as PID 1: mounts, console and limits.
+///
+/// # Errors
+///
+/// Fails when the RAM root is missing or unsafe, or a mount or setup step fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (dup2, fchmod, open).")]
 pub fn initialize() -> Result<()> {
     direct_ram_pid1()?;
@@ -166,9 +171,19 @@ pub fn initialize() -> Result<()> {
     operation::boot_id()?;
     Ok(())
 }
+/// Sync and power off.
+///
+/// # Errors
+///
+/// As [`reboot`].
 pub fn power_off() -> Result<()> {
     reboot(true)
 }
+/// Sync and boot the loaded recovery kernel.
+///
+/// # Errors
+///
+/// Fails when the kernel declines the handoff.
 #[allow(unsafe_code, reason = "Linux syscall ABI (reboot, sync).")]
 pub fn handoff_reboot() -> Result<()> {
     quiet()?;
@@ -180,6 +195,11 @@ pub fn handoff_reboot() -> Result<()> {
         "kernel declined loaded recovery handoff",
     )
 }
+/// Sync and reboot, or power off when `poweroff` is set.
+///
+/// # Errors
+///
+/// Fails when the kernel refuses.
 #[allow(unsafe_code, reason = "Linux syscall ABI (reboot, sync).")]
 pub fn reboot(poweroff: bool) -> Result<()> {
     direct_ram_pid1()?;

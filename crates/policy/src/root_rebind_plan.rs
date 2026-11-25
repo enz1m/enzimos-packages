@@ -4,7 +4,9 @@ use crate::{boot_entries, boot_options, catalog, identity, recovery_activation, 
 use enzimos_platform::{Error, Result, require};
 use serde_json::{Value, json as value};
 use std::collections::{BTreeMap, BTreeSet};
+/// Loader files by name.
 pub type Texts = BTreeMap<String, String>;
+/// Boot entries owned by recovery images and activations.
 pub struct RecoveryOwners {
     uefi: BTreeSet<String>,
     bios: BTreeSet<String>,
@@ -12,6 +14,10 @@ pub struct RecoveryOwners {
 }
 impl RecoveryOwners {
     /// Runtime callers must also verify every ready image's actual published artifacts.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an owner is unfinished, duplicated, or exceeds the bound.
     pub fn from_records(
         images: &BTreeMap<String, Value>,
         activations: &BTreeMap<String, Value>,
@@ -146,12 +152,20 @@ fn pair(uefi: &str, bios: &str, kernel: &str, initrd: &str) -> Result<()> {
         "rebind loader resource bindings differ",
     )
 }
+/// A boot redirection from one root to another.
 pub struct Plan {
+    /// Generation registry after the redirection.
     pub catalog: Value,
+    /// New loader file contents by name.
     pub replacements: Texts,
+    /// Generations whose entries change.
     pub affected: Vec<String>,
 }
 /// The wrapping callback is an internal signing adapter, never an IPC parameter.
+///
+/// # Errors
+///
+/// Fails when the registry or files are invalid, an owner is not inventoried, or `wrap` fails.
 pub fn redirect<F: FnMut(&str) -> Result<String>>(
     before: &Value,
     source: &Value,

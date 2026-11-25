@@ -230,6 +230,11 @@ impl<'g> Owned<'g> {
         original.recheck()?;
         Ok(Self { original })
     }
+    /// Run the approved delivery while `lock` is held.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the grant changed, `authorize` fails, or the delivery fails.
     pub fn deliver(
         self,
         lock: &files::Lock,
@@ -239,9 +244,19 @@ impl<'g> Owned<'g> {
         deliver_scope(self.original, &expected, lock, &mut || authorize())
     }
 }
+/// The delivery observation for request `body`.
+///
+/// # Errors
+///
+/// Fails when the request is invalid or the grant cannot be read.
 pub fn observation(body: &Value) -> Result<Value> {
     Scope::open(body)?.view()
 }
+/// Deliver the grant in request `body` if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the request or grant changed, `authorize` fails, or the delivery fails.
 pub fn deliver<F: FnMut() -> Result<()>>(
     body: &Value,
     expected: &Value,

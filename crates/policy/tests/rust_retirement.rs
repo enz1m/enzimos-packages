@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! The retirement journal engine resumes without repeating mutations.
 use enzimos_platform::{Error, Result, json as document};
 use enzimos_policy::{
     recovery_journal::Records,

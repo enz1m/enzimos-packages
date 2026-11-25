@@ -40,6 +40,7 @@ fn named(path: &str) -> Result<File> {
         ),
     )
 }
+/// Descriptors received from the backend for one network share copy.
 pub struct Handoff<'s> {
     scope: &'s Scope,
     request: Value,
@@ -58,6 +59,11 @@ pub struct Handoff<'s> {
     restic: crate::backup_restic_runtime::Image,
 }
 impl<'s> Handoff<'s> {
+    /// Receive the handoff from `message` for the worker in `scope`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the sender is not the original worker or the descriptors differ.
     pub fn receive(message: Message, scope: &'s Scope) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -419,6 +425,11 @@ impl<'s> Handoff<'s> {
             &self.source,
         )
     }
+    /// The received request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the handoff changed.
     pub fn request(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.request)

@@ -215,6 +215,11 @@ impl<'g> Snapshot<'g> {
     }
 }
 
+/// Status of generation pins while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the pin registry cannot be read.
 pub fn status_locked(lock: &files::Lock) -> Result<Value> {
     crate::operation::root_only()?;
     crate::namespaces::initial()?;
@@ -226,6 +231,11 @@ pub fn status_locked(lock: &files::Lock) -> Result<Value> {
     Ok(value!({"pins":data["pins"],"removal_available":false,"deletion_authorized":false}))
 }
 
+/// Pin `generation` as `id` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the generation is not ready or the pin cannot be written.
 pub fn pin_locked(id: &str, generation: &str, lock: &files::Lock) -> Result<Value> {
     identity::safe_id(id)?;
     identity::safe_id(generation)?;

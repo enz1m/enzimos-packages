@@ -42,6 +42,7 @@ fn names(directory: &File) -> Result<BTreeSet<String>> {
         })
         .collect()
 }
+/// The running native image on the independent RAM root.
 pub struct Original<'a> {
     scope: &'a Scope,
     directory: File,
@@ -232,6 +233,11 @@ impl<'a> Original<'a> {
         )?;
         self.scope.recheck()
     }
+    /// Require that `record` names this image.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record differs.
     pub fn matches_record(&self, record: &Value) -> Result<()> {
         self.recheck()?;
         crate::root_retirement_record::validate(record, records::text(record, "id")?)?;
@@ -241,6 +247,11 @@ impl<'a> Original<'a> {
         )?;
         self.recheck()
     }
+    /// JSON evidence for the running image.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

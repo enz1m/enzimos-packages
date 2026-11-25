@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Update worker records require an owned handoff and never replay.
 use enzimos_platform::json;
 use enzimos_policy::update_worker_record as record;
 use serde_json::{Value, json as value};

@@ -15,12 +15,16 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+/// Fixed filesystem labels of installer answer volumes.
 #[derive(Clone, Copy)]
 pub enum Label {
+    /// Unattended installation answers.
     Answers,
+    /// Test-check answers.
     Testcheck,
 }
 impl Label {
+    /// The filesystem label.
     pub fn name(self) -> &'static str {
         match self {
             Self::Answers => "ENZIMOS_ANSWERS",
@@ -181,6 +185,7 @@ fn inventory(vendor: &Command) -> Result<Vec<Value>> {
         Duration::from_secs(15),
     )?)
 }
+/// A block device carrying an answer label, retained with its block and signature identity.
 pub struct Device {
     label: Label,
     path: PathBuf,
@@ -196,6 +201,11 @@ pub struct Device {
     blkid: Command,
 }
 impl Device {
+    /// Find and retain the single device labelled `label`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when no single suitable device carries the label or its node cannot be retained.
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn observe(label: Label) -> Result<Self> {
         crate::namespaces::initial()?;
@@ -259,6 +269,11 @@ impl Device {
         this.recheck(false)?;
         Ok(this)
     }
+    /// Verify the device, its media and its filesystem signature are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the device changed or the label is no longer unique.
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn recheck(&self, mounted: bool) -> Result<()> {
         crate::namespaces::initial()?;
@@ -299,29 +314,59 @@ impl Device {
             "original answer volume signature or unique selection changed",
         )
     }
+    /// The retained device descriptor.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Device::recheck`].
     pub fn descriptor(&self, mounted: bool) -> Result<BorrowedFd<'_>> {
         self.recheck(mounted)?;
         Ok(self.file.as_fd())
     }
+    /// Filesystem type of the device.
+    ///
+    /// # Panics
+    ///
+    /// Never for a retained device, whose filesystem type is checked on admission.
     pub fn filesystem(&self) -> &str {
         self.row["fstype"]
             .as_str()
             .expect("devices are admitted only with a known filesystem type")
     }
+    /// Filesystem UUID of the device.
+    ///
+    /// # Panics
+    ///
+    /// Never for a retained device, whose UUID is checked on admission.
     pub fn uuid(&self) -> &str {
         self.row["uuid"]
             .as_str()
             .expect("devices are admitted only with a UUID")
     }
+    /// Device number of the device.
+    ///
+    /// # Panics
+    ///
+    /// Never for a retained device, whose device number is checked on admission.
     pub fn number(&self) -> topology::Device {
         number(&self.row["maj:min"]).expect("devices are admitted only with a valid maj:min")
     }
+    /// Require that the device shares no disk with `other`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the topologies overlap.
     pub fn independent(&self, other: &topology::Graph) -> Result<()> {
         require(
             self.graph.leaves.is_disjoint(&other.leaves),
             "answer volume overlaps installation medium or target",
         )
     }
+    /// JSON evidence for the device, its node and signature.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Device::recheck`].
     pub fn evidence(&self, mounted: bool) -> Result<Value> {
         self.recheck(mounted)?;
         Ok(

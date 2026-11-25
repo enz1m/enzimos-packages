@@ -90,6 +90,7 @@ pub(crate) fn preflight(guard: &Guard, id: &str) -> Result<()> {
     }
     guard.recheck()
 }
+/// A private stage receiving one selective export.
 pub struct Staging<'r, 'a, 'g> {
     context: &'r Context<'a, 'g>,
     original: Value,
@@ -103,6 +104,10 @@ pub struct Staging<'r, 'a, 'g> {
 impl<'r, 'a, 'g> Staging<'r, 'a, 'g> {
     /// Durable selected ID fence exists before starting the worker. An observing
     /// record has no metadata/bytes or completion authority and is never adopted.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the export registry or stage is unsafe or exists, or `authorize` fails.
     pub fn enter(
         context: &'r Context<'a, 'g>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -189,6 +194,11 @@ impl<'r, 'a, 'g> Staging<'r, 'a, 'g> {
             "unexpected private export stage membership",
         )
     }
+    /// Publish the closed worker's output into the stage as the completed export.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the stage already advanced, the content changed, or `authorize` fails.
     pub fn publish(
         mut self,
         closed: Closed<'g>,
@@ -252,6 +262,11 @@ pub struct Completed<'r, 'a, 'g> {
     epoch: files::FileIdentity,
 }
 impl Completed<'_, '_, '_> {
+    /// Verify the completed export is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record or content changed, or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.stage.recheck(authorize)?;
         self.closed.require_context(self.stage.context, authorize)?;
@@ -280,6 +295,11 @@ impl Completed<'_, '_, '_> {
         )?;
         self.stage.recheck(authorize)
     }
+    /// Result document of the completed export.
+    ///
+    /// # Errors
+    ///
+    /// Fails on recheck.
     pub fn result(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let r = &self.stage.value;
@@ -312,6 +332,11 @@ impl Completed<'_, '_, '_> {
         self.recheck(authorize)?;
         Ok(export)
     }
+    /// Result document of the completed export for the system service.
+    ///
+    /// # Errors
+    ///
+    /// Fails on recheck.
     pub fn system_result(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         let result = self.result(authorize)?;
         let mut projected = value!({"id":result["id"],"status":result["status"],"bytes":result["bytes"],"sha256":result["sha256"]});

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
+//! Validation of home and backup history settings.
 use enzimos_platform::{Result, json, require};
 use serde_json::Value;
+/// Home retention settings and their Snapper configuration keys.
 pub const HOME_KEYS: &[(&str, &str)] = &[
     ("hourly", "TIMELINE_LIMIT_HOURLY"),
     ("daily", "TIMELINE_LIMIT_DAILY"),
@@ -9,6 +11,11 @@ pub const HOME_KEYS: &[(&str, &str)] = &[
     ("yearly", "TIMELINE_LIMIT_YEARLY"),
     ("manual", "NUMBER_LIMIT"),
 ];
+/// Validate home retention settings.
+///
+/// # Errors
+///
+/// Fails when a field is missing or out of bounds.
 pub fn validate_home(v: &Value) -> Result<()> {
     json::fields(v, "hourly daily weekly monthly yearly manual")?;
     let mut sum = 0;
@@ -28,9 +35,19 @@ pub fn validate_home(v: &Value) -> Result<()> {
         "empty or excessive timeline retention",
     )
 }
+/// Validate backup retention settings.
+///
+/// # Errors
+///
+/// Fails when a field is missing or out of bounds.
 pub fn validate_backup(v: &Value) -> Result<()> {
     crate::backup_retention::validate(v)
 }
+/// Snapper arguments that apply home retention settings `v`.
+///
+/// # Errors
+///
+/// Fails when `v` is invalid.
 pub fn home_arguments(v: &Value) -> Result<Vec<String>> {
     validate_home(v)?;
     let mut args = vec![

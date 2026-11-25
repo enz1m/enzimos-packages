@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Storage mount admission refuses shadowed, foreign and read-only mounts.
 use enzimos_platform::mountinfo;
 use enzimos_policy::storage_runtime;
 #[test]

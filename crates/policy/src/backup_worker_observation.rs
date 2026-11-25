@@ -8,6 +8,7 @@ use enzimos_platform::{
 };
 use serde_json::Value;
 use std::{fs::File, os::fd::AsFd, path::Path, time::Duration};
+/// A report received from the original backup worker.
 pub struct Observation {
     request_sha256: String,
     worker: Value,
@@ -15,10 +16,18 @@ pub struct Observation {
     report: Value,
     header: Option<File>,
 }
+/// A packet received from the worker.
 pub enum Incoming {
+    /// A checkpoint challenge to answer.
     Challenge(Message),
+    /// The worker's report.
     Observation(Observation),
 }
+/// Receive the next challenge or report for `request` at `sequence` from the worker in `scope`.
+///
+/// # Errors
+///
+/// Fails when the sender is not the original worker, or the packet is malformed or out of sequence.
 pub fn receive(
     channel: &Packet,
     scope: &Scope,
@@ -110,11 +119,21 @@ impl Observation {
             enzimos_platform::Error("original reported header descriptor required".into())
         })
     }
+    /// The report nonce.
+    ///
+    /// # Panics
+    ///
+    /// Never for a received report, whose nonce is checked on receipt.
     pub fn nonce(&self) -> &str {
         self.report["nonce"]
             .as_str()
             .expect("reports are admitted only with a valid nonce")
     }
+    /// JSON receipt binding the report to its request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the report cannot be canonicalized.
     pub fn receipt(&self) -> Result<Value> {
         Ok(
             serde_json::json!({"schema":2,"id":self.report["id"],"request_sha256":self.report["request_sha256"],
@@ -125,6 +144,11 @@ impl Observation {
     /// Closing this original public descriptor grants no pin/enrollment authority.
     /// It must precede normal unmount; the completed worker/mount proofs remain
     /// separately required for durable completion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the header was already retired or differs from the owned mount, or it cannot be
+    /// closed.
     pub fn retire_header(
         &mut self,
         request: &Value,

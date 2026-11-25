@@ -235,6 +235,11 @@ impl Adapter for Runtime<'_> {
         self.durable()
     }
 }
+/// Prepare root rebind `id` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when another rebind is unfinished or preparation fails.
 pub fn prepare_locked(id: &str, lock: &files::Lock) -> Result<Value> {
     prepare_authorized(id, lock, &mut || lock.recheck())
 }
@@ -358,6 +363,11 @@ pub(crate) fn prepare_authorized(
     };
     root_rebind_apply::apply(&journal, &mut runtime)
 }
+/// Resume explicit boot-only rebind `id`.
+///
+/// # Errors
+///
+/// Fails when the record is missing, another rebind needs review, or a step fails.
 pub fn resume_locked(id: &str, _lock: &files::Lock) -> Result<Value> {
     let mut authorize = || _lock.recheck();
     crate::namespaces::initial()?;
@@ -398,6 +408,11 @@ pub fn resume_locked(id: &str, _lock: &files::Lock) -> Result<Value> {
     };
     root_rebind_apply::apply(&journal, &mut runtime)
 }
+/// Status of the rebind journal.
+///
+/// # Errors
+///
+/// Fails when the journal cannot be read or belongs to another filesystem.
 pub fn status() -> Result<Value> {
     crate::namespaces::initial()?;
     let guard = crate::storage_runtime::Guard::observe()?;

@@ -198,6 +198,11 @@ fn source(file: &File) -> Result<files::FileIdentity> {
     )?;
     Ok(files::identity(&m))
 }
+/// Save the sealed recovery file `input` as `name` in `directory`.
+///
+/// # Errors
+///
+/// Fails when the name or filesystem is unsuitable, the input changed, or the write fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat, sendfile).")]
 pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Result<Value> {
     crate::identity::uuid(backup_uuid)?;

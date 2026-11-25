@@ -358,6 +358,7 @@ impl Stage {
         })
     }
 }
+/// A signed boot artifact published by this process.
 /// Only actual copied output plus its original completed receipt creates this actor.
 pub struct Signed {
     path: PathBuf,
@@ -368,6 +369,11 @@ pub struct Signed {
     mount: u64,
 }
 impl Signed {
+    /// Verify the signed file is still the published copy at its path.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the path or parent was replaced or covered.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.copy.checkpoint(authorize)?;
         self.receipt.recheck()?;
@@ -394,6 +400,11 @@ impl Signed {
         )?;
         authorize()
     }
+    /// Require that this output replaced `original` with epoch `epoch`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it replaced something else, or on [`Signed::recheck`].
     pub fn require_replaced_input(
         &self,
         original: &File,
@@ -406,10 +417,20 @@ impl Signed {
             "signed output does not own independently retained predecessor",
         )
     }
+    /// The signed file.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Signed::recheck`].
     pub fn file(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&File> {
         self.recheck(authorize)?;
         self.copy.descriptor(authorize)
     }
+    /// JSON evidence with the path and SHA-256.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Signed::recheck`].
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(value!({"path":self.path,"sha256":self.copy.sha256()}))
@@ -469,11 +490,21 @@ fn sign_in(
     authorize()?;
     Ok(signed)
 }
+/// Sign the EFI binary at `path` with the owner key, into `output` or in place.
+///
+/// # Errors
+///
+/// Fails when the owner key is unavailable, the input is unsafe, or signing fails.
 pub fn sign(path: &Path, output: Option<&Path>) -> Result<Value> {
     operation::root_only()?;
     let _lock = operation::lock()?;
     sign_locked(path, output, &_lock)
 }
+/// [`sign`] while `_operation` is held.
+///
+/// # Errors
+///
+/// As [`sign`].
 pub fn sign_locked(path: &Path, output: Option<&Path>, _operation: &files::Lock) -> Result<Value> {
     sign_authorized(path, output, _operation, &mut || _operation.recheck())
 }
@@ -544,10 +575,20 @@ pub(crate) fn sign_retained_authorized(
     owner.recheck()?;
     Ok(result)
 }
+/// Build and sign a UKI from `kernel`, `initrd` and `options` at `destination`.
+///
+/// # Errors
+///
+/// Fails when an input is unsafe, the owner key is unavailable, or building or signing fails.
 pub fn build_uki(kernel: &Path, initrd: &Path, options: &str, destination: &Path) -> Result<Value> {
     let lock = operation::lock()?;
     build_uki_locked(kernel, initrd, options, destination, &lock)
 }
+/// [`build_uki`] while `_operation` is held.
+///
+/// # Errors
+///
+/// As [`build_uki`].
 pub fn build_uki_locked(
     kernel: &Path,
     initrd: &Path,
@@ -747,6 +788,10 @@ pub(crate) fn build_uki_retained_authorized(
 
 /// This content binding complements signature verification; a signature alone
 /// does not prove this UKI contains the selected kernel, initrd and command line.
+///
+/// # Errors
+///
+/// Fails when a section is missing or differs from the reviewed inputs.
 pub fn verify_payload(body: &[u8], kernel: &str, initrd: &str, options: &str) -> Result<()> {
     let sections = pe::sections(body)?;
     let command = sections

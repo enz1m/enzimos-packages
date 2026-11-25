@@ -7,9 +7,12 @@ use crate::{
 use enzimos_platform::{Result, require};
 use serde_json::{Value, json};
 
+/// How the staged retirement entry is selected on UEFI.
 #[derive(Clone, Copy)]
 pub enum UefiMode {
+    /// As the loader default.
     Default,
+    /// For the next boot only.
     OneShot,
 }
 pub(crate) struct Stage {

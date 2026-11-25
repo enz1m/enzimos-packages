@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Deployed Flatpak remote and metadata checks.
 use enzimos_policy::{flatpak_plan::Source, flatpak_state as state};
 const CONFIG: &str = "[core]\nrepo_version=1\nmode=bare-user-only\n[remote \"flathub\"]\nurl=https://dl.flathub.org/repo/\ncollection-id=org.flathub.Stable\ngpg-verify=true\ngpg-verify-summary=true\nurl-is-set=true\nxa.authenticator-install=false\n";
 const ENZIMOS: &str = "[remote \"enzimos\"]\nurl=https://flatpak.enzim.dev/repo/\nxa.title=enzimOS Apps\nxa.default-branch=stable\ngpg-verify=true\ncollection-id=org.enzimos.Apps\ngpg-verify-summary=true\nxa.authenticator-install=false\nxa.authenticator-install-is-set=true\n";

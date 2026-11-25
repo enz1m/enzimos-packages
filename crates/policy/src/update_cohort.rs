@@ -170,18 +170,26 @@ impl Cohort {
     pub(crate) fn observe() -> Result<Self> {
         Self::at(Path::new(PATH), 0)
     }
+    /// The cohort admission document.
     pub fn document(&self) -> &Value {
         &self.document
     }
     pub(crate) fn raw_sha256(&self) -> &str {
         &self.raw_sha256
     }
+    /// Package metadata rows of the cohort.
     pub fn packages_metadata(&self) -> &[Value] {
         &self.packages_metadata
     }
+    /// Kernels in the cohort.
     pub fn kernels(&self) -> &Value {
         &self.kernels
     }
+    /// Retain the cohort at `path`, owned by `owner`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the cohort has unknown members, is on another mount, or a package is invalid.
     pub fn at(path: &Path, owner: u32) -> Result<Self> {
         let directory = files::directory(path, Some(owner))?;
         let directory_shape = shape(&directory, owner)?;
@@ -302,6 +310,11 @@ impl Cohort {
         }
         Ok(())
     }
+    /// Verify the cohort directories and membership are unchanged and it has not expired.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or the cohort expired.
     pub fn recheck(&self) -> Result<()> {
         fresh_expiry(enzimos_platform::json::string(
             &self.document["expires_at"],

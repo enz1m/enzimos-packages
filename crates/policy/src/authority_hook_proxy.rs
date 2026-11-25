@@ -8,9 +8,17 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{fs::File, os::fd::FromRawFd, time::Duration};
+/// Environment variable naming the inherited supervisor channel.
 pub const FD_ENV: &str = "ENZIMOS_UPDATE_HOOK_FD";
+/// Environment variable naming the supervisor PID.
 pub const PID_ENV: &str = "ENZIMOS_UPDATE_SUPERVISOR_PID";
+/// Environment variable naming the update generation.
 pub const ID_ENV: &str = "ENZIMOS_UPDATE_GENERATION";
+/// Validate a hook request frame for generation `id`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or the frame is refused.
 pub fn request_frame(body: &Value, id: &str) -> Result<()> {
     identity::safe_id(id)?;
     json::fields(body, "schema action generation token")?;
@@ -48,6 +56,11 @@ pub(crate) fn response_frame(
     )?;
     deferred::validate(&body["marker"], "authority")
 }
+/// Send a contention notice to the inherited update supervisor and return its answer.
+///
+/// # Errors
+///
+/// Fails when the inherited context is missing or invalid, or the supervisor does not answer.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
 pub fn request() -> Result<Value> {
     operation::root_only()?;

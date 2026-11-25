@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Deferred work markers and start records.
 use enzimos_policy::{deferred, deferred_start};
 use serde_json::json as value;
 const BOOT: &str = "11111111-1111-4111-8111-111111111111";

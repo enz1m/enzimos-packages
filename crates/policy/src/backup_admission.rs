@@ -245,6 +245,7 @@ fn retired_epoch(before: &files::FileIdentity, after: &files::FileIdentity) -> R
         "original opt-in changed outside known retirement rename",
     )
 }
+/// The pinned backup repository destination.
 pub struct Repository<'a, 'g> {
     destination: &'a crate::backup_destination::Destination<'g>,
     document: Document,
@@ -301,6 +302,11 @@ pub struct StoredPin<'a> {
     document: Document,
 }
 impl<'a> StoredPin<'a> {
+    /// Open the destination pin and require it to match `configuration` and the control mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the pin is missing or differs.
     pub fn open(
         configuration: &'a crate::backup_configuration::Configuration,
         storage: &'a crate::storage_runtime::Guard,
@@ -327,6 +333,11 @@ impl<'a> StoredPin<'a> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the pin and storage are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when either changed.
     pub fn recheck(&self) -> Result<()> {
         self.configuration.recheck()?;
         self.storage.recheck()?;
@@ -345,6 +356,7 @@ impl<'a> StoredPin<'a> {
         self.storage
     }
 }
+/// The backup opt-in marker.
 pub struct OptIn {
     document: Document,
 }
@@ -379,6 +391,10 @@ fn validate_marker(bytes: &[u8]) -> Result<()> {
 }
 impl OptIn {
     /// None means disabled and must return before configuration/source discovery.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the marker is unsafe.
     pub fn open() -> Result<Option<Self>> {
         crate::namespaces::initial()?;
         Self::retained(
@@ -393,9 +409,19 @@ impl OptIn {
         validate_marker(&document.bytes)?;
         Ok(Some(Self { document }))
     }
+    /// Verify the marker is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.document.recheck()
     }
+    /// Require that the opt-in belongs to `configuration` and `repository`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it belongs to another control directory.
     pub fn verify(
         &self,
         configuration: &crate::backup_configuration::Configuration,
@@ -416,6 +442,10 @@ impl OptIn {
     }
     /// Report the bound opt-in even while the destination is absent. This is a
     /// status check and cannot authorize repository traversal or backup capture.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the opt-in belongs to another control directory.
     pub fn verify_stored(
         &self,
         configuration: &crate::backup_configuration::Configuration,
@@ -460,6 +490,10 @@ impl OptIn {
     }
     /// Caller must separately verify fresh recovery-copy confirmation before
     /// capture. A schedule document alone never grants recovery or source authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the opt-in cannot be read or `body` fails.
     pub fn admit<F: FnOnce(&Self) -> Result<Value>>(body: F) -> Result<Value> {
         match Self::open()? {
             None => Ok(serde_json::json!({"status":"disabled-no-source-scan"})),

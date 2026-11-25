@@ -10,6 +10,11 @@ use crate::{
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::{Value, json};
 use std::path::Path;
+/// Adopt the confirmed restored root of activation `id` reviewed as `digest`.
+///
+/// # Errors
+///
+/// Fails when the activation is not selected with the reviewed intent, or adoption fails.
 pub fn adopt_locked(id: &str, digest: &str, lock: &files::Lock) -> Result<Value> {
     records::job_id(id)?;
     crate::identity::sha(digest)?;

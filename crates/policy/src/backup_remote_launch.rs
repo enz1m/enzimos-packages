@@ -20,6 +20,7 @@ fn shape(file: &File) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
+/// A recorded launch intent of one network share copy worker.
 pub struct Launch<'g> {
     guard: &'g Guard,
     parent: File,
@@ -29,6 +30,11 @@ pub struct Launch<'g> {
     value: Value,
 }
 impl<'g> Launch<'g> {
+    /// Record the launch intent for `context`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry is unsafe or full, or `authorize` fails.
     pub fn enter(
         context: &Context<'_, 'g>,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -68,6 +74,11 @@ impl<'g> Launch<'g> {
         context.recheck(authorize)?;
         Ok(this)
     }
+    /// Verify the launch intent is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry or intent changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let named = files::directory_relative(self.guard.control(), Path::new(FOLDER), Some(0))?;

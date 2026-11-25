@@ -33,6 +33,7 @@ fn private(file: &File, mount: u64) -> Result<files::FileIdentity> {
     )?;
     Ok(files::identity(&metadata))
 }
+/// The ready-image receipt joined to the restored boot.
 pub struct Receipt<'b, 'a, 's> {
     control: &'b Control<'a, 's>,
     boot: &'b Restored<'a, 's>,
@@ -113,6 +114,11 @@ impl<'b, 'a, 's> Receipt<'b, 'a, 's> {
         )?;
         self.boot.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Read-only mount of the package authority subvolume, retained by its mount and subvolume identity.
 use crate::{authority, filesystem, storage_runtime, subvolume};
 use enzimos_platform::{Error, Result, files, json, mount_identity, require};
 use serde_json::{Value, json as value};
@@ -8,7 +9,9 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+/// Mount point of the package authority.
 pub const PATH: &str = "/etc/pacman.d/gnupg";
+/// The read-only package authority mount, retained by its subvolume and mount identity.
 pub struct Authority {
     directory: File,
     unique: u64,
@@ -19,6 +22,11 @@ pub struct Authority {
     inode: (u64, u64, u32, u32, u32),
 }
 impl Authority {
+    /// Observe the authority subvolume mounted at [`PATH`] on `guard`'s filesystem.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the authority is not a private, independent mount of the configured subvolume.
     pub fn observe(guard: &storage_runtime::Guard) -> Result<Self> {
         guard.recheck()?;
         let directory = files::directory(Path::new(PATH), Some(0))?;
@@ -55,6 +63,11 @@ impl Authority {
         this.recheck(guard)?;
         Ok(this)
     }
+    /// Verify the mount and subvolume are unchanged and no alternate keybox exists.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the mount changed or a keybox file appeared.
     pub fn recheck(&self, guard: &storage_runtime::Guard) -> Result<()> {
         guard.recheck()?;
         let named = files::directory(Path::new(PATH), Some(0))?;
@@ -89,6 +102,11 @@ impl Authority {
         }
         Ok(())
     }
+    /// The authority files by name.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a file is missing or unsafe.
     pub fn files(&self) -> Result<BTreeMap<String, Vec<u8>>> {
         let mut result = BTreeMap::new();
         for name in authority::FILES {
@@ -104,6 +122,11 @@ impl Authority {
         }
         Ok(result)
     }
+    /// SHA-256 of each authority file.
+    ///
+    /// # Errors
+    ///
+    /// As [`Authority::files`].
     pub fn hashes(&self) -> Result<Value> {
         Ok(value!(
             self.files()?
@@ -112,6 +135,7 @@ impl Authority {
                 .collect::<BTreeMap<_, _>>()
         ))
     }
+    /// JSON identity of the authority mount.
     pub fn identity(&self) -> Value {
         value!({"filesystem_uuid":self.filesystem["filesystem_uuid"],"subvolume":self.subvolume.0,"mount":self.unique,"inode":self.inode})
     }

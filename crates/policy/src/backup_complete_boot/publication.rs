@@ -1,6 +1,11 @@
 use super::*;
 use std::fmt::Write as _;
 
+/// Publish the boot entries of complete-restore stage `stage_uuid` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the receipt registry is missing or invalid, or publication fails.
 pub fn publish_locked(lock: &files::Lock, stage_uuid: &str) -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;

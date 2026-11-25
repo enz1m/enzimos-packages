@@ -271,6 +271,7 @@ pub(crate) fn unmentioned(roots: &BTreeSet<String>, targets: &Value) -> Result<(
     }
     Ok(())
 }
+/// The complete current loader entry set.
 pub struct Loaders<'a, 's> {
     automatic: Automatic,
     control: &'a Control<'a, 's>,
@@ -586,6 +587,11 @@ impl<'a, 's> Loaders<'a, 's> {
         unmentioned(&self.roots, targets.rows()?)?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

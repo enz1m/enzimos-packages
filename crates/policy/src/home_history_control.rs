@@ -30,15 +30,30 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Value> {
 fn state(command: &Command) -> Result<Value> {
     parse(&command.run(&["is-enabled", TIMER], &[0, 1], 4096)?)
 }
+/// State of the home history timer.
+///
+/// # Errors
+///
+/// Fails when systemctl fails.
 pub fn observe() -> Result<Value> {
     storage_runtime::initial_namespace()?;
     state(&Command::open("/usr/bin/systemctl")?)
 }
+/// The current timer state and provider evidence.
+///
+/// # Errors
+///
+/// Fails when systemctl fails.
 pub fn plan() -> Result<Value> {
     storage_runtime::initial_namespace()?;
     let command = Command::open("/usr/bin/systemctl")?;
     Ok(json!({"timer":state(&command)?,"provider":command.evidence()?}))
 }
+/// Enable or disable the home history timer if the state still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the plan or timer changed, authorization fails, or systemctl fails.
 pub fn set<F: FnMut() -> Result<()>>(
     enabled: bool,
     expected: &Value,

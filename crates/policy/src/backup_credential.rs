@@ -35,6 +35,11 @@ pub struct Credential {
     parent_flags: i32,
 }
 impl Credential {
+    /// Retain the stored backup credential's file identity.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the credential is missing or unsafe.
     pub fn open() -> Result<Self> {
         crate::namespaces::initial()?;
         Self::retained(Path::new(crate::backup_configuration::PASSWORD), 0)
@@ -90,6 +95,11 @@ impl Credential {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the credential is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed or was replaced.
     pub fn recheck(&self) -> Result<()> {
         let parent = files::directory(
             self.path

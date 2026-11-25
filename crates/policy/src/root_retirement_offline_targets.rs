@@ -9,6 +9,7 @@ use crate::{
 use enzimos_platform::{Error, Result, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
+/// The offline retirement targets joined to their journal and origins.
 pub struct Targets<'a, 's> {
     control: &'a Control<'a, 's>,
     mounts: &'a Mounts<'s>,
@@ -171,6 +172,11 @@ impl<'a, 's> Targets<'a, 's> {
         )?;
         self.control.require_original_mounts(self.mounts)
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let result = value!({"journal":self.journal.evidence()?,"origins":self.origins.evidence()?,

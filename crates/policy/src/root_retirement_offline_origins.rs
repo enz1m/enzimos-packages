@@ -166,6 +166,7 @@ impl Registry {
                 .collect::<Result<BTreeMap<_,_>>>()?}))
     }
 }
+/// The birth, activation and job registries for offline ownership checks.
 pub struct Origins<'a, 's> {
     control: &'a Control<'a, 's>,
     filesystem: String,
@@ -285,6 +286,11 @@ impl<'a, 's> Origins<'a, 's> {
         }
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let result = value!({"births":self.births.evidence()?,"activations":self.activations.evidence()?,

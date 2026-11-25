@@ -162,6 +162,7 @@ impl Quiet {
         )
     }
 }
+/// Backup drive rotation state, retained for review and its next step.
 pub struct Context<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -183,6 +184,11 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     /// Observe an existing nonterminal journal under the original operation lock.
     /// No directory, receipt, scratch or repository is created by this admission.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the rotation is unknown or finished, another rotation is unfinished, or
+    /// `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -305,6 +311,11 @@ impl<'a> Context<'a> {
         context.recheck(authorize)?;
         Ok(context)
     }
+    /// Verify the rotation inputs, pin and registry are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         self.guard.recheck()?;
@@ -528,6 +539,10 @@ impl<'a> Context<'a> {
     }
     /// Explicit reviewed abandonment removes only the original staged objects.
     /// Current repository and credential remain retained throughout the action.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the review changed, abandon is not the next action, or a step fails.
     pub fn abandon(
         mut self,
         review_sha256: &str,
@@ -572,6 +587,10 @@ impl<'a> Context<'a> {
     }
     /// Durable discarding precedes consuming the original retired repository and
     /// credential. Removed actors stay retained through actual receipt completion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the review changed, discard is not the next action, or a step fails.
     pub fn discard(
         mut self,
         review_sha256: &str,
@@ -666,6 +685,10 @@ impl<'a> Context<'a> {
     }
     /// Consumes the actual original review context; no journal bytes can call a
     /// switch. The original switching receipt is durable before the first rename.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the review changed, switch is not the next action, or a step fails.
     pub fn switch(
         mut self,
         review_sha256: &str,

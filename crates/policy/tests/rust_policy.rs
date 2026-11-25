@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Memory policy transitions.
 use enzimos_policy::memory;
 use serde_json::{Value, json};
 

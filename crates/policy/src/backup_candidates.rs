@@ -275,6 +275,7 @@ impl Device {
         value!({"device":self.observed,"topology":self.graph.json()})
     }
 }
+/// Block devices that could hold a backup, observed for one selection.
 pub struct Discovery {
     guard: Guard,
     vendor: Command,
@@ -284,6 +285,11 @@ pub struct Discovery {
     devices: Vec<Value>,
 }
 impl Discovery {
+    /// Observe candidate devices and the system storage.
+    ///
+    /// # Errors
+    ///
+    /// Fails when lsblk fails or its output is invalid.
     pub fn observe() -> Result<Self> {
         let guard = Guard::observe()?;
         let vendor = Command::open("/usr/bin/lsblk")?;
@@ -328,6 +334,11 @@ impl Discovery {
         )?;
         source_runtime_hints(Self::read(&self.vendor)?, uuid, &self.source_members)
     }
+    /// Verify the system storage is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.vendor.recheck()?;
@@ -342,6 +353,11 @@ impl Discovery {
     fn token(&self, row: &Value, device: &Device) -> Result<String> {
         selection_token(row, &self.source.json(), &self.boot, &device.evidence())
     }
+    /// Redacted candidate inventory for display.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the deadline passes or a candidate cannot be observed.
     pub fn inventory(&self) -> Result<Value> {
         self.recheck()?;
         let mut candidates = Vec::new();
@@ -374,6 +390,11 @@ impl Discovery {
             value!({"schema":1,"candidates":candidates,"mounting_supported":false,"formatting_supported":false,"credential_enrollment_supported":false}),
         )
     }
+    /// Resolve the selection `token` to one candidate device.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the inventory changed, the token is ambiguous or unknown, or the deadline passes.
     pub fn select(&self, token: &str) -> Result<Selection<'_>> {
         identity::sha(token)?;
         self.recheck()?;
@@ -566,6 +587,7 @@ fn area_inventory(
     }
     Ok(normalized)
 }
+/// A selected candidate device.
 pub struct Selection<'a> {
     discovery: &'a Discovery,
     row: Value,

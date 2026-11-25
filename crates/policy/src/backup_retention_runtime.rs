@@ -488,6 +488,10 @@ pub fn after_backup_attached(
     status
 }
 /// Manual cleanup (`enzimos-policy backup retain`) with the destination attached.
+///
+/// # Errors
+///
+/// Fails when the destination is not attached or retention fails.
 pub fn retain_attached_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     crate::backup_destination_attach::with_destination(
         guard,

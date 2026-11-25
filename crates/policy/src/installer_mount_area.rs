@@ -12,6 +12,7 @@ use std::{
     },
     path::Path,
 };
+/// Path of the private answer area.
 pub const ROOT: &str = "/run/enzimos-answers";
 const STORE: &str = "/run/enzimos-install-native";
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -123,6 +124,11 @@ fn row_role(rows: &[mountinfo::Row], id: u64, private: bool, role: Role) -> Resu
     )?;
     Ok(r.clone())
 }
+/// The answer-area mount row with mount ID `id`.
+///
+/// # Errors
+///
+/// Fails when the row is missing or does not have the private answer area's options.
 pub fn validate_mount(rows: &[mountinfo::Row], id: u64) -> Result<mountinfo::Row> {
     row_role(rows, id, true, Role::Answers)
 }
@@ -149,6 +155,7 @@ fn origin(
         "private installer bind left its original parent filesystem",
     )
 }
+/// A private bind area retained by its mount and parent.
 pub struct Area {
     role: Role,
     file: File,
@@ -162,12 +169,26 @@ pub struct Area {
 }
 impl Area {
     /// Capture the actual configured kernel area; receipts are never authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the area is missing or not the expected private mount.
     pub fn observe() -> Result<Self> {
         Self::observe_role(Role::Answers)
     }
+    /// Capture the configured storage area.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the area is missing or not the expected private mount.
     pub fn observe_storage() -> Result<Self> {
         Self::observe_role(Role::Storage)
     }
+    /// Capture the configured installation target area.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the area is missing or not the expected private mount.
     pub fn observe_target() -> Result<Self> {
         Self::observe_role(Role::Target)
     }
@@ -219,6 +240,10 @@ impl Area {
         Ok(this)
     }
     /// Retain and check the underlying area even while its one owned volume covers it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the area or its parent changed.
     pub fn recheck_covered(&self) -> Result<()> {
         let role = self.role;
         namespaces::initial()?;
@@ -250,6 +275,11 @@ impl Area {
             Ok(())
         }
     }
+    /// Verify the area is still mounted at its path.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the area or its parent changed.
     pub fn recheck(&self) -> Result<()> {
         let role = self.role;
         self.recheck_covered()?;
@@ -266,25 +296,46 @@ impl Area {
             "named original answer area changed",
         )
     }
+    /// The area directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Area::recheck`].
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.file)
     }
+    /// The area's mount row.
     pub fn binding(&self) -> &mountinfo::Row {
         &self.row
     }
+    /// Mount ID of the area's parent.
     pub fn parent_mount(&self) -> u64 {
         self.parent_mount
     }
 }
 /// Explicit fresh boot preparation, before answer discovery/mounting. Failed
 /// intent is retained; this function never adopts or completes an earlier one.
+///
+/// # Errors
+///
+/// Fails when an area already exists or cannot be created and verified.
 pub fn create(lock: &files::Lock) -> Result<Value> {
     create_role(lock, Role::Answers)
 }
+/// Create the storage area for this boot.
+///
+/// # Errors
+///
+/// Fails when an area already exists or cannot be created and verified.
 pub fn create_storage(lock: &files::Lock) -> Result<Value> {
     create_role(lock, Role::Storage)
 }
+/// Create the installation target area for this boot.
+///
+/// # Errors
+///
+/// Fails when an area already exists or cannot be created and verified.
 pub fn create_target(lock: &files::Lock) -> Result<Value> {
     create_role(lock, Role::Target)
 }

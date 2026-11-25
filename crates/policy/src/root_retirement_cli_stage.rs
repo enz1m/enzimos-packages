@@ -14,6 +14,11 @@ use crate::{
 };
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::Value;
+/// Stage the coordinator for prepared receipt `id` with image `image_id` and power action `exit`.
+///
+/// # Errors
+///
+/// Fails for other exit actions, when the receipt is not prepared, or staging fails.
 pub fn stage_locked(
     guard: &Guard,
     lock: &files::Lock,

@@ -8,6 +8,11 @@ use std::{
     path::Path,
     time::Duration,
 };
+/// Signer fingerprint from GnuPG status output.
+///
+/// # Errors
+///
+/// Fails when the status is too large, not UTF-8, unsuccessful or ambiguous.
 pub fn status(body: &[u8], success: bool) -> Result<String> {
     require(body.len() <= 65536, "package signature status bound")?;
     let text =
@@ -61,6 +66,11 @@ fn directory_identity(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
     let m = file.metadata()?;
     Ok((m.dev(), m.ino(), m.uid(), m.gid(), m.mode()))
 }
+/// Verify `signature` over `archive` with the authority in `home` and return the signer.
+///
+/// # Errors
+///
+/// Fails when the authority or a descriptor is unsafe, or verification fails.
 pub fn verify(archive: &File, signature: &File, home: &Path) -> Result<String> {
     let owner = enzimos_platform::process_identity::effective_uid();
     let directory = files::directory(home, Some(owner))?;

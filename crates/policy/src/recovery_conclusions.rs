@@ -68,6 +68,7 @@ pub(crate) fn historical(
                     })
         })
 }
+/// Adopted recovery conclusions read from the recovery journals.
 pub struct Observation<'g> {
     guard: &'g Guard,
     jobs: Journal,
@@ -75,6 +76,11 @@ pub struct Observation<'g> {
     concluded: BTreeSet<String>,
 }
 impl<'g> Observation<'g> {
+    /// Observe the conclusions on `guard`'s storage.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a journal cannot be opened.
     pub fn observe(guard: &'g Guard) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -91,6 +97,11 @@ impl<'g> Observation<'g> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the journals are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         self.jobs.checkpoint()?;
@@ -114,12 +125,21 @@ impl<'g> Observation<'g> {
         )?;
         self.recheck()
     }
+    /// Whether recovery `id` is concluded.
+    ///
+    /// # Errors
+    ///
+    /// Fails on recheck.
     pub fn is_concluded(&self, id: &str) -> Result<bool> {
         identity::safe_id(id)?;
         self.recheck()?;
         Ok(self.concluded.contains(id))
     }
     /// Only a completed, non-replayable recovery-prepare receipt can be history.
+    ///
+    /// # Errors
+    ///
+    /// Fails on recheck.
     pub fn historical_backend_record(&self, row: &serde_json::Value) -> Result<bool> {
         self.recheck()?;
         let result = historical(row, &self.jobs.records, &self.concluded);

@@ -96,6 +96,7 @@ pub trait SourceScope {
     /// As for [`SourceScope::recheck`].
     fn evidence(&self) -> Result<Value>;
 }
+/// The public backup configuration, retained by identity.
 pub struct Configuration {
     original: crate::settings_file::Config,
     value: Value,
@@ -103,6 +104,10 @@ pub struct Configuration {
 impl Configuration {
     /// This observes public configuration only; it neither reads credentials nor
     /// qualifies a mounted repository or an additional source.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the configuration is missing, unsafe or invalid.
     pub fn open() -> Result<Self> {
         crate::namespaces::initial()?;
         let original = crate::settings_file::Config::open(PATH, LIMIT)?;
@@ -110,6 +115,11 @@ impl Configuration {
         original.recheck()?;
         Ok(Self { original, value })
     }
+    /// Verify the configuration is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()
     }

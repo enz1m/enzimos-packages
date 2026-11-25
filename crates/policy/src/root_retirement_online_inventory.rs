@@ -13,6 +13,7 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
 };
 
+/// The complete subvolume inventory of the online root tree.
 pub struct Inventory<'a> {
     guard: &'a Guard,
     top: &'a TopMount,
@@ -62,6 +63,11 @@ fn absent(records: &Records, targets: &Value) -> Result<()> {
     Ok(())
 }
 impl<'a> Inventory<'a> {
+    /// Observe the inventory on the top-level mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the tree is incomplete or on another filesystem, or `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         top: &'a TopMount,
@@ -210,6 +216,11 @@ impl<'a> Inventory<'a> {
         )?;
         self.recheck(authorize)
     }
+    /// JSON evidence for the inventory.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = json!({"filesystem":self.filesystem,"top_epoch":self.epoch,"mount":self.mount,

@@ -12,6 +12,11 @@ use std::path::PathBuf;
 /// Implemented by trusted native code retaining the original backend ledger.
 /// No wire object constructs that ledger or the original Root Context.
 pub trait References {
+    /// Require that no backend record mentions `generation`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when one does.
     fn require_unmentioned(&self, generation: &str) -> Result<()>;
 }
 struct Runtime<'a, 'g, 'r, 'u> {

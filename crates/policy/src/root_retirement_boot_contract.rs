@@ -158,6 +158,7 @@ pub struct Finish {
     pub(crate) defaults: String,
     pub(crate) bios: String,
     pub(crate) remove_uefi: bool,
+    /// Whether the one-shot UEFI selection must be cleared.
     pub clear_one_shot: bool,
 }
 pub(crate) fn finish(

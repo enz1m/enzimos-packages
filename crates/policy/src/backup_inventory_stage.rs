@@ -107,6 +107,7 @@ impl Document {
         value!({"inode":self.epoch,"bytes":self.bytes.len(),"sha256":json::sha256(&self.bytes)})
     }
 }
+/// Inventory documents staged for one capture.
 pub struct Staged<'c, 's, 'cfg, 'g> {
     capture: &'c Released<'s, 'cfg, 'g>,
     id: String,
@@ -130,6 +131,11 @@ impl<'c, 's, 'cfg, 'g> Staged<'c, 's, 'cfg, 'g> {
     }
     /// Consume this actual stage only after original worker/source retirement.
     /// Per-role receipts enter before mutation; failed partial stages never retry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when retirement was already entered, the registry changed, or a document cannot be
+    /// removed.
     pub fn retire(
         mut self,
         closed: &crate::backup_transfer_observation::ClosedObservation<'_>,
@@ -308,6 +314,10 @@ impl<'c, 's, 'cfg, 'g> Staged<'c, 's, 'cfg, 'g> {
     }
     /// Fixed documents only. A retained descriptor is review/staging data, not
     /// permission to mount this directory or pass caller-selected Restic options.
+    ///
+    /// # Errors
+    ///
+    /// Fails for unknown documents or when the stage changed.
     pub fn descriptor(&self, name: &str) -> Result<&File> {
         self.recheck()?;
         self.documents
@@ -445,6 +455,11 @@ fn inventory_scope(
         "transfer_complete":false,"backup_complete":false}),
     )
 }
+/// Stage the inventory documents of `capture` as `id`.
+///
+/// # Errors
+///
+/// Fails when the stage exists, leaves the control mount, or a document cannot be written.
 #[allow(unsafe_code, reason = "Linux syscall ABI (mkdirat).")]
 pub fn stage<'c, 's, 'cfg, 'g>(
     capture: &'c Released<'s, 'cfg, 'g>,

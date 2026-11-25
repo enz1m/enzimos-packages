@@ -394,6 +394,7 @@ impl<'g> Store<'g> {
         Ok(v)
     }
 }
+/// Durable intent of one native backup worker, bound to its caller and source.
 pub struct Intent<'g> {
     store: Store<'g>,
     id: String,
@@ -407,6 +408,11 @@ pub struct Completed<'g> {
     intent: Intent<'g>,
 }
 impl Completed<'_> {
+    /// Verify the intent record is complete with the worker scope closed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed or is not a completed, closed intent.
     pub fn recheck(&self) -> Result<()> {
         (self.intent.additional)()?;
         self.intent.image.recheck()?;
@@ -417,6 +423,11 @@ impl Completed<'_> {
             "original completed worker witness required",
         )
     }
+    /// The completed intent record.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Completed::recheck`].
     pub fn value(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -427,12 +438,22 @@ impl Completed<'_> {
     }
 }
 impl<'g> Intent<'g> {
+    /// Consume this intent once its completion is recorded.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record is not complete.
     pub fn into_completed(self) -> Result<Completed<'g>> {
         self.recheck()?;
         let this = Completed { intent: self };
         this.recheck()?;
         Ok(this)
     }
+    /// [`Intent::prepare_checked`] with no additional guard.
+    ///
+    /// # Errors
+    ///
+    /// As [`Intent::prepare_checked`].
     pub fn prepare(
         request: &Value,
         guard: &'g crate::storage_runtime::Guard,
@@ -443,6 +464,11 @@ impl<'g> Intent<'g> {
     }
     /// Additional original typed coordinator guards may restrict every boundary;
     /// they never replace source, caller, lock or fresh authorization checks.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request differs from the actual caller or source, the journal is outside the
+    /// control mount, or a check fails.
     pub fn prepare_checked(
         request: &Value,
         guard: &'g crate::storage_runtime::Guard,
@@ -495,15 +521,30 @@ impl<'g> Intent<'g> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the lock, source, caller and record are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         (self.additional)()?;
         self.image.recheck()?;
         self.store.recheck()
     }
+    /// The source storage guard.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Intent::recheck`].
     pub fn source(&self) -> Result<&crate::storage_runtime::Guard> {
         self.recheck()?;
         Ok(self.source)
     }
+    /// The caller's sealed input, pidfd and validator descriptors.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Intent::recheck`].
     pub fn caller_descriptors(&self) -> Result<(&File, std::os::fd::BorrowedFd<'_>, &File)> {
         self.recheck()?;
         let (image, pidfd) = self.image.descriptors()?;
@@ -512,6 +553,11 @@ impl<'g> Intent<'g> {
     /// The caller creates the original temporary only after prepare(), using
     /// recheck() at every copy boundary. Only this typed original can update the
     /// prepared request; JSON cannot attach a replacement credential authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the temporary is not the one the request describes or the record cannot be
+    /// updated.
     pub fn attach_input(&mut self, input: &crate::backup_auth_input::Temporary<'_>) -> Result<()> {
         self.recheck()?;
         let request = &self.store.records[&format!("{}.json", self.id)].value["request"];
@@ -524,6 +570,11 @@ impl<'g> Intent<'g> {
         input.recheck()?;
         self.recheck()
     }
+    /// Record the started worker's scope.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent changed or the record cannot be updated.
     pub fn attach_worker(
         &mut self,
         scope: &enzimos_platform::backup_worker_scope::Scope,
@@ -535,6 +586,11 @@ impl<'g> Intent<'g> {
     }
     /// Every proof is an original live-captured object. No JSON or callback can
     /// manufacture worker, temporary-input or normal mount completion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a proof differs from the original prepared objects or the record cannot be
+    /// updated.
     pub fn complete<T>(
         &mut self,
         observation: &crate::backup_worker_observation::Observation,
@@ -575,20 +631,39 @@ impl<'g> Intent<'g> {
         Ok(value)
     }
     /// Must precede scratch creation/PID1 start; a repeated call is refused.
+    ///
+    /// # Errors
+    ///
+    /// Fails when called twice or the record cannot be updated.
     pub fn starting(&mut self) -> Result<Value> {
         self.recheck()?;
         let value = self.store.change(&self.id, "starting")?;
         self.recheck()?;
         Ok(value)
     }
+    /// Record that the worker outcome is uncertain.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record cannot be updated.
     pub fn uncertain(&mut self) -> Result<Value> {
         self.recheck()?;
         self.store.change(&self.id, "uncertain")
     }
+    /// The intent record file.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Intent::recheck`].
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.store.records[&format!("{}.json", self.id)].file)
     }
+    /// The current intent record.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Intent::recheck`].
     pub fn value(&self) -> Result<Value> {
         self.recheck()?;
         Ok(self.store.records[&format!("{}.json", self.id)]

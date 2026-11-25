@@ -24,6 +24,7 @@ fn shape(file: &File) -> Result<Value> {
         value!({"device":m.dev(),"inode":m.ino(),"uid":m.uid(),"gid":m.gid(),"mode":m.mode(),"mount":mount_identity::id(file.as_fd(),true)?}),
     )
 }
+/// Fresh copies of the boot publication staged for update `id`.
 pub struct Stage {
     pub(crate) path: PathBuf,
     directory: File,
@@ -32,6 +33,11 @@ pub struct Stage {
     rows: Value,
 }
 impl Stage {
+    /// Stage copies of the boot publication for `plan` as `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan changed or a copy fails.
     pub fn capture(plan: &Plan, id: &str, lock: &files::Lock) -> Result<Self> {
         Self::capture_authorized(plan, id, lock, &mut || lock.recheck())
     }

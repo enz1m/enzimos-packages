@@ -327,6 +327,11 @@ impl<'a, 'g> Completed<'a, 'g> {
         self.recheck()?;
         Ok(&self.name)
     }
+    /// The exported database file.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the export changed.
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.readonly)

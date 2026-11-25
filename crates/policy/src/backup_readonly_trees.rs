@@ -132,6 +132,7 @@ impl<'a> Tree<'a> {
         "detached_mount":self.unique,"readonly":true,"nodev":true,"nosuid":true,"noexec":true})
     }
 }
+/// Read-only source trees detached for one backup.
 pub struct Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
     inputs: &'a Inputs<'b, 'c, 's, 'cfg, 'g>,
     lock: &'a files::Lock,
@@ -142,6 +143,11 @@ pub struct Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
     value: Value,
 }
 impl<'a, 'b, 'c, 's, 'cfg, 'g> Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
+    /// Detach the read-only source trees for backup `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry is unsafe or full, a tree cannot be detached, or `authorize` fails.
     pub fn prepare(
         inputs: &'a Inputs<'b, 'c, 's, 'cfg, 'g>,
         lock: &'a files::Lock,
@@ -258,6 +264,11 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
             )
         })
     }
+    /// Verify the trees are ready and unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or are not ready.
     pub fn recheck(&self) -> Result<()> {
         self.components()?;
         require(
@@ -267,6 +278,10 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
     }
     /// Consume these actual trees and one actual kernel-backed worker scope.
     /// The durable reservation is not a handoff or permission to attach globally.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the worker is not the trees' separate worker or the record cannot be written.
     pub fn reserve_worker(
         mut self,
         scope: enzimos_platform::backup_worker_scope::Scope,
@@ -295,6 +310,10 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Prepared<'a, 'b, 'c, 's, 'cfg, 'g> {
         Ok(this)
     }
     /// Review evidence only. Detached descriptors stay private before reservation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.value,"record_epoch":self.record.evidence()?}))

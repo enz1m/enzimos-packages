@@ -25,6 +25,7 @@ pub fn finished(record: &Value) -> bool {
 pub(crate) fn fallback_only(record: &Value) -> bool {
     FAILED_FALLBACK_AFTER.contains(&record["phase"].as_str().unwrap_or(""))
 }
+/// Recorded apply steps in their required order.
 pub const STEPS: [&str; 12] = [
     "resolved",
     "stage-recorded",
@@ -39,6 +40,11 @@ pub const STEPS: [&str; 12] = [
     "new-published",
     "complete",
 ];
+/// Validate an update apply plan of schema 1 or 2.
+///
+/// # Errors
+///
+/// Fails for other schemas or when a field is invalid.
 pub fn plan(plan: &Value) -> Result<()> {
     json::fields(
         plan,
@@ -96,6 +102,11 @@ fn seal(mut record: Value) -> Result<Value> {
     record["journal_sha256"] = value!(json::fingerprint(&record)?);
     Ok(record)
 }
+/// The sealed initial intent record of apply `id` for `document` by `actor`.
+///
+/// # Errors
+///
+/// Fails when the resulting record is invalid.
 pub fn initial(id: &str, document: &Value, actor: &Value) -> Result<Value> {
     let mut body = value!({"schema":1,"id":id,"boot_id":document["boot_id"],"filesystem_uuid":document["storage"]["filesystem_uuid"],"actor":actor,"phase":"intent","plan":document,"steps":[],"result":null});
     if document["schema"] == 2 {
@@ -106,6 +117,11 @@ pub fn initial(id: &str, document: &Value, actor: &Value) -> Result<Value> {
     validate(&record, id)?;
     Ok(record)
 }
+/// Validate apply record `id`, including its step order and digest.
+///
+/// # Errors
+///
+/// Fails when the identifier, schema, steps, result or digest is invalid.
 pub fn validate(record: &Value, id: &str) -> Result<()> {
     identity::safe_id(id)?;
     require(
@@ -220,6 +236,11 @@ pub fn validate(record: &Value, id: &str) -> Result<()> {
         "apply journal digest mismatch",
     )
 }
+/// The sealed record after recording `phase` with `evidence` and an optional final `result`.
+///
+/// # Errors
+///
+/// Fails when `previous` is invalid or finished, or the phase may not follow it.
 pub fn advance(
     previous: &Value,
     phase: &str,
@@ -246,6 +267,11 @@ pub fn advance(
     transition(previous, &current, id)?;
     Ok(current)
 }
+/// Require that `current` is a valid successor of `previous`.
+///
+/// # Errors
+///
+/// Fails when a completed apply would replay, the intent changed, or evidence was rewritten.
 pub fn transition(previous: &Value, current: &Value, id: &str) -> Result<()> {
     validate(previous, id)?;
     validate(current, id)?;
@@ -270,6 +296,11 @@ pub fn transition(previous: &Value, current: &Value, id: &str) -> Result<()> {
         "apply evidence rewritten or replayed",
     )
 }
+/// Require that the worker `request` belongs to the fresh apply in `record`.
+///
+/// # Errors
+///
+/// Fails when the caller, image, boot, storage or phase differs.
 pub fn worker_binding(record: &Value, request: &Value) -> Result<()> {
     let id = text(request, "id")?;
     validate(record, id)?;

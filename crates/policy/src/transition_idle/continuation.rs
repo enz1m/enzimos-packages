@@ -175,6 +175,11 @@ impl Snapshot {
         self.worker = Some(id.into());
         Ok(())
     }
+    /// Require that the worker checkpoint `record` still belongs to the retained owner.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the owner or supervisor changed.
     pub fn worker_checkpoint(&mut self, record: &Value) -> Result<()> {
         let id = record["id"]
             .as_str()
@@ -228,6 +233,10 @@ impl Snapshot {
         self.recheck()
     }
     /// Only the exact Root supervisor of an already measured handoff may attach.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record is not a handed-off worker of this boot.
     pub fn worker_handoff(record: &Value) -> Result<Self> {
         let id = record["id"]
             .as_str()

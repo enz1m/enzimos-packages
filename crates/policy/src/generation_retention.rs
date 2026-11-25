@@ -223,6 +223,10 @@ fn retire_one(
 /// Retire old boot generations and their transient staging. Only the caller's
 /// already held operation lock is used; a retirement that fails after its
 /// journal started stops the run so the journal stays for explicit review.
+///
+/// # Errors
+///
+/// Fails when the registry cannot be observed or a retirement fails.
 pub fn retain_locked(
     guard: &Guard,
     lock: &files::Lock,

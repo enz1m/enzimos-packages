@@ -89,6 +89,7 @@ fn members(parent: &File) -> Result<BTreeSet<String>> {
         })
         .collect()
 }
+/// Backend records that reference boot generations.
 pub struct Observation<'g> {
     guard: &'g Guard,
     parent: Option<File>,
@@ -190,6 +191,11 @@ impl<'g> Observation<'g> {
         }
         self.guard.recheck()
     }
+    /// Require that no backend record mentions `generation`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a record mentions it or the records changed.
     pub fn require_unmentioned(&self, generation: &str) -> Result<()> {
         let conclusions = crate::recovery_conclusions::Observation::observe(self.guard)?;
         self.require_unmentioned_with_conclusions(generation, &conclusions)

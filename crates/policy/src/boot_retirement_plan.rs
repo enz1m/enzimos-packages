@@ -177,6 +177,10 @@ pub(crate) fn tombstone(data: &Value, generation: &str, boot: &str) -> Result<Va
 }
 /// Conservative token matching retains unknown or historical references for
 /// explicit review. It cannot turn an unrecognized record into deletion permission.
+///
+/// # Errors
+///
+/// Fails when `v` cannot be encoded.
 pub fn mentions(v: &Value, generation: &str) -> Result<bool> {
     identity::safe_id(generation)?;
     let text =

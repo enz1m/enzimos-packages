@@ -129,6 +129,7 @@ fn flags(file: &File) -> Result<i32> {
     )?;
     Ok(flags)
 }
+/// The deleted receipt and its origin record, retained for finishing.
 pub struct Original<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -145,6 +146,11 @@ pub struct Original<'a> {
     origin_flags: i32,
 }
 impl<'a> Original<'a> {
+    /// Observe the origin record of the deleted receipt in `journal`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the origin differs from the reference family or cannot be retained.
     pub fn observe(
         guard: &'a Guard,
         top: &'a TopMount,
@@ -199,6 +205,11 @@ impl<'a> Original<'a> {
         result.recheck(authorize)?;
         Ok(result)
     }
+    /// Verify the receipt, ownership and origin record are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -247,6 +258,11 @@ impl<'a> Original<'a> {
         self.inventory.recheck(authorize)?;
         authorize()
     }
+    /// JSON evidence for the finish origin.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -480,6 +496,11 @@ impl Published<'_> {
 
 /// Online completion consumes all original mutation actors. Errors retain their
 /// durable state and never replay a publication, reconstruct a proof or roll back.
+///
+/// # Errors
+///
+/// Fails when the journal differs from the deleted selection, coordinator cleanup is missing or
+/// unexpected, or a step fails.
 pub fn finish<'a>(
     original: Original<'a>,
     journal: Journal<'a>,
@@ -528,6 +549,11 @@ pub fn finish<'a>(
 }
 
 /// Root CLI uses complete standalone backend references, with no job exemption.
+///
+/// # Errors
+///
+/// Fails when the receipt cannot be retained, finishing fails, or cleanup after a failure is
+/// refused.
 pub fn finish_locked(
     guard: &Guard,
     lock: &files::Lock,

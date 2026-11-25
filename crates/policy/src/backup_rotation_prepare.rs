@@ -141,6 +141,11 @@ fn absent(mount: &Mount<'_>, guard: &Guard) -> Result<()> {
         "retired rotation objects require review",
     )
 }
+/// Prepare drive rotation `id` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when a rotation exists or is unfinished, or preparation fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 pub fn prepare_locked(
     guard: &Guard,

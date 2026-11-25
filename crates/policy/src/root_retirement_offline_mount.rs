@@ -61,6 +61,7 @@ pub struct Unmounted<'a, 's> {
     original: OwnedTop<'a, 's>,
     after_unmount: Released<'a, 's>,
 }
+/// The offline mount after it was released.
 pub struct ReleasedMount<'s> {
     scope: &'s crate::root_retirement_offline_scope::Scope,
     generation: String,
@@ -323,6 +324,11 @@ impl<'a, 's> Unmounted<'a, 's> {
             .require_original_mapping(self.original.mapping)?;
         self.original.mapping.recheck()
     }
+    /// JSON evidence for the unmount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -369,6 +375,11 @@ impl ReleasedMount<'_> {
         )?;
         self.scope.recheck()
     }
+    /// JSON evidence for the released mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

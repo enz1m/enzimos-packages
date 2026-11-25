@@ -73,10 +73,15 @@ impl Input {
         )
     }
 }
+/// A public-only authority built in a work directory with its pinned inputs.
 pub struct Prepared {
+    /// Work directory holding the built authority.
     pub directory: PathBuf,
+    /// Approved key fingerprints.
     pub approved: Vec<String>,
+    /// Locally signed key fingerprints.
     pub local: Vec<String>,
+    /// JSON summary of the build.
     pub summary: Value,
     inputs: Vec<(Input, u32)>,
     prepared: BTreeMap<String, Input>,
@@ -95,6 +100,11 @@ impl Prepared {
         }
         Ok(())
     }
+    /// Verify the pinned inputs are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an input changed.
     pub fn recheck(&self) -> Result<()> {
         for (input, owner) in &self.inputs {
             input.recheck(*owner)?;
@@ -104,12 +114,14 @@ impl Prepared {
         }
         Ok(())
     }
+    /// Built files by name.
     pub fn files(&self) -> BTreeMap<String, Vec<u8>> {
         self.prepared
             .iter()
             .map(|(name, input)| (name.clone(), input.bytes.clone()))
             .collect()
     }
+    /// SHA-256 of each built file.
     pub fn hashes(&self) -> Value {
         value!(
             self.prepared
@@ -119,6 +131,11 @@ impl Prepared {
         )
     }
 }
+/// Run isolated GnuPG in `home` with `args` and `input`.
+///
+/// # Errors
+///
+/// Fails when the home path is not UTF-8 or GnuPG fails.
 pub fn gpg(home: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>> {
     let mut all = vec![
         "--homedir",
@@ -200,6 +217,11 @@ fn public_only(path: &Path, owner: u32) -> Result<()> {
     }
     Ok(())
 }
+/// Build a new authority from `current` and the Arch `keyring` in `work`.
+///
+/// # Errors
+///
+/// Fails when the owner differs, the keyring is empty, a master key is revoked, or GnuPG fails.
 pub fn build(current: &Path, keyring: &Path, work: &Path, owner: u32) -> Result<Prepared> {
     require(
         enzimos_platform::process_identity::effective_uid() == owner,

@@ -8,12 +8,20 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+/// Whether setup creates a new repository or adopts an existing one.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
+    /// Create a new repository.
     Initialize,
+    /// Adopt an existing repository.
     Adopt,
 }
 impl Mode {
+    /// Parse a wire name produced by [`Mode::name`].
+    ///
+    /// # Errors
+    ///
+    /// Fails for any other name.
     pub fn parse(s: &str) -> Result<Self> {
         match s {
             "initialize" => Ok(Self::Initialize),
@@ -21,6 +29,7 @@ impl Mode {
             _ => Err(Error("setup mode unavailable".into())),
         }
     }
+    /// Stable wire name.
     pub fn name(self) -> &'static str {
         match self {
             Self::Initialize => "initialize",
@@ -146,6 +155,11 @@ fn topology(v: &Value, root: crate::topology::Device) -> Result<()> {
         "setup graph has unreachable nodes or false/duplicate leaves",
     )
 }
+/// Validate an initial setup plan document.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(v: &Value) -> Result<()> {
     json::fields(
         v,
@@ -214,6 +228,7 @@ pub fn validate(v: &Value) -> Result<()> {
         "initialization/adoption differs from original repository review",
     )
 }
+/// A server-made setup plan bound to its review, owner and configuration state.
 pub struct Plan<'a, 'r, 'd> {
     review: &'a Review<'r, 'd>,
     image: Image,
@@ -223,6 +238,12 @@ pub struct Plan<'a, 'r, 'd> {
     original: Value,
 }
 impl<'a, 'r, 'd> Plan<'a, 'r, 'd> {
+    /// Build the plan for setup `id` by `uid` from `review`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the owner is invalid, the configuration is not on the original Root mount, or
+    /// `authorize` fails.
     pub fn observe(
         review: &'a Review<'r, 'd>,
         id: &str,
@@ -273,6 +294,11 @@ impl<'a, 'r, 'd> Plan<'a, 'r, 'd> {
         authorize()?;
         Ok(this)
     }
+    /// Verify that no backup configuration exists yet.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any configuration file or setup record exists.
     pub fn recheck_initial(&self) -> Result<()> {
         self.review.recheck()?;
         self.recheck_identity()?;
@@ -311,10 +337,20 @@ impl<'a, 'r, 'd> Plan<'a, 'r, 'd> {
             "original setup plan source/parent changed",
         )
     }
+    /// The plan document.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Plan::recheck_initial`].
     pub fn value(&self) -> Result<Value> {
         self.recheck_initial()?;
         Ok(self.original.clone())
     }
+    /// SHA-256 of the canonical plan document.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Plan::recheck_initial`].
     pub fn digest(&self) -> Result<String> {
         self.recheck_initial()?;
         Ok(json::sha256(&json::canonical(&self.original)?))
@@ -329,14 +365,29 @@ impl<'a, 'r, 'd> Plan<'a, 'r, 'd> {
         self.recheck_identity()?;
         self.image.actor()
     }
+    /// The source storage guard.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan's inputs changed.
     pub fn source_guard(&self) -> Result<&crate::storage_runtime::Guard> {
         self.recheck_identity()?;
         Ok(self.guard())
     }
+    /// The setup mode.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan's inputs changed.
     pub fn mode(&self) -> Result<Mode> {
         self.recheck_identity()?;
         Mode::parse(enzimos_platform::json::string(&self.original["mode"])?)
     }
+    /// The review the plan was built from.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan's inputs changed.
     pub fn review(&self) -> Result<&'a Review<'r, 'd>> {
         self.recheck_identity()?;
         Ok(self.review)

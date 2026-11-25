@@ -356,6 +356,7 @@ impl Owned {
         lock.recheck()
     }
 }
+/// The reviewed destination mounted writable for a setup body.
 pub struct Scope<'a, 'r, 'd> {
     owned: Owned,
     area: crate::backup_private_area::Area<'a>,
@@ -364,6 +365,11 @@ pub struct Scope<'a, 'r, 'd> {
     authorize: &'a dyn Fn() -> Result<()>,
 }
 impl Scope<'_, '_, '_> {
+    /// Verify the mount, device and lock are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         self.lock.recheck()?;
         self.area.covered()?;
@@ -373,6 +379,10 @@ impl Scope<'_, '_, '_> {
     }
     /// Borrow only during the body. Outstanding clones/children prevent normal
     /// unmount and durable completion; no descriptor number enters a receipt.
+    ///
+    /// # Errors
+    ///
+    /// Fails after close or on [`Scope::recheck`].
     pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         Ok(self
@@ -400,6 +410,10 @@ pub struct Closed<'a, 'r, 'd, T> {
 }
 impl<'a, 'r, 'd, T> Closed<'a, 'r, 'd, T> {
     /// Move the body result out while retaining the original normal-close proof.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the destination signature changed after closure.
     pub fn split(self) -> Result<(T, Closed<'a, 'r, 'd, ()>)> {
         self.recheck()?;
         let Self {
@@ -426,6 +440,11 @@ impl<'a, 'r, 'd, T> Closed<'a, 'r, 'd, T> {
             },
         ))
     }
+    /// Verify the closed destination's signature is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.lock.recheck()?;
         (self.authorize)()?;
@@ -446,6 +465,11 @@ impl<'a, 'r, 'd, T> Closed<'a, 'r, 'd, T> {
         self.recheck()?;
         Ok(&self.binding)
     }
+    /// The setup body's result.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Closed::recheck`].
     pub fn result(&self) -> Result<&T> {
         self.recheck()?;
         Ok(&self.result)
@@ -605,12 +629,21 @@ impl<'a, 'r, 'd> Active<'a, 'r, 'd> {
         self.store.recheck()?;
         Ok(&self.scope)
     }
+    /// Verify the owned mount and source are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when either changed.
     pub fn recheck(&self) -> Result<()> {
         self.scope()?;
         Ok(())
     }
     /// Join the actual owned top-level mount and Source guard to the concrete
     /// destination used by the consumer; a matching JSON binding is insufficient.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `destination` is not this mount's root on the original source.
     pub fn require_destination(
         &self,
         destination: &crate::backup_destination::Destination<'_>,
@@ -638,6 +671,11 @@ impl<'a, 'r, 'd> Active<'a, 'r, 'd> {
         )?;
         self.recheck()
     }
+    /// Unmount after a successful body.
+    ///
+    /// # Errors
+    ///
+    /// As [`Active::close_result`].
     pub fn close(self) -> Result<Closed<'a, 'r, 'd, ()>> {
         self.close_result(Ok(()))
     }
@@ -645,6 +683,10 @@ impl<'a, 'r, 'd> Active<'a, 'r, 'd> {
     /// normal close is logged; the identity-checked rollback guards then detach
     /// whatever this scope still owns (never another mount), and the intent is
     /// settled once /backup-repository is proven empty.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the body failed, the unmount fails, or the destination changed after closure.
     pub fn close_result<T>(self, outcome: Result<T>) -> Result<Closed<'a, 'r, 'd, T>> {
         let Self {
             scope,
@@ -801,6 +843,11 @@ pub(crate) fn settle_runtime(
     }
     Ok(settled)
 }
+/// Mount the reviewed destination for setup `id`, run `body`, and unmount.
+///
+/// # Errors
+///
+/// Fails when the review, mount or body fails, or the mount cannot be closed cleanly.
 pub fn with_owned_mount<'a, 'r, 'd, T>(
     review: &'a Review<'r, 'd>,
     id: &str,

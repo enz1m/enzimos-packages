@@ -74,6 +74,7 @@ pub(crate) fn options(body: &str, root: &str) -> Result<String> {
     )?;
     Ok(result)
 }
+/// A fresh update apply plan measured under the operation lock.
 pub struct Plan {
     actor: crate::update_actor::Actor,
     snapshot: Snapshot,
@@ -88,6 +89,12 @@ pub struct Plan {
     boot_files: Vec<crate::boot_volume::Artifact>,
 }
 impl Plan {
+    /// Measure the plan while `_lock` is held.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a pacman transaction is active, storage changed, or fewer than two fresh
+    /// generations remain.
     pub fn observe_locked(_lock: &files::Lock) -> Result<Self> {
         crate::namespaces::initial()?;
         let snapshot = Snapshot::online()?;
@@ -189,6 +196,7 @@ impl Plan {
         plan.recheck_before_mutation()?;
         Ok(plan)
     }
+    /// The plan document.
     pub fn document(&self) -> &Value {
         &self.document
     }
@@ -198,6 +206,11 @@ impl Plan {
     pub(crate) fn image(&self) -> &File {
         &self.image
     }
+    /// Verify the measured inputs are unchanged before mutating.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a measured input changed.
     pub fn recheck_before_mutation(&self) -> Result<()> {
         self.actor.recheck()?;
         self.snapshot.recheck()?;

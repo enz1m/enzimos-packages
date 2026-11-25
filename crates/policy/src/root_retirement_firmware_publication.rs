@@ -185,6 +185,7 @@ impl Member {
         )
     }
 }
+/// The EFI variables used for one-shot selection.
 pub struct Original<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -198,6 +199,11 @@ pub struct Original<'a> {
     state: Value,
 }
 impl<'a> Original<'a> {
+    /// Observe the EFI variables for one-shot selection.
+    ///
+    /// # Errors
+    ///
+    /// Fails without EFI firmware or when the variable directory is unsafe, or `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,

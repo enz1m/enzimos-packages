@@ -12,6 +12,7 @@ use crate::{
 use enzimos_platform::{Error, Result, files, json, require};
 use serde_json::{Value, json as value};
 use std::{os::fd::AsFd, path::Path};
+/// Review of a recovery from birth `birth_id` into generation `generation`.
 pub struct Review {
     idle: Snapshot,
     ledger: catalog::Transaction,
@@ -23,6 +24,11 @@ pub struct Review {
     generation: String,
 }
 impl Review {
+    /// Open the review.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a package transaction is running or the generation is not ready.
     pub fn open(birth_id: &str, generation: &str) -> Result<Self> {
         identity::safe_id(birth_id)?;
         identity::safe_id(generation)?;
@@ -92,6 +98,11 @@ impl Review {
         this.view()?;
         Ok(this)
     }
+    /// The review document.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the live source or selection changed.
     pub fn view(&self) -> Result<Value> {
         self.idle.recheck()?;
         self.ledger.recheck()?;
@@ -127,6 +138,11 @@ impl Review {
         Ok(view)
     }
 }
+/// Prepare recovery job `id` from the review.
+///
+/// # Errors
+///
+/// Fails when the review cannot be opened or the job cannot be recorded.
 pub fn prepare_locked(
     id: &str,
     birth_id: &str,

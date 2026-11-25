@@ -446,6 +446,7 @@ impl Registry {
         journal.recheck()
     }
 }
+/// The offline protection ledgers.
 pub struct Ledgers<'a, 's> {
     control: &'a Control<'a, 's>,
     journal: &'a Journal<'a, 's>,
@@ -637,6 +638,11 @@ impl<'a, 's> Ledgers<'a, 's> {
         }
         self.journal.require_original_control(self.control)
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

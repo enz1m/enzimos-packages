@@ -44,6 +44,7 @@ pub(crate) struct Executing<'j, 'a, 's> {
 pub(crate) struct Succeeded<'j, 'a, 's> {
     original: State<'j, 'a, 's>,
 }
+/// Progress through the remaining deletion targets.
 pub struct Progress<'j, 'a, 's> {
     original: State<'j, 'a, 's>,
 }
@@ -398,6 +399,11 @@ impl<'j, 'a, 's> Progress<'j, 'a, 's> {
         result.recheck()?;
         Ok(result)
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(serde_json::json!({"next_step":self.next_index(),

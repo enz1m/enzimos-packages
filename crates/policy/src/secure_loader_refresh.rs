@@ -46,6 +46,11 @@ pub(crate) fn validate(record: &Value) -> Result<()> {
     }
     Ok(())
 }
+/// Refresh the installed owner loaders on `volume`.
+///
+/// # Errors
+///
+/// Fails when a loader cannot be verified, signed or published.
 pub fn refresh_locked(volume: &Volume, lock: &files::Lock) -> Result<()> {
     refresh_authorized(volume, lock, &mut || lock.recheck())
 }

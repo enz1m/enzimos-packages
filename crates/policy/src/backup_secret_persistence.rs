@@ -184,6 +184,10 @@ pub(crate) fn publication(file: &File, length: usize, guard: &Guard) -> Result<V
 }
 /// `authorize` binds the original current caller, session and reviewed operation.
 /// No credential contents or digest enter this function's memory or receipts.
+///
+/// # Errors
+///
+/// Fails when the credential exists or cannot be written, or `authorize` fails.
 pub fn persist(
     input: &Validated,
     lock: &files::Lock,
@@ -191,6 +195,11 @@ pub fn persist(
 ) -> Result<Value> {
     persist_inner(input, lock, authorize, None)?.public_result()
 }
+/// Persist `input` as the credential of an initializing setup.
+///
+/// # Errors
+///
+/// Fails for an adoption, or as [`persist`].
 pub fn persist_owned_in_setup(
     input: &Validated,
     context: &crate::backup_setup_context::Prepared<'_, '_, '_, '_>,
@@ -204,6 +213,10 @@ pub fn persist_owned_in_setup(
     persist_inner(input, lock, authorize, Some(context))
 }
 /// Adoption publication requires both completed mounts using the original input.
+///
+/// # Errors
+///
+/// Fails when the confirmation belongs to another plan, or as [`persist`].
 pub fn persist_confirmed_in_setup(
     confirmed: &crate::backup_input_authentication::Confirmed<'_, '_, '_>,
     context: &crate::backup_setup_context::Prepared<'_, '_, '_, '_>,

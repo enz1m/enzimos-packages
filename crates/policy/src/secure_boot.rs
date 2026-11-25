@@ -18,18 +18,30 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use zeroize::Zeroizing;
+/// Directory of the EFI variables filesystem.
 pub const EFI: &str = "/sys/firmware/efi/efivars";
 pub(crate) const DIRECTORY: &str = "/var/lib/enzimos-control/secure-boot";
 const GUID: &str = "8be4df61-93ca-11d2-aa0d-00e098032b8c";
+/// File name of the EFI signature database variable.
 pub const DB: &str = "db-d719b2cb-3d3a-4596-a3bc-dad00e67656f";
 fn crypto<T>(v: std::result::Result<T, openssl::error::ErrorStack>) -> Result<T> {
     // Never attach parsed key bytes or crypto-library diagnostics to API errors.
     v.map_err(|_| Error("owner certificate or key operation refused".into()))
 }
+/// Decode a one-byte EFI Boolean variable after its 4-byte attributes.
+///
+/// # Errors
+///
+/// Fails when the body is not a valid Boolean variable.
 pub fn flag(body: &[u8]) -> Result<bool> {
     require(body.len() == 5 && body[4] <= 1, "invalid EFI firmware flag")?;
     Ok(body[4] == 1)
 }
+/// UEFI capability, Secure Boot and setup-mode state read from the EFI variables in `directory`.
+///
+/// # Errors
+///
+/// Fails when a variable is missing or malformed, or the directory changes while read.
 pub fn firmware_at(directory: &Path, owner: u32) -> Result<Value> {
     match std::fs::symlink_metadata(directory) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -62,9 +74,19 @@ pub fn firmware_at(directory: &Path, owner: u32) -> Result<Value> {
     )?;
     Ok(value!({"uefi":true,"capable":true,"enabled":enabled,"setup_mode":setup}))
 }
+/// [`firmware_at`] for the system EFI variables, owned by Root.
+///
+/// # Errors
+///
+/// As [`firmware_at`].
 pub fn firmware() -> Result<Value> {
     firmware_at(Path::new(EFI), 0)
 }
+/// Whether the EFI signature database body contains the DER `certificate`.
+///
+/// # Errors
+///
+/// Fails when the body is oversized or not a valid signature list.
 pub fn db_contains(body: &[u8], certificate: &[u8]) -> Result<bool> {
     require(
         (4..=1024 * 1024).contains(&body.len())
@@ -111,15 +133,23 @@ pub fn db_contains(body: &[u8], certificate: &[u8]) -> Result<bool> {
     }
     Ok(found)
 }
+/// The owner's Secure Boot certificate in PEM and DER form.
 pub struct Material {
     key: Zeroizing<Vec<u8>>,
+    /// PEM certificate.
     pub pem: Vec<u8>,
+    /// DER certificate.
     pub der: Vec<u8>,
 }
 impl Material {
     pub(crate) fn key_file(&self) -> Result<std::fs::File> {
         enzimos_platform::memfile::sealed("enzimos-owner-signing", &self.key)
     }
+    /// Check that `key`, `pem` and `der` are one matching owner key and certificate.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a value is out of bounds or the key and certificate do not match.
     pub fn validate(key: Vec<u8>, pem: Vec<u8>, der: Vec<u8>) -> Result<Self> {
         let key = Zeroizing::new(key);
         require(
@@ -140,6 +170,11 @@ impl Material {
         )?;
         Ok(Self { key, pem, der })
     }
+    /// Generate a new owner key and self-signed certificate.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the clock is unusable or key generation fails.
     pub fn generate() -> Result<Self> {
         let key = crypto(PKey::from_rsa(crypto(Rsa::generate(3072))?))?;
         let mut name = crypto(X509NameBuilder::new())?;
@@ -178,6 +213,12 @@ impl Material {
         let der = crypto(certificate.to_der())?;
         Self::validate(std::mem::take(&mut *private), pem, der)
     }
+    /// Load the owner credentials from a private directory owned by `owner`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the directory or a file is unsafe, missing, changes while read, or the
+    /// credentials do not match.
     pub fn load(directory: &Path, owner: u32) -> Result<Self> {
         let held = files::directory(directory, Some(owner))?;
         let before = held.metadata()?;
@@ -195,6 +236,11 @@ impl Material {
         )?;
         Self::validate(std::mem::take(&mut *key), pem, der)
     }
+    /// Write these credentials as new files in `directory`, owned by `owner`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the directory is unsafe or a file exists or cannot be written.
     pub fn write_new(&self, directory: &Path, owner: u32) -> Result<()> {
         let held = files::create_directory(directory, 0o700, owner)?;
         // A partial directory is deliberately retained. No second key is created
@@ -254,6 +300,12 @@ fn read_material(
     )?;
     Ok(body)
 }
+/// Load the owner credentials, requiring them to be enrolled when Secure Boot is enabled.
+///
+/// # Errors
+///
+/// Fails as [`Material::load`] does, or when Secure Boot is enabled and the certificate is not in
+/// the firmware db.
 pub fn credentials_at(directory: &Path) -> Result<Material> {
     let material = Material::load(directory, 0)?;
     if firmware()?["enabled"] == true {
@@ -265,6 +317,11 @@ pub fn credentials_at(directory: &Path) -> Result<Material> {
     }
     Ok(material)
 }
+/// Whether the owner policy is configured in the control directory.
+///
+/// # Errors
+///
+/// Fails when the control directory or policy is unsafe or incomplete.
 pub fn configured() -> Result<bool> {
     configured_at(
         &files::directory(Path::new(operation::CONTROL), Some(0))?,
@@ -325,6 +382,12 @@ pub(crate) fn configured_at(control: &std::fs::File, owner: u32) -> Result<bool>
     )?;
     Ok(configured)
 }
+/// Create a new owner key in the control directory and report its certificate.
+///
+/// # Errors
+///
+/// Fails on a non-UEFI system, when a key already exists or cannot be observed, or when writing
+/// fails.
 pub fn create_key() -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;
@@ -340,6 +403,11 @@ pub fn create_key() -> Result<Value> {
         value!({"status":"owner-key-created","firmware_changed":false,"certificate":format!("{DIRECTORY}/owner.cer")}),
     )
 }
+/// Whether the installer must carry owner credentials, given whether the target is encrypted.
+///
+/// # Errors
+///
+/// Fails when Secure Boot is enabled and the target is not encrypted.
 pub fn installer_preflight(encrypted: bool) -> Result<bool> {
     operation::root_only()?;
     if firmware()?["enabled"] != true {
@@ -352,6 +420,11 @@ pub fn installer_preflight(encrypted: bool) -> Result<bool> {
     credentials_at(Path::new("/run/enzimos-owner-key"))?;
     Ok(true)
 }
+/// Copy the staged owner credentials into the installer target root.
+///
+/// # Errors
+///
+/// Fails for any other target or when the credentials cannot be copied.
 pub fn install_owner_credentials(target: &Path) -> Result<()> {
     operation::root_only()?;
     require(
@@ -361,6 +434,11 @@ pub fn install_owner_credentials(target: &Path) -> Result<()> {
     let material = credentials_at(Path::new("/run/enzimos-owner-key"))?;
     material.write_new(&target.join("var/lib/enzimos-control/secure-boot"), 0)
 }
+/// Path below `/boot` of a UKI source named by `value`.
+///
+/// # Errors
+///
+/// Fails for names that are not a safe relative path.
 pub fn source_path(value: &str) -> Result<PathBuf> {
     require(
         value.starts_with('/')

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Owner Secure Boot credentials keep private permissions and refuse replacement.
 use enzimos_platform::files;
 use enzimos_policy::secure_boot::{self, Material};
 use std::{os::unix::fs::PermissionsExt, path::Path};

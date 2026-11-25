@@ -12,7 +12,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// User ID of the ephemeral development signing key.
 pub const UID: &str = "enzimOS development install (this machine only)";
+/// An ephemeral GnuPG signer in a fresh private directory.
 pub struct Signer {
     home: PathBuf,
     directory: File,
@@ -20,6 +22,7 @@ pub struct Signer {
     mount: u64,
     owner: u32,
     agent: crate::development_agent_owner::Owner,
+    /// Fingerprint of the signing key.
     pub fingerprint: String,
     retired: bool,
 }
@@ -137,6 +140,10 @@ fn handshake(
 impl Signer {
     /// A fresh directory only. The installer supplies its retained live/target
     /// guard around each call; unprivileged fixtures can use their own directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the directory exists or is unsafe, or GnuPG does not create exactly one key.
     pub fn create(home: &Path, owner: u32) -> Result<Self> {
         require(
             enzimos_platform::process_identity::effective_uid() == owner
@@ -180,6 +187,11 @@ impl Signer {
             .map_err(|e| Error(format!("signer initial recheck: {e}")))?;
         Ok(result)
     }
+    /// Verify the signer is not retired and its directory is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails after retirement or when the directory changed.
     pub fn recheck(&self) -> Result<()> {
         require(!self.retired, "retired development key cannot sign again")?;
         let named = files::directory(&self.home, Some(self.owner))?;
@@ -192,6 +204,11 @@ impl Signer {
         )?;
         self.agent.recheck()
     }
+    /// The armored public key.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Signer::recheck`] or when the export is too large.
     pub fn public(&self) -> Result<Vec<u8>> {
         self.recheck()?;
         let bytes = authority_build::gpg(&self.home, &["--export", &self.fingerprint], &[])?;
@@ -202,6 +219,12 @@ impl Signer {
         self.recheck()?;
         Ok(bytes)
     }
+    /// Write a detached signature of `archive` to the new file `destination`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the archive is not a protected read-only file, the destination exists, or signing
+    /// fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn sign(&self, archive: &File, destination: &Path) -> Result<()> {
         self.recheck()?;
@@ -282,6 +305,11 @@ impl Signer {
     }
     /// Confirm the exact agent's kernel exit before removing only files in this
     /// newly created private-key directory. No installed authority is touched.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the agent's exit cannot be confirmed or the key directory holds unexpected
+    /// members; the key is then kept.
     pub fn retire(&mut self) -> Result<()> {
         self.recheck()?;
         self.agent.terminate()?;
@@ -341,6 +369,11 @@ impl Signer {
         Ok(())
     }
 }
+/// Verify that `signature` is a valid signature of `archive` by `fingerprint` in `home`.
+///
+/// # Errors
+///
+/// Fails when verification fails or the signer differs.
 pub fn verify_local(
     archive: &File,
     signature: &File,

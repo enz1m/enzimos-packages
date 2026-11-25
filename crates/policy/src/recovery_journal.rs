@@ -13,15 +13,24 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::{Path, PathBuf},
 };
+/// Records by id.
 pub type Records = BTreeMap<String, Value>;
+/// Recovery journal folders below the control mount.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
+    /// Recovery jobs.
     Jobs,
+    /// Recovery runs.
     Runs,
+    /// Recovery activations.
     Activations,
+    /// Recovery workflows.
     Workflows,
+    /// Recovery images.
     Images,
+    /// Recovery image publications.
     Publications,
+    /// Media restores.
     Media,
 }
 impl Kind {
@@ -36,6 +45,11 @@ impl Kind {
             Self::Media => "media-restores",
         }
     }
+    /// Validate a record of this kind with identifier `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record is invalid for its kind.
     pub fn validate(self, value: &Value, id: &str) -> Result<()> {
         match self {
             Self::Jobs => recovery_records::job(value, id),
@@ -79,6 +93,11 @@ fn unchanged(previous: &Value, next: &Value, keys: &[&str]) -> Result<()> {
     }
     Ok(())
 }
+/// Require that `next` is a valid successor of `previous` for this journal kind.
+///
+/// # Errors
+///
+/// Fails for an invalid record or a transition that adopts, skips or reverses a phase.
 pub fn transition(kind: Kind, previous: Option<&Value>, next: &Value, id: &str) -> Result<()> {
     kind.validate(next, id)?;
     let Some(previous) = previous else {
@@ -284,11 +303,13 @@ impl Authority {
         }
     }
 }
+/// A recovery journal folder with its records and their original epochs.
 pub struct Journal {
     kind: Kind,
     path: PathBuf,
     directory: Option<File>,
     guard: Authority,
+    /// Current records by id.
     pub records: Records,
     original_records: BTreeMap<String, crate::control_record::Retained>,
 }
@@ -326,6 +347,10 @@ impl Journal {
         self.recheck()
     }
     /// Re-read the complete registry; directory identity alone does not pin its records.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a record or the record set changed.
     pub fn unchanged(&self) -> Result<()> {
         self.recheck()?;
         require(
@@ -353,6 +378,10 @@ impl Journal {
     }
     /// Bounded repeated authority checks use original cached values plus full
     /// actual epochs and exact membership; they never reopen a new JSON baseline.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the folder protection, membership or a record changed.
     pub fn checkpoint(&self) -> Result<()> {
         self.recheck()?;
         require(
@@ -412,6 +441,11 @@ impl Journal {
             serde_json::json!({"records":records,"directory":directory,"mount":self.guard.control_mount_id()}),
         )
     }
+    /// Open the journal folder of `kind`, creating it when `create` is set.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the folder is unsafe or a record is invalid.
     pub fn open(kind: Kind, create: bool) -> Result<Self> {
         Self::open_guarded(kind, create, Authority::Online(Guard::observe()?))
     }
@@ -507,6 +541,11 @@ impl Journal {
         journal.recheck()?;
         Ok(journal)
     }
+    /// Verify the journal folder is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it was replaced or appeared during observation.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         if let Some(held) = &self.directory {
@@ -527,6 +566,13 @@ impl Journal {
         }
         Ok(())
     }
+    /// Save `next` as record `id`, requiring `previous` to be its current value, while holding
+    /// `operation`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record is invalid, the transition is refused, the journal is full or changed,
+    /// or the write fails.
     pub fn save(
         &mut self,
         id: &str,

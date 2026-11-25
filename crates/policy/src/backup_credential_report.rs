@@ -11,6 +11,7 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{fs::File, os::fd::AsFd, time::Duration};
+/// The worker's credential review report.
 pub struct Reported {
     request: Value,
     report: Value,
@@ -140,6 +141,11 @@ impl Reported {
             "original sealed credential outcome differs from request or reported key",
         )
     }
+    /// Close the report with the worker's closed request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request belongs to another worker.
     pub fn close<'g>(self, closed: ClosedRequest<'g>) -> Result<Closed<'g>> {
         self.recheck()?;
         closed.require_request(&self.request)?;
@@ -185,6 +191,11 @@ impl Closed<'_> {
         self.recheck()?;
         json::fingerprint(&material)
     }
+    /// Result document of the review.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the report changed.
     pub fn result(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -193,6 +204,11 @@ impl Closed<'_> {
             "key_creation_replayed":false,"old_access_revoked":false}),
         )
     }
+    /// Verify the report and closure are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         self.closed.require_request(&self.original.request)
@@ -235,6 +251,11 @@ impl Closed<'_> {
         self.recheck()?;
         Ok(enzimos_platform::json::string(&self.original.report["result"]["new_key"])?.into())
     }
+    /// JSON evidence for the report and closure.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

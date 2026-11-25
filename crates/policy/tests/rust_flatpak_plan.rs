@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Offline Flatpak plan and remote policy validation.
 use enzimos_policy::flatpak_plan::{self as plan, Source};
 const REMOTE: &str = include_str!("fixtures/flathub.flatpakrepo");
 #[test]

@@ -26,8 +26,11 @@ pub(crate) fn root_retirements_idle(
             && v["filesystem_uuid"] == filesystem
     })
 }
+/// Proof that no online transition journal holds an in-flight record.
 pub struct Snapshot {
+    /// Storage guard the journals were read from.
     pub guard: Guard,
+    /// The observed journal records.
     pub records: Value,
     adoption: Option<String>,
     planned: Option<String>,
@@ -566,6 +569,11 @@ impl Snapshot {
         this.recheck()?;
         Ok(this)
     }
+    /// Observe every online transition journal and require them idle.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a journal holds an in-flight record or cannot be read.
     pub fn online() -> Result<Self> {
         Self::new(None, None)
     }
@@ -729,9 +737,19 @@ impl Snapshot {
         published.require_original_observation(original)?;
         self.guard.recheck()
     }
+    /// Verify every journal is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a journal changed.
     pub fn recheck(&self) -> Result<()> {
         self.recheck_with_catalog(None)
     }
+    /// [`Snapshot::recheck`] while `pending` is the only catalog change.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a journal changed or the catalog differs from `pending`.
     pub fn recheck_catalog_pending(
         &self,
         pending: &enzimos_platform::publication::Prepared,

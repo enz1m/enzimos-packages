@@ -5,6 +5,7 @@ use enzimos_platform::{Result, files, json, require, stream_copy};
 use serde_json::{Value, json as value};
 use std::path::Path;
 pub(crate) const MARKER: &str = "/run/enzimos/installer-rescue-origin.json";
+/// Installed path of the native policy binary.
 pub const POLICY: &str = "/usr/lib/enzimos-native/enzimos-policy";
 fn observed() -> Result<Value> {
     operation::root_only()?;
@@ -50,6 +51,11 @@ fn observed() -> Result<Value> {
         value!({"schema":1,"boot_id":operation::boot_id()?,"kernel":namespaces::kernel_release()?,"policy_sha256":sha}),
     )
 }
+/// Record the media origin of this boot.
+///
+/// # Errors
+///
+/// Fails when the origin cannot be measured or written.
 pub fn initialize() -> Result<Value> {
     let value = observed()?;
     files::ensure_directory(Path::new("/run/enzimos"), 0o700, 0)?;
@@ -58,6 +64,11 @@ pub fn initialize() -> Result<Value> {
     files::atomic(Path::new(MARKER), &bytes, 0o600, Some(0), false)?;
     current()
 }
+/// The recorded media origin of this boot.
+///
+/// # Errors
+///
+/// Fails when the boot or native policy identity changed.
 pub fn current() -> Result<Value> {
     let expected = observed()?;
     let value = json::decode(&files::read(Path::new(MARKER), 4096, Some(0), true)?, 4096)?;

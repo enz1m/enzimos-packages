@@ -3,12 +3,19 @@
 use crate::settings_command::Command;
 use enzimos_platform::{Result, require, secret};
 use std::{fs::File, os::fd::BorrowedFd, time::Duration};
+/// A sealed secret input checked by the confined validator.
 pub struct Validated {
     uid: u32,
     original: secret::Retained,
     reader: Command,
 }
 impl Validated {
+    /// Retain `fd` from `uid` after the validator accepts it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the input is not a valid sealed secret, the validator fails or writes output, or
+    /// `authorize` fails.
     pub fn retain(
         fd: BorrowedFd<'_>,
         uid: u32,
@@ -42,6 +49,11 @@ impl Validated {
     pub(crate) fn owner(&self) -> u32 {
         self.uid
     }
+    /// Verify the input is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         self.reader.recheck()
@@ -50,6 +62,11 @@ impl Validated {
         self.recheck()?;
         self.original.length()
     }
+    /// The input descriptor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the input changed.
     pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
         self.original.fd()

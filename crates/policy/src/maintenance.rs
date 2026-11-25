@@ -19,6 +19,11 @@ fn command(action: &str) -> Result<(&'static str, &'static [&'static str])> {
         )),
     }
 }
+/// Run maintenance `action` against the configured root, or defer it while the lock is busy.
+///
+/// # Errors
+///
+/// Fails for unknown actions or when the command fails.
 pub fn maintain(action: &str) -> Result<Value> {
     let (program, args) = command(action)?;
     operation::root_only()?;

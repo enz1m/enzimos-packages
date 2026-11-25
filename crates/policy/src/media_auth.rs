@@ -13,9 +13,13 @@ use std::{
 use zeroize::Zeroizing;
 pub(crate) const CONSUMER: &str = "/usr/lib/enzimos-native/enzimos-media-auth";
 pub(crate) const MAX_DATA: usize = 256 * 1024;
+/// An installed account that can unlock the recovery media.
 pub struct Account {
+    /// Account name.
     pub name: String,
+    /// User ID.
     pub uid: u32,
+    /// Primary group ID.
     pub gid: u32,
     pub(crate) hash: Zeroizing<Vec<u8>>,
 }

@@ -75,6 +75,11 @@ pub(crate) fn validate(body: &Value) -> Result<()> {
         "home history receipt phase or snapshot proof",
     )
 }
+/// The current Snapper source and provider evidence.
+///
+/// # Errors
+///
+/// Fails when Snapper cannot be queried.
 pub fn plan() -> Result<Value> {
     let lock = operation::lock()?;
     let source = Source::observe()?;
@@ -83,6 +88,10 @@ pub fn plan() -> Result<Value> {
     Ok(value!({"source":source.evidence()?,"provider":command.evidence()?}))
 }
 /// A manual snapshot: Snapper's number cleanup applies the "manual" limit.
+///
+/// # Errors
+///
+/// Fails when the plan changed, authorization fails, or Snapper fails.
 pub fn create<F: FnMut() -> Result<()>>(
     expected: Option<&Value>,
     authorization: F,

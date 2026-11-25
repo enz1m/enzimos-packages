@@ -3,6 +3,11 @@
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeMap;
+/// Collect the boot inventory in the legacy report form.
+///
+/// # Errors
+///
+/// As [`crate::boot_inventory::collect`].
 pub fn collect() -> Result<Value> {
     view(crate::boot_inventory::collect()?)
 }

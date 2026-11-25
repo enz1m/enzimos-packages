@@ -16,6 +16,7 @@ use std::{
     os::fd::{AsFd, AsRawFd, BorrowedFd},
     time::Duration,
 };
+/// A sealed source offer for the reserved transfer worker.
 pub struct Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
     reserved: Reserved<'a, 'b, 'c, 's, 'cfg, 'g>,
     caller: &'o Caller,
@@ -27,6 +28,11 @@ pub struct Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
     failed: bool,
 }
 impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
+    /// Seal the source offer for `reserved` and `caller`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the offer exceeds its bound or `authorize` fails.
     pub fn enter(
         mut reserved: Reserved<'a, 'b, 'c, 's, 'cfg, 'g>,
         caller: &'o Caller,
@@ -99,6 +105,11 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
     }
     /// Original intent is durable before the first packet. Any partial send is
     /// uncertain and never replayed, including on this same still-live actor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the offer was already sent or failed, a chunk cannot be sent, or `authorize`
+    /// fails.
     pub fn send(
         &mut self,
         channel: &Packet,
@@ -109,6 +120,11 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
     }
     /// Send exactly one original chunk, allowing the owning caller to service
     /// fresh worker checkpoints between chunks. Partial sends retire this actor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the offer was already sent or failed, the chunk cannot be sent, or `authorize`
+    /// fails.
     pub fn send_next(
         &mut self,
         channel: &Packet,
@@ -178,6 +194,11 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
         self.failed = false;
         Ok(self.next == chunks.len())
     }
+    /// JSON evidence for the offer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the offer changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -185,6 +206,11 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
             "receiver_accepted":false,"source_mounts_admitted":false,"transfer_complete":false,"backup_complete":false}),
         )
     }
+    /// Close the offer and release its source descriptions.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the offer is incomplete or `authorize` fails.
     pub fn close(
         self,
         authorize: &mut dyn FnMut() -> Result<()>,

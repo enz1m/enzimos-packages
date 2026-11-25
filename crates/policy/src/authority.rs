@@ -3,6 +3,7 @@
 use enzimos_platform::{Error, Result, require};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
+/// Fingerprints of the five Arch master signing keys.
 pub const MASTERS: [&str; 5] = [
     "2AC0A42EFB0B5CBC7A0402ED4DC95B6D7BE9892E",
     "3572FA2A1B067F22C58AF155F8B821B42A6FDCD7",
@@ -10,10 +11,17 @@ pub const MASTERS: [&str; 5] = [
     "99B6618472A3B3B814185BAED7D3D823B88BDB9B",
     "D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C",
 ];
+/// GnuPG configuration of an authority home.
 pub const CONFIG: &str =
     "trust-model direct\nno-auto-key-retrieve\nauto-key-locate clear\nno-autostart\n";
+/// Files that make up an authority home.
 pub const FILES: [&str; 4] = ["pubring.gpg", "trustdb.gpg", "gpg.conf", "approved.trust"];
 pub(crate) const MINIMUM_APPROVED: usize = 10;
+/// Require an uppercase 40-digit hex fingerprint.
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn fingerprint(s: &str) -> Result<&str> {
     require(
         s.len() == 40
@@ -73,6 +81,11 @@ fn arch_uid(s: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_graphic() && !b"<>@".contains(&b))
 }
+/// Primary key fingerprints and UIDs in a GnuPG colon listing.
+///
+/// # Errors
+///
+/// Fails when the listing is malformed or repeats a key.
 pub fn identities(body: &str) -> Result<BTreeSet<(String, String)>> {
     let mut result = BTreeSet::new();
     let mut primary = None;
@@ -153,6 +166,11 @@ pub(crate) fn masters_usable(body: &str, now: u64) -> Result<()> {
     }
     Ok(())
 }
+/// Master keys trusted by all five master contexts, excluding `revoked`.
+///
+/// # Errors
+///
+/// Fails without exactly five contexts or when a master key is revoked.
 pub fn quorum(
     listings: &BTreeMap<String, String>,
     revoked: &BTreeSet<String>,
@@ -207,6 +225,11 @@ pub(crate) fn trusted_local(body: &str, arch: &BTreeSet<String>) -> Result<Vec<S
     }
     Ok(result.into_iter().collect())
 }
+/// Fingerprints in a GnuPG colon listing.
+///
+/// # Errors
+///
+/// Fails when a fingerprint row is missing.
 pub fn fingerprints(body: &str) -> Result<BTreeSet<String>> {
     let mut result = BTreeSet::new();
     for row in rows(body)? {
@@ -217,6 +240,11 @@ pub fn fingerprints(body: &str) -> Result<BTreeSet<String>> {
     }
     Ok(result)
 }
+/// GnuPG ownertrust text giving `keys` full trust.
+///
+/// # Errors
+///
+/// Fails when the output would exceed its bound.
 pub fn trust(keys: impl IntoIterator<Item = String>) -> Result<String> {
     let mut result = String::new();
     for key in keys.into_iter().collect::<BTreeSet<_>>() {

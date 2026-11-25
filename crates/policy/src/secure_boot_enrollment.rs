@@ -368,6 +368,10 @@ impl Firmware {
 
 /// No arbitrary variable selector and no cold receipt replay. Only this live
 /// producer can advance its original prepared record after a known append.
+///
+/// # Errors
+///
+/// Fails outside Setup Mode, without an owner certificate, or when the append fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat, write).")]
 pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;

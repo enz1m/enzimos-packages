@@ -34,6 +34,7 @@ fn shape(file: &File) -> Result<Shape> {
         mount_identity::id(file.as_fd(), true)?,
     ))
 }
+/// A durable transfer request reserved for one worker scope.
 pub struct Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
     context: &'r Context<'a, 'b, 'c, 's, 'cfg, 'g>,
     scope: Scope,
@@ -47,6 +48,11 @@ pub struct Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
     delivered: bool,
 }
 impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
+    /// Reserve a transfer request for the worker in `scope`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the worker or context changed, the registry is full, or `authorize` fails.
     pub fn enter(
         context: &'r Context<'a, 'b, 'c, 's, 'cfg, 'g>,
         scope: Scope,
@@ -133,6 +139,10 @@ impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
     /// Only the owned original kernel scope may authorize intent retirement.
     /// This consumes the live actor; it does not release source descriptions,
     /// delete captures/staging or assert a completed transfer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed scope is not the reserved worker's, or the record cannot be updated.
     pub fn close(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<ClosedRequest> {
         self.components(authorize)?;
         let closed = self.scope.close()?;
@@ -186,14 +196,30 @@ impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
     pub(crate) fn control_scope(&self) -> &Scope {
         &self.scope
     }
+    /// The reserved request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the reservation changed or `authorize` fails.
     pub fn request(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.request)
     }
+    /// The worker's kernel scope.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the reservation changed or `authorize` fails.
     pub fn kernel_scope(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Scope> {
         self.components(authorize)?;
         Ok(&self.scope)
     }
+    /// Send the request to the reserved worker over `channel`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request was already sent, the peer is another process, or the send fails.
+    /// Sends are never retried.
     pub fn send(
         &mut self,
         channel: &Packet,
@@ -239,6 +265,11 @@ impl<'r, 'a, 'b, 'c, 's, 'cfg, 'g> Reserved<'r, 'a, 'b, 'c, 's, 'cfg, 'g> {
         self.delivered = true;
         self.recheck(authorize)
     }
+    /// JSON evidence for the reservation and its progress.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the reservation changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -275,6 +306,11 @@ impl ClosedRequest {
             "original closed transfer request or receipt changed",
         )
     }
+    /// JSON evidence for the closed request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed request changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

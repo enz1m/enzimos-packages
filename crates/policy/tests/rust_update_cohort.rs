@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Admission of an offline update cohort.
 use enzimos_policy::update_cohort::Cohort;
 use serde_json::{Value, json};
 use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::Path};

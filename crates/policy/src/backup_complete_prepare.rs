@@ -252,6 +252,12 @@ fn copy_tree(
     subvolume::sync(target.directory.as_fd())?;
     authorize()
 }
+/// Prepare a complete restore of stage `stage_uuid` into fresh root, home and boot storage while
+/// `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the replacement storage aliases the stage or home, or is not a fresh fixed layout.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fchmod, openat, unlinkat).")]
 pub fn prepare_locked(
     lock: &files::Lock,

@@ -3,21 +3,39 @@
 use crate::{identity, recovery_records as records};
 use enzimos_platform::{Error, Result, require};
 use std::collections::BTreeMap;
+/// Recovery run identity read from the kernel command line.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Parameters {
+    /// Recovery job identifier.
     pub id: String,
+    /// LUKS UUID of the encrypted root.
     pub luks: String,
+    /// Btrfs filesystem UUID.
     pub filesystem: String,
+    /// Control subvolume.
     pub control: String,
+    /// Authority subvolume.
     pub authority: String,
+    /// ESP filesystem UUID.
     pub esp: String,
+    /// UEFI loader entry to restore afterwards.
     pub uefi_previous: String,
+    /// Index of the BIOS menu entry to restore afterwards.
     pub bios_previous: usize,
+    /// Index of this run's own BIOS menu entry.
     pub bios_own: usize,
+    /// Power action after the run (`reboot` or `poweroff`).
     pub exit: String,
+    /// Whether the run was started automatically.
     pub automatic: bool,
 }
 impl Parameters {
+    /// Parse the `enzimos.*` parameters of a kernel command line.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the command line is too long, a parameter is missing, duplicated, malformed or
+    /// unknown.
     pub fn parse(command_line: &str) -> Result<Self> {
         require(
             command_line.len() <= 65536 && !command_line.contains('\0'),
@@ -109,6 +127,11 @@ impl Parameters {
             automatic,
         })
     }
+    /// Require that these parameters match the recorded run and its plan.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any parameter differs from the records.
     pub fn matches_record(&self, run: &serde_json::Value, job: &serde_json::Value) -> Result<()> {
         records::run(run, &self.id)?;
         records::job(job, &self.id)?;

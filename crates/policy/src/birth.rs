@@ -110,6 +110,11 @@ pub(crate) fn validate(v: &Value, identifier: &str, fs_uuid: &str) -> Result<()>
     }
     Ok(())
 }
+/// Parse `btrfs subvolume show` output for `path`.
+///
+/// # Errors
+///
+/// Fails when the output is too large, ambiguous or incomplete.
 pub fn parse_show(body: &str, path: &str) -> Result<Value> {
     require(body.len() <= 256 * 1024, "Btrfs metadata bound")?;
     let mut fields = std::collections::BTreeMap::new();

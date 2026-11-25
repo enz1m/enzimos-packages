@@ -5,11 +5,17 @@ use crate::{
 };
 use enzimos_platform::{Result, files};
 use serde_json::Value;
+/// The complete online boot context of a root retirement, without mutators.
 pub struct Boot<'a> {
     original: Context<'a, 'a>,
     namespace: crate::root_retirement_signed_namespace::Namespace<'a>,
 }
 impl<'a> Boot<'a> {
+    /// Observe the boot context for planning.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the loaders, ESP or signing namespace cannot be retained or `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -31,6 +37,11 @@ impl<'a> Boot<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
+    /// Observe the boot context of an existing receipt in `journal`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the loaders, ESP or signing namespace cannot be retained or `authorize` fails.
     pub fn observe_journal(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -55,6 +66,11 @@ impl<'a> Boot<'a> {
         this.recheck(authorize)?;
         Ok(this)
     }
+    /// Hand the loader state to finishing after the target was deleted.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the context changed or does not match `journal` and `inventory`.
     pub fn finish_loaders(
         self,
         journal: &crate::root_retirement_online_journal::Journal<'_>,
@@ -279,6 +295,11 @@ impl<'a> Boot<'a> {
             authorize,
         )
     }
+    /// JSON evidence for the boot context.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = serde_json::json!({"boot":self.original.evidence(authorize)?,

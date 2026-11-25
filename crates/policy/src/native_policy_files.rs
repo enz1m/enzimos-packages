@@ -10,6 +10,11 @@ pub(crate) const FILES: &[&str] = &[
     "enzimos-recovery-run-init",
     "recovery-pacman.conf",
 ];
+/// Measure the native policy files in `directory`.
+///
+/// # Errors
+///
+/// Fails when the directory is unsafe or holds unknown files.
 pub fn observe(directory: &Path) -> Result<Value> {
     let held = files::directory(directory, Some(0))?;
     let directory_identity = files::identity(&held.metadata()?);

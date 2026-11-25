@@ -15,8 +15,23 @@ use std::os::fd::AsFd;
 /// Supplied by the actual server-held backend ledger. Implementations retain
 /// and recheck their original descriptions; JSON evidence is never an actor.
 pub trait References {
+    /// Verify the referenced records are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     fn recheck(&self) -> Result<()>;
+    /// The referenced records.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they cannot be read.
     fn records(&self) -> Result<Value>;
+    /// Evidence used for planning.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it cannot be built.
     fn planning_evidence(&self) -> Result<Value>;
 }
 #[expect(
@@ -47,6 +62,7 @@ impl Backend<'_> {
     }
 }
 
+/// Every online registry and journal that could reference a root, retained for planning.
 pub struct Observation<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -68,6 +84,10 @@ impl<'a> Observation<'a> {
         Self::observe_inner(guard, lock, None, None, authorize)
     }
     /// The caller supplies the original server actor, never an exempt request ID.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a registry or journal cannot be retained or `authorize` fails.
     pub fn observe_referenced(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -85,6 +105,11 @@ impl<'a> Observation<'a> {
     ) -> Result<Self> {
         Self::observe_inner(guard, lock, None, Some(journal), authorize)
     }
+    /// [`Observation::observe_referenced`] that also retains the online journal's own records.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a registry or journal cannot be retained or `authorize` fails.
     pub fn observe_journal_referenced(
         guard: &'a Guard,
         lock: &'a files::Lock,
@@ -651,6 +676,10 @@ impl<'a> Observation<'a> {
         Ok(&self.original)
     }
     /// Diagnostic evidence cannot grant target ownership or deletion authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a retained registry changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = value!({"original":self.original,"execution_authorized":false,

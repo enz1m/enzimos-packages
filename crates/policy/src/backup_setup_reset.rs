@@ -389,6 +389,11 @@ fn probe(uuid: &str, source_uuid: &str) -> Result<Repository> {
     drop(context);
     Ok(found)
 }
+/// Settle an interrupted backup setup while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the setup state cannot be read or settled safely.
 pub fn reset_locked(lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;

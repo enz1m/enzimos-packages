@@ -9,7 +9,13 @@ use serde_json::Value;
 use std::{fs::File, os::fd::AsFd, path::Path};
 pub(crate) const MAX_IMAGE: u64 = 192 * 1024 * 1024;
 pub(crate) const MAX_IMAGES: usize = 8;
+/// Assurance level of a published recovery image.
 pub const ASSURANCE: &str = "software-local-recovery-boot-not-firmware-or-application-health";
+/// Require a recovery image identifier (`ri-` and a digest).
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn identifier(id: &str) -> Result<&str> {
     let hash = id
         .strip_prefix("ri-")
@@ -17,6 +23,11 @@ pub fn identifier(id: &str) -> Result<&str> {
     identity::sha(hash)?;
     Ok(id)
 }
+/// Validate a recovery image descriptor.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn descriptor(v: &Value) -> Result<()> {
     json::fields(
         v,
@@ -32,10 +43,20 @@ pub fn descriptor(v: &Value) -> Result<()> {
     identity::sha(records::text(v, "base_initrd_sha256")?)?;
     recovery_activation::policy_files(&v["policy_files"], native, true)
 }
+/// Identifier of the image described by `v`.
+///
+/// # Errors
+///
+/// Fails when `v` cannot be canonicalized.
 pub fn image_id(v: &Value) -> Result<String> {
     descriptor(v)?;
     Ok(format!("ri-{}", json::fingerprint(v)?))
 }
+/// Validate a recovery image manifest.
+///
+/// # Errors
+///
+/// Fails when the schema, a file or a size is invalid.
 pub fn manifest(v: &Value) -> Result<()> {
     json::fields(v, "schema identity files")?;
     require(
@@ -76,6 +97,11 @@ pub(crate) fn entry_texts(id: &str, options: &str) -> Result<(String, String)> {
         ),
     ))
 }
+/// Validate recovery image record `id`.
+///
+/// # Errors
+///
+/// Fails when a field is invalid or the identity does not match `id`.
 pub fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(
         v,
@@ -353,11 +379,20 @@ impl Published {
         Ok(retained)
     }
 }
+/// Verify the published image record `v` against its files.
+///
+/// # Errors
+///
+/// Fails when the record is invalid or a published file changed.
 pub fn verify_published(v: &Value) -> Result<()> {
     Published::observe(v)?.recheck()
 }
 
 /// Publisher-owned image status; original artifacts remain held through final checks.
+///
+/// # Errors
+///
+/// Fails when the image journal or published files cannot be observed.
 pub fn status_locked(lock: &enzimos_platform::files::Lock) -> Result<Value> {
     crate::operation::root_only()?;
     crate::namespaces::initial()?;

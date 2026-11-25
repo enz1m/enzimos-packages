@@ -161,6 +161,11 @@ fn observed(marker: &Marker<'_>, command: &Command, approval: Option<Value>) -> 
         value!({"marker":marker.evidence()?,"timer":timer(command)?,"provider":command.evidence()?,"approval":approval}),
     )
 }
+/// The schedule timer state.
+///
+/// # Errors
+///
+/// Fails when systemctl fails.
 pub fn observation(enabled: bool) -> Result<Value> {
     crate::namespaces::initial()?;
     let storage = Guard::observe()?;
@@ -208,6 +213,11 @@ pub fn observation(enabled: bool) -> Result<Value> {
     };
     observed(&marker, &command, approval)
 }
+/// Enable or disable scheduled backups if the state still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the plan or approval changed, `authorize` fails, or systemctl fails.
 pub fn set<F: FnMut() -> Result<()>>(
     enabled: bool,
     id: &str,

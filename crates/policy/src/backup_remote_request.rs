@@ -4,6 +4,7 @@ use enzimos_platform::{Error, Result, fd_packet::Credentials, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
 pub(crate) const LIMIT: usize = 65536;
+/// Number of descriptors in a network share copy handoff.
 pub const DESCRIPTORS: usize = 16;
 pub(crate) const ROLES: [&str; 14] = [
     "caller-pidfd",

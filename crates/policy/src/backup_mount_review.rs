@@ -113,6 +113,11 @@ pub struct Review<'a, 'd> {
     original: Value,
 }
 impl<'a, 'd> Review<'a, 'd> {
+    /// Open the review `id` of `selection`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the review is missing, unsafe, or `authorize` fails.
     pub fn open(
         selection: &'a Selection<'d>,
         id: &str,
@@ -196,6 +201,11 @@ fn prepared(selection: &Selection<'_>, id: &str) -> Result<Value> {
 }
 /// `authorize` must revalidate the caller's original fresh grant and session.
 /// This primitive is not advertised as installed/qualified by the native frontend.
+///
+/// # Errors
+///
+/// Fails when the signature changed, the journal is outside the control mount, or `authorize`
+/// fails.
 pub fn review(
     selection: &Selection<'_>,
     id: &str,

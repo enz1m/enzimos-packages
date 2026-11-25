@@ -250,6 +250,15 @@ pub(crate) fn package_rows(bytes: &[u8]) -> Result<Value> {
     }
     Ok(Value::Object(result))
 }
+/// Generations of the registry `data` with their kernels.
+///
+/// # Errors
+///
+/// Fails when the registry is invalid.
+///
+/// # Panics
+///
+/// Never for a registry that passes validation, which requires integer ordinals and kernel objects.
 pub fn generations(data: &Value) -> Result<Value> {
     catalog::validate(data, data["filesystem_uuid"].as_str().unwrap_or(""))?;
     let mut rows = enzimos_platform::json::object(&data["generations"])?
@@ -276,6 +285,11 @@ pub fn generations(data: &Value) -> Result<Value> {
             .collect(),
     ))
 }
+/// System overview: OS release, generations and recovery images.
+///
+/// # Errors
+///
+/// Fails when a registry or record cannot be read.
 pub fn system() -> Result<Value> {
     crate::namespaces::initial()?;
     crate::operation::root_only()?;

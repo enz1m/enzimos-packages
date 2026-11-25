@@ -76,6 +76,7 @@ fn program(top: u32, owner: u32, dm: u32) -> Vec<libc::sock_filter> {
     out.push(row(0x06, 0, 0, legacy::DENY));
     out
 }
+/// The installed native retirement syscall filter.
 pub struct Installed<'a, 's> {
     scope: &'s Scope,
     mounts: &'a Mounts<'s>,
@@ -316,6 +317,11 @@ impl<'a, 's> Installed<'a, 's> {
         self.inventory.require_original_journal(journal)?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

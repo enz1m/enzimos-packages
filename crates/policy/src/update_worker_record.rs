@@ -4,10 +4,19 @@ use crate::{identity, module_view_record};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
 pub(crate) const MAXIMUM: usize = 32;
+/// Installed path of the update worker.
 pub const EXECUTABLE: &str = "/usr/lib/enzimos-native/enzimos-update-worker";
+/// pacman configuration the update worker uses.
 pub const CONFIG: &str = "/etc/enzimos/update-pacman.conf";
+/// RuntimeMaxSec of the update worker unit.
 pub const RUNTIME_SECONDS: u64 = 1400;
+/// TimeoutStopSec of the update worker unit.
 pub const STOP_SECONDS: u64 = 10;
+/// Validate a worker caller identity (PID, start ticks and executable digest).
+///
+/// # Errors
+///
+/// Fails when a field is missing or out of range.
 pub fn process(value: &Value) -> Result<()> {
     json::fields(value, "pid start_ticks executable_sha256")?;
     require(
@@ -24,6 +33,11 @@ pub fn process(value: &Value) -> Result<()> {
     )?;
     Ok(())
 }
+/// Validate a retained directory identity (device, inode and mount).
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn directory(value: &Value) -> Result<()> {
     json::fields(value, "device inode mount")?;
     require(
@@ -33,6 +47,11 @@ pub fn directory(value: &Value) -> Result<()> {
         "worker retained directory identity refused",
     )
 }
+/// Validate a sealed worker request of schema 1, 2 or 3.
+///
+/// # Errors
+///
+/// Fails for other schemas or when a field is missing or invalid.
 pub fn request(value: &Value) -> Result<()> {
     let schema = value["schema"]
         .as_u64()
@@ -113,6 +132,11 @@ pub fn request(value: &Value) -> Result<()> {
     }
     Ok(())
 }
+/// Validate a request that may be executed, which requires the description-bound schema.
+///
+/// # Errors
+///
+/// Fails for older schemas or an invalid request.
 pub fn execution_request(value: &Value) -> Result<()> {
     request(value)?;
     require(
@@ -121,6 +145,10 @@ pub fn execution_request(value: &Value) -> Result<()> {
     )
 }
 /// Closed wire role only; recipients still pin the actual kernel task and image.
+///
+/// # Errors
+///
+/// Fails for requests without a known caller image.
 pub fn caller_image(value: &Value) -> Result<&'static str> {
     execution_request(value)?;
     if value["schema"] == 2 {
@@ -129,14 +157,29 @@ pub fn caller_image(value: &Value) -> Result<&'static str> {
         crate::update_actor::image_path(enzimos_platform::json::string(&value["caller_image"])?)
     }
 }
+/// Systemd unit name of the update worker for job `id`.
+///
+/// # Errors
+///
+/// Fails unless `id` is a safe identifier.
 pub fn unit(id: &str) -> Result<String> {
     identity::safe_id(id)?;
     Ok(format!("enzimos-update-worker-{id}.service"))
 }
+/// Command-line arguments of the update worker for job `id`.
+///
+/// # Errors
+///
+/// Fails unless `id` is a safe identifier.
 pub fn arguments(id: &str) -> Result<Vec<String>> {
     identity::safe_id(id)?;
     Ok(vec![EXECUTABLE.into(), "serve".into(), id.into()])
 }
+/// Path of the request socket of the update worker for job `id`.
+///
+/// # Errors
+///
+/// Fails unless `id` is a safe identifier.
 pub fn socket_path(id: &str) -> Result<std::path::PathBuf> {
     identity::safe_id(id)?;
     let digest = json::sha256(id.as_bytes());
@@ -145,6 +188,11 @@ pub fn socket_path(id: &str) -> Result<std::path::PathBuf> {
         digest.get(..32).unwrap_or(&digest)
     )))
 }
+/// Validate a worker record of job `id`, including its request digest.
+///
+/// # Errors
+///
+/// Fails when the record has unexpected fields, another id, an invalid request or digest.
 pub fn validate(value: &Value, id: &str) -> Result<()> {
     json::fields(
         value,
@@ -206,6 +254,11 @@ pub fn validate(value: &Value, id: &str) -> Result<()> {
     Ok(())
 }
 /// Validate every service checkpoint before a caller advances its private snapshot.
+///
+/// # Errors
+///
+/// Fails when a checkpoint is invalid, out of order, or the history does not end in a successful
+/// completion.
 pub fn history(before: &Value, checkpoints: &[Value], id: &str) -> Result<Value> {
     validate(before, id)?;
     execution_request(&before["request"])?;
@@ -231,6 +284,11 @@ pub fn history(before: &Value, checkpoints: &[Value], id: &str) -> Result<Value>
     )?;
     Ok(prior.clone())
 }
+/// Require that `after` is a valid next record after `before`.
+///
+/// # Errors
+///
+/// Fails for an invalid record or a transition that replays, skips or reverses a phase.
 pub fn transition(before: Option<&Value>, after: &Value, id: &str) -> Result<()> {
     validate(after, id)?;
     let Some(before) = before else {

@@ -189,6 +189,12 @@ fn folder(volume: &Volume, name: &str, create: bool) -> Result<File> {
     volume.recheck()?;
     Ok(file)
 }
+/// Publish a new recovery image with kernel `options` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when `options` contains a recovery marker, a package transaction is running, or
+/// publication fails.
 pub fn publish_locked(options: &str, lock: &files::Lock) -> Result<Value> {
     records::command_line(options)?;
     require(

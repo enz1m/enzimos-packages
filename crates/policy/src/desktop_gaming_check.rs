@@ -72,6 +72,11 @@ fn controllers() -> Vec<Value> {
         .collect()
 }
 
+/// Gaming readiness diagnostics.
+///
+/// # Errors
+///
+/// Fails when a diagnostic command cannot run.
 pub fn check() -> Result<Value> {
     let mut packages = Map::new();
     for name in PACKAGES {

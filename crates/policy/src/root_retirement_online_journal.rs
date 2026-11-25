@@ -14,12 +14,18 @@ use std::{
     path::Path,
 };
 
+/// Phases of an online root retirement receipt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
+    /// Prepared, not yet executing.
     Prepared,
+    /// Executing deletions.
     Executing,
+    /// Target deleted.
     Deleted,
+    /// Complete.
     Complete,
+    /// Abandoned before deletion.
     Abandoned,
 }
 impl Phase {
@@ -74,6 +80,7 @@ fn validate_observed(row: &Value, id: &str, filesystem: &Value, phase: Phase) ->
         "original online Root receipt phase/filesystem/target mismatch",
     )
 }
+/// An online root retirement receipt retained with its directory and mount.
 pub struct Journal<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -86,6 +93,12 @@ pub struct Journal<'a> {
     record_flags: i32,
 }
 impl<'a> Journal<'a> {
+    /// Retain receipt `id`, requiring it to be in `phase`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the receipt directory is unsafe, the receipt is missing, invalid or in another
+    /// phase.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl).")]
     pub fn observe(
         guard: &'a Guard,
@@ -332,6 +345,11 @@ impl<'a> Journal<'a> {
         published.recheck()?;
         Ok(published)
     }
+    /// The retained receipt.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the receipt changed.
     pub fn record(&self) -> Result<&Value> {
         self.recheck()?;
         self.record.value()
@@ -343,6 +361,11 @@ impl<'a> Journal<'a> {
         )?;
         self.recheck()
     }
+    /// JSON evidence for the receipt and its epoch.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the receipt changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -449,6 +472,11 @@ impl Published<'_> {
         self.recheck()?;
         self.journal.record.value()
     }
+    /// JSON evidence for the publication and its boot entries.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the publication changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

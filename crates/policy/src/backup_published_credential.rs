@@ -102,6 +102,11 @@ impl Published {
         self.recheck()?;
         Ok(self.file.as_fd())
     }
+    /// Public result of the credential publication.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the publication changed.
     pub fn public_result(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -117,6 +122,10 @@ impl Published {
     /// Failure rollback of an incomplete setup: remove exactly this run's
     /// credential and its completion receipt. The caller proves that no
     /// repository was created and no pin was published.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the credential changed or cannot be removed.
     pub fn retract(&self, lock: &files::Lock) -> Result<()> {
         lock.recheck()?;
         self.recheck()?;
@@ -127,6 +136,11 @@ impl Published {
         )?;
         lock.recheck()
     }
+    /// JSON binding of the published credential.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the publication changed.
     pub fn binding(&self) -> Result<Value> {
         self.recheck()?;
         crate::backup_secret_persistence::publication(

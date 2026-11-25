@@ -147,6 +147,11 @@ fn execute(p: &Parameters, image: &str, secret: &[u8], lock: &files::Lock) -> Re
         "namespace_origin_proven":true,"home_overwritten":false,"authority_overwritten":false,"old_roots_retired":false,"ram_handoff":handoff}),
     )
 }
+/// Run the recovery described by `p` as PID 1 on the RAM root.
+///
+/// # Errors
+///
+/// Fails when a step (detachment, unlock, mount or restore) fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (sync).")]
 pub fn run(p: &Parameters) -> Result<Value> {
     bootstrap::quiet()?;

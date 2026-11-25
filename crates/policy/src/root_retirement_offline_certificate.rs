@@ -109,6 +109,7 @@ fn pair(pem: &[u8], der: &[u8]) -> Result<()> {
         "original public PEM/DER certificates differ",
     )
 }
+/// The public owner certificate and policy.
 pub struct Certificate<'a, 's> {
     control: &'a Control<'a, 's>,
     parent: File,
@@ -246,6 +247,11 @@ impl<'a, 's> Certificate<'a, 's> {
         }
         Ok(())
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

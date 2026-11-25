@@ -36,6 +36,7 @@ fn shape(file: &File) -> Result<Shape> {
         mount_identity::id(file.as_fd(), true)?,
     ))
 }
+/// A durable selective export request reserved for one worker scope.
 pub struct Reserved<'r, 'a, 'g> {
     context: &'r Context<'a, 'g>,
     scope: Scope,
@@ -50,6 +51,12 @@ pub struct Reserved<'r, 'a, 'g> {
     delivered: bool,
 }
 impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
+    /// Reserve the export request for the worker in `scope`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the worker or context changed, the request registry is full, or `authorize`
+    /// fails.
     pub fn enter(
         context: &'r Context<'a, 'g>,
         scope: Scope,
@@ -140,6 +147,10 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
     }
     /// Only actual original pidfd death and original empty cgroup can close
     /// this request. Closure supplies no file observation or export publication.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed scope is not the reserved worker's, or the record cannot be updated.
     pub fn close(self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<ClosedRequest<'g>> {
         self.components(authorize)?;
         let closed = self.scope.close()?;
@@ -195,6 +206,12 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         self.components(authorize)?;
         Ok(&self.scope)
     }
+    /// Send the request to the reserved worker over `channel`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request was already sent, the peer is another process, or the send fails.
+    /// Sends are never retried.
     pub fn send(
         &mut self,
         channel: &Packet,
@@ -241,6 +258,11 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         self.delivered = true;
         self.recheck(authorize)
     }
+    /// JSON evidence for the reservation and its progress.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the reservation changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -283,6 +305,11 @@ impl ClosedRequest<'_> {
             "closed selective worker belongs to another original request",
         )
     }
+    /// The closed request's record.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed request changed.
     pub fn binding(&self) -> Result<&Value> {
         self.recheck()?;
         self.closed.binding()
@@ -310,6 +337,11 @@ impl ClosedRequest<'_> {
             "original closed selective export request or receipt changed",
         )
     }
+    /// JSON evidence for the closed request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the closed request changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

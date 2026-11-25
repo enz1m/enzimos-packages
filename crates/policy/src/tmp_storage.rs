@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Whether /tmp is RAM-backed or on disk, applied at the next boot.
 use crate::{operation, settings_command::Command, settings_file::Config};
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::{Value, json};
@@ -57,6 +58,11 @@ fn active_mode(findmnt: &Command) -> Result<&'static str> {
     })
 }
 
+/// The configured and active /tmp storage.
+///
+/// # Errors
+///
+/// Fails when the configuration or mount cannot be read.
 pub fn query() -> Result<Value> {
     let findmnt = Command::open("/usr/bin/findmnt")?;
     let active = active_mode(&findmnt)?;
@@ -73,11 +79,21 @@ fn evidence(config: &Config, findmnt: &Command) -> Result<Value> {
     Ok(json!({"configured":configured(config)?,"configuration":config.evidence()?}))
 }
 
+/// The current observation.
+///
+/// # Errors
+///
+/// Fails when the configuration or mount cannot be read.
 pub fn observation() -> Result<Value> {
     let findmnt = Command::open("/usr/bin/findmnt")?;
     evidence(&Config::open(CONFIG, 16)?, &findmnt)
 }
 
+/// Configure /tmp storage `mode` (`ram` or `disk`) if the state still matches `expected`.
+///
+/// # Errors
+///
+/// Fails for invalid modes, a changed state, failed authorization, or a failed write.
 pub fn set(
     mode: &Value,
     expected: &Value,

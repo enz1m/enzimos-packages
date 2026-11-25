@@ -1,21 +1,40 @@
 // SPDX-License-Identifier: MIT
 //! Typed local-session decisions. Data alone never grants D-Bus caller authority.
 use enzimos_platform::{Error, Result, require};
+/// A logind session as seen by user switching.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Session {
+    /// Logind session ID.
     pub id: String,
+    /// Session object path.
     pub path: String,
+    /// Owner user ID.
     pub uid: u32,
+    /// Seat name.
     pub seat: String,
+    /// Session class, such as `user` or `greeter`.
     pub kind: String,
+    /// Session type, such as `wayland`, `x11` or `tty`.
     pub session_type: String,
+    /// PAM service that opened the session.
     pub service: String,
+    /// Virtual terminal number.
     pub vt: u32,
+    /// Whether the session is active.
     pub active: bool,
+    /// Whether the session is remote.
     pub remote: bool,
+    /// Whether the session is locked.
     pub locked: bool,
 }
+/// Virtual terminals reserved for greeter sessions.
 pub const POOL: [u32; 4] = [3, 4, 5, 6];
+/// Require a local seat0 session of `uid` and `kind`, optionally active and locked as given.
+///
+/// # Errors
+///
+/// Fails with `Not authorized` for any other session, or `Session must be locked` when `locked`
+/// does not match.
 pub fn local(
     s: &Session,
     uid: u32,
@@ -42,11 +61,19 @@ pub fn local(
         "Session must be locked",
     )
 }
+/// How to reach a greeter.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Choice {
+    /// Activate the existing greeter session at this index.
     Activate(usize),
+    /// Start a greeter on this virtual terminal.
     Start(u32),
 }
+/// Pick a free greeter session or an inactive greeter terminal from the pool.
+///
+/// # Errors
+///
+/// Fails when there are too many sessions, a greeter session is invalid, or no terminal is free.
 pub fn choose(
     sessions: &[Session],
     states: &std::collections::BTreeMap<u32, String>,
@@ -72,6 +99,11 @@ pub fn choose(
     }
     Err(Error("No more sessions can be opened".into()))
 }
+/// Require a greeter caller and a locked user session of another user as target.
+///
+/// # Errors
+///
+/// As [`local`] for either session, or when the target is the greeter or the caller.
 pub fn existing(caller: &Session, target: &Session, greeter: u32) -> Result<()> {
     local(caller, greeter, "greeter", Some(true), None)?;
     require(

@@ -318,6 +318,8 @@ fn namespace_drift(
     changes.join("; ")
 }
 
+/// The targets of one online root retirement, joined to the registries and inventory that reference
+/// them.
 pub struct Intent<'a> {
     references: Observation<'a>,
     inventory: &'a Inventory<'a>,
@@ -330,6 +332,11 @@ struct Protection<'a> {
     namespaces: crate::namespaces::Observation,
 }
 impl<'a> Intent<'a> {
+    /// Observe the targets of retiring root `root_uuid`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the root is not uniquely present, a target is referenced, or `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         top: &'a TopMount,
@@ -361,6 +368,10 @@ impl<'a> Intent<'a> {
     }
     /// Join original loader actors and a complete namespace mount sample.
     /// This still supplies no offline deletion or cold receipt authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the boot context does not protect every target or `authorize` fails.
     pub fn protect(
         mut self,
         boot: crate::root_retirement_online_boot::Boot<'a>,
@@ -409,6 +420,10 @@ impl<'a> Intent<'a> {
     }
     /// Stable plan measurement excludes transient inspection mount IDs and
     /// namespace representatives. Actual retained actors still recheck in full.
+    ///
+    /// # Errors
+    ///
+    /// Fails without complete protection or when the retained state changed.
     pub fn measurement(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let protection = self
@@ -431,6 +446,11 @@ impl<'a> Intent<'a> {
     }
     /// Consume one fully protected intent into one fresh prepared receipt. No
     /// existing row, uncertain attempt or offline deletion actor is adopted.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan changed, protection is missing, the root mount changed, or the receipt
+    /// cannot be written.
     pub fn prepare(
         mut self,
         expected: &Value,
@@ -497,6 +517,10 @@ impl<'a> Intent<'a> {
         Ok(value!({"id":record["id"],"status":"root-retirement-prepared","deleted":false}))
     }
     /// Comparison data; publishing requires an independent complete protection gate.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         let result = value!({"record":self.record,"targets":self.targets.evidence(authorize)?,
@@ -508,6 +532,10 @@ impl<'a> Intent<'a> {
 
 /// Standalone Root preparation uses the complete original backend inventory;
 /// it supplies no job exemption and creates no offline deletion authority.
+///
+/// # Errors
+///
+/// Fails when the reviewed plan changed, preparation fails, or cleanup after a failure is refused.
 pub fn prepare_locked(
     guard: &Guard,
     lock: &files::Lock,
@@ -558,6 +586,10 @@ pub fn prepare_locked(
 
 /// Standalone preview uses the same complete retained context as preparation.
 /// A diagnostic refusal never constructs a receipt or deletion authority.
+///
+/// # Errors
+///
+/// Fails when the root is not uniquely present in the subvolume inventory or the observation fails.
 pub fn plan_locked(
     guard: &Guard,
     lock: &files::Lock,

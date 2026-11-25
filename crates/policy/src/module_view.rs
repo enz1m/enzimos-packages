@@ -133,6 +133,7 @@ impl Mounted {
         require(!mounted(self.path)?, "module mount removal uncertain")
     }
 }
+/// A private view of the running kernel's modules kept while another transaction rewrites the tree.
 pub struct ModuleView {
     snapshot: transition_idle::Snapshot,
     id: String,
@@ -197,6 +198,11 @@ impl ModuleView {
         self.record = next;
         authorize()
     }
+    /// Enter the module view for transaction `id` while `_lock` is held.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a view is already active or cannot be created and verified.
     pub fn enter_locked(id: &str, _lock: &files::Lock) -> Result<Self> {
         Self::enter_authorized(id, _lock, &mut || _lock.recheck())
     }
@@ -405,6 +411,7 @@ impl ModuleView {
             .as_ref()
             .ok_or_else(|| enzimos_platform::Error("missing value".into()))
     }
+    /// Release of the retained kernel.
     pub fn kernel(&self) -> &str {
         &self.kernel
     }
@@ -432,6 +439,11 @@ impl ModuleView {
         self.snapshot.worker_history(id, checkpoints)?;
         self.recheck()
     }
+    /// Leave the module view while `_lock` is held.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the view changed or cannot be removed.
     pub fn leave_locked(&mut self, _lock: &files::Lock) -> Result<()> {
         self.leave_authorized(_lock, &mut || _lock.recheck())
     }

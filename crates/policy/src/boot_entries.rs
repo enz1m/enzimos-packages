@@ -1,18 +1,32 @@
 // SPDX-License-Identifier: MIT
+//! Parsing of systemd-boot entries and the Limine BIOS menu.
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::{BTreeMap, BTreeSet};
+/// Largest loader entry or menu text in bytes.
 pub const MAX_TEXT: usize = 256 * 1024;
+/// One BIOS menu entry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
+    /// Entry title.
     pub title: String,
+    /// Entry text, including its title line.
     pub text: String,
 }
+/// A parsed BIOS (Limine) menu.
 pub struct Menu {
+    /// Text before the first entry.
     pub header: String,
+    /// Entries in order.
     pub entries: Vec<Entry>,
+    /// Index of the default entry.
     pub selected: usize,
 }
+/// Fields of a loader entry, as `key value` lines (UEFI) or `key: value` lines (BIOS).
+///
+/// # Errors
+///
+/// Fails when the text is too large, a line is malformed, or a field is empty or repeated.
 pub fn fields(text: &str, bios: bool) -> Result<BTreeMap<String, String>> {
     require(
         text.len() <= MAX_TEXT && !text.contains('\0'),
@@ -42,6 +56,12 @@ pub fn fields(text: &str, bios: bool) -> Result<BTreeMap<String, String>> {
     }
     Ok(result)
 }
+/// Parse a BIOS menu.
+///
+/// # Errors
+///
+/// Fails when the menu is malformed, has too many entries, or its default is ambiguous or out of
+/// range.
 pub fn menu(text: &str) -> Result<Menu> {
     require(
         text.len() <= MAX_TEXT && !text.contains('\0'),
@@ -90,6 +110,11 @@ pub fn menu(text: &str) -> Result<Menu> {
         selected: defaults[0],
     })
 }
+/// Index of the single BIOS entry titled `title`.
+///
+/// # Errors
+///
+/// Fails when the entry is missing or ambiguous.
 pub fn number(text: &str, title: &str) -> Result<usize> {
     let m = menu(text)?;
     let found = m

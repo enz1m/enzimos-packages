@@ -58,6 +58,7 @@ struct ShareInputs {
     rotation: Option<Observation>,
     restic: crate::backup_restic_runtime::Image,
 }
+/// Descriptors received from the backend for one transfer.
 pub struct Handoff {
     request: Value,
     frame: Value,
@@ -70,6 +71,11 @@ pub struct Handoff {
     admitted: Admitted,
 }
 impl Handoff {
+    /// Receive the transfer handoff from `message` for the worker in `scope`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the sender is not the original worker or the descriptors differ.
     pub fn receive(message: Message, scope: &Scope) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -452,6 +458,11 @@ impl Handoff {
             "share pin descriptor differs from independent original",
         )
     }
+    /// The received request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the handoff changed.
     pub fn request(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.request)

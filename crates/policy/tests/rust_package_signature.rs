@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Package signature status parsing.
 use enzimos_policy::package_signature;
 const FP: &str = "1111111111111111111111111111111111111111";
 const PRIMARY: &str = "2222222222222222222222222222222222222222";

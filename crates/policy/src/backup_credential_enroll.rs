@@ -45,6 +45,12 @@ fn body(row: &Value) -> Result<Vec<u8>> {
     bytes.push(b'\n');
     Ok(bytes)
 }
+/// Enroll prepared credential `id` in the repository while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the image changed, the key limit is reached, `authorize` fails, or the readback
+/// differs.
 pub fn enroll_locked(
     guard: &Guard,
     lock: &files::Lock,

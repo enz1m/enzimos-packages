@@ -56,12 +56,22 @@ impl Kind {
         }
     }
 }
+/// Validate a selective export selection.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn selection(v: &Value) -> Result<()> {
     json::fields(v, "id snapshot path")?;
     crate::identity::safe_id(text(v, "id")?)?;
     crate::identity::sha(text(v, "snapshot")?)?;
     crate::backup_selective_result::file_path(text(v, "path")?).map(|_| ())
 }
+/// Validate a selective export context.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn context(v: &Value) -> Result<()> {
     context_kind(v, Kind::File)
 }

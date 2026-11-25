@@ -231,6 +231,10 @@ pub(crate) fn normalize(target: &Path, name: &str, config: &Value, root: &File) 
 }
 /// Internal updater call. Retain the global operation lock throughout this call.
 /// The callback observes committed records; it cannot authorize replay or adoption.
+///
+/// # Errors
+///
+/// Fails when the configuration is invalid, the destination exists, or creation fails.
 pub fn create_locked<F: FnMut(&str, &Value) -> Result<()>>(
     identifier: &str,
     _operation: &files::Lock,

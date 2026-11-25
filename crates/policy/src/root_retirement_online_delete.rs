@@ -346,6 +346,10 @@ fn step(
 /// Delete every target of an unstaged prepared (or interrupted executing)
 /// receipt online, one durable change per fully protected observation, until
 /// the receipt is `deleted`. `root-retire finish` then retires its birth.
+///
+/// # Errors
+///
+/// Fails when the receipt changed, a deletion fails, or deletion does not converge.
 pub fn delete_locked(
     guard: &Guard,
     lock: &files::Lock,
@@ -383,6 +387,10 @@ pub fn delete_locked(
 
 /// End an unstaged receipt that is prepared or executing. Nothing is deleted;
 /// targets that remain stay where they are and transitions are admitted again.
+///
+/// # Errors
+///
+/// Fails when the receipt differs from its journal or cannot be abandoned.
 pub fn abandon_locked(
     guard: &Guard,
     lock: &files::Lock,

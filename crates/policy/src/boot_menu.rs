@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
+//! Generation of the boot menu material from installed loader entries.
 use enzimos_platform::{Error, Result, files, require};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+/// Fields of a loader configuration file, by key.
 pub fn parse(text: &str) -> BTreeMap<String, Vec<String>> {
     let mut result = BTreeMap::<String, Vec<String>>::new();
     for line in text.lines() {
@@ -43,6 +45,12 @@ fn tools(names: &[&str]) -> Vec<String> {
 fn lines(values: &[&str]) -> Vec<String> {
     values.iter().map(|s| (*s).into()).collect()
 }
+/// Boot menu files for the ESP at `boot`, optionally with a pending restore entry.
+///
+/// # Errors
+///
+/// Fails unless the caller is Root, or when the loader configuration or entries are missing or
+/// ambiguous.
 pub fn material(boot: &Path, restore_pending: bool) -> Result<BTreeMap<String, Vec<u8>>> {
     require(
         enzimos_platform::process_identity::effective_uid() == 0,
@@ -211,6 +219,11 @@ fn menus(
     .map(|(name, content)| (name.into(), (content.join("\n") + "\n").into_bytes()))
     .collect())
 }
+/// Write the boot menu files to the ESP at `boot`.
+///
+/// # Errors
+///
+/// Fails when the material is incomplete or a file cannot be written.
 pub fn render(boot: &Path, restore_pending: bool) -> Result<()> {
     let mut contents = material(boot, restore_pending)?;
     let directory = files::directory(&boot.join("EFI/enzimos"), Some(0))?;
@@ -232,6 +245,11 @@ pub fn render(boot: &Path, restore_pending: bool) -> Result<()> {
     }
     Ok(())
 }
+/// Write the boot menu files to the retained ESP `volume`.
+///
+/// # Errors
+///
+/// Fails when the volume changed, the material is incomplete, or a file cannot be written.
 pub fn render_live(volume: &crate::boot_volume::Volume, restore_pending: bool) -> Result<()> {
     volume.writable()?;
     volume.directory(Path::new("EFI/enzimos"))?;

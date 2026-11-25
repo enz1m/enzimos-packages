@@ -15,6 +15,11 @@ use serde_json::{Value, json as value};
 use std::path::Path;
 pub(crate) const EFI: &str = "/sys/firmware/efi/efivars";
 pub(crate) const GUID: &str = "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f";
+/// Whether the EFI loader variables allow activating a recovery entry.
+///
+/// # Errors
+///
+/// Fails when a selection override or unknown loader state needs review.
 pub fn efi_guard() -> Result<bool> {
     match std::fs::symlink_metadata(EFI) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
@@ -153,6 +158,11 @@ fn verified(
     let states = boot::classify(record, entries, &actual)?;
     Ok((actual, states))
 }
+/// Prepare activation of staged job `id` reviewed as `job_sha`.
+///
+/// # Errors
+///
+/// Fails when the review is stale, an activation exists, or staging is unfinished.
 pub fn prepare_locked(id: &str, job_sha: &str, lock: &files::Lock) -> Result<Value> {
     identity::sha(job_sha)?;
     let job = recovery_stage::load_job(id)?;
@@ -281,6 +291,11 @@ fn write(
     boot::classify(record, entries, &actual)?;
     Ok(())
 }
+/// Publish the prepared activation `id` reviewed as `digest`.
+///
+/// # Errors
+///
+/// Fails when the activation is not prepared, the review changed, or publication fails.
 pub fn publish_locked<F: FnMut(&str) -> Result<()>>(
     id: &str,
     digest: &str,
@@ -326,6 +341,11 @@ pub fn publish_locked<F: FnMut(&str) -> Result<()>>(
         value!({"status":"staged-entries-published","selection_changed":false,"artifacts_copied":false,"retirement_enabled":false}),
     )
 }
+/// Select the published activation `id` with kernel `flavor`.
+///
+/// # Errors
+///
+/// Fails when the activation is not published, another selection exists, or selection fails.
 pub fn select_locked<F: FnMut(&str) -> Result<()>>(
     id: &str,
     digest: &str,

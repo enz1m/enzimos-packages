@@ -16,6 +16,7 @@ pub(crate) const NAMES: [&str; 4] = [
     "vmlinuz-linux-lts",
     "initramfs-linux-lts.img",
 ];
+/// Kernel artifacts staged for a new generation.
 pub struct Stage {
     path: PathBuf,
     directory: File,
@@ -62,6 +63,11 @@ pub(crate) fn inventory(root: &File) -> Result<String> {
     )?;
     Ok(body.into())
 }
+/// Require that the initramfs `body` contains modules only for `release`.
+///
+/// # Errors
+///
+/// Fails when it contains modules for another release.
 pub fn initrd_release(body: &[u8], release: &str) -> Result<()> {
     identity::safe_id(release)?;
     let members = initramfs::inventory(body, &BTreeSet::new())?;
@@ -230,6 +236,11 @@ impl Stage {
     pub(crate) fn filesystem_uuid(&self) -> &Value {
         &self.filesystem["filesystem_uuid"]
     }
+    /// Copy the staged artifacts into `destination`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an artifact changed or cannot be written.
     pub fn copy(&self, destination: &File) -> Result<()> {
         self.copy_authorized(destination, &mut || Ok(()))
     }

@@ -129,23 +129,42 @@ fn selected(command: &Command, uuid: &str) -> Result<Value> {
     require(rows.len() == 1, "unknown or unsupported network connection")?;
     Ok(rows[0].clone())
 }
+/// NetworkManager connections with their firewall trust.
+///
+/// # Errors
+///
+/// Fails when nmcli fails or its output is invalid.
 pub fn connections() -> Result<Value> {
     storage_runtime::initial_namespace()?;
     Ok(
         value!({"trusted_zone":TRUSTED_ZONE,"connections":connections_with(&Command::open("/usr/bin/nmcli")?)?}),
     )
 }
+/// One connection by UUID.
+///
+/// # Errors
+///
+/// Fails when the UUID is invalid or nmcli fails.
 pub fn connection(uuid: &str) -> Result<Value> {
     storage_runtime::initial_namespace()?;
     selected(&Command::open("/usr/bin/nmcli")?, uuid)
 }
 /// Private backend plan material; provider identities do not enter Query replies.
+///
+/// # Errors
+///
+/// Fails when the UUID is invalid or nmcli fails.
 pub fn plan(uuid: &str) -> Result<Value> {
     storage_runtime::initial_namespace()?;
     let command = Command::open("/usr/bin/nmcli")?;
     let before = selected(&command, uuid)?;
     Ok(value!({"connection":before,"provider":command.evidence()?}))
 }
+/// Set whether connection `uuid` is trusted, if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the plan or connection changed, authorization fails, or nmcli fails.
 pub fn set<F: FnMut() -> Result<()>>(
     uuid: &str,
     trusted: bool,

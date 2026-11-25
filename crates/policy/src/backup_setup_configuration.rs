@@ -60,6 +60,12 @@ pub struct Configuration<'a> {
     bytes: Vec<u8>,
 }
 impl<'a> Configuration<'a> {
+    /// Publish the backup configuration for the prepared setup and its published credential.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the configuration directory is not on the original Root mount, the draft changed,
+    /// a file already exists, or `authorize` fails.
     #[allow(unsafe_code, reason = "Linux syscall ABI (fsync, linkat, unlinkat).")]
     pub fn publish(
         context: &Prepared<'_, '_, '_, '_>,
@@ -184,6 +190,11 @@ impl<'a> Configuration<'a> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the published configuration is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.credential.recheck()?;
         crate::backup_publication_identity::recheck(
@@ -220,12 +231,21 @@ impl<'a> Configuration<'a> {
     }
     /// Failure rollback of an incomplete setup: remove exactly this run's
     /// configuration (its credential is retracted separately, afterwards).
+    ///
+    /// # Errors
+    ///
+    /// Fails when the configuration changed or cannot be removed.
     pub fn retract(&self, lock: &files::Lock) -> Result<()> {
         lock.recheck()?;
         self.recheck()?;
         crate::backup_publication_identity::retract(&self.parent, c"backup.json")?;
         lock.recheck()
     }
+    /// The published configuration bytes.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Configuration::recheck`].
     pub fn public_bytes(&self) -> Result<&[u8]> {
         self.recheck()?;
         Ok(&self.bytes)
@@ -234,14 +254,29 @@ impl<'a> Configuration<'a> {
         self.recheck()?;
         json::decode(&self.bytes, LIMIT)
     }
+    /// JSON binding of the published credential.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Configuration::recheck`].
     pub fn credential_binding(&self) -> Result<Value> {
         self.recheck()?;
         self.credential.binding()
     }
+    /// The published configuration file.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Configuration::recheck`].
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.file)
     }
+    /// Descriptor of the published credential.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Configuration::recheck`].
     pub fn credential_descriptor(&self) -> Result<std::os::fd::BorrowedFd<'_>> {
         self.recheck()?;
         self.credential.descriptor()

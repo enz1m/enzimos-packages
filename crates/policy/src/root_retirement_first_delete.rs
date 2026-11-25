@@ -36,6 +36,7 @@ fn flags(file: &File) -> Result<i32> {
     )?;
     Ok(flags)
 }
+/// The first deletion step of a root retirement, bound to its durable in-flight record.
 pub struct First<'j, 'a, 's> {
     entered: StepEntered<'j, 'a, 's>,
     identity: Value,
@@ -53,6 +54,7 @@ pub struct First<'j, 'a, 's> {
     args: [u64; 512],
     remaining: Vec<crate::root_retirement_objects::Original>,
 }
+/// State after the first deletion step.
 pub struct After<'j, 'a, 's> {
     original: First<'j, 'a, 's>,
     top: File,
@@ -273,6 +275,11 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
         )?;
         self.entered.recheck()
     }
+    /// JSON evidence of this deletion step; it grants no further deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -382,6 +389,11 @@ impl<'j, 'a, 's> After<'j, 'a, 's> {
             .original_seal()
             .recheck_after_first(self)
     }
+    /// JSON evidence of this deletion step; it grants no further deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -478,6 +490,11 @@ impl<'j, 'a, 's> Advanced<'j, 'a, 's> {
             .original_seal()
             .recheck_advanced_first(self)
     }
+    /// JSON evidence of this deletion step; it grants no further deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -566,6 +583,11 @@ impl<'j, 'a, 's> Next<'j, 'a, 's> {
             .original_seal()
             .recheck_next(self)
     }
+    /// JSON evidence of this deletion step; it grants no further deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

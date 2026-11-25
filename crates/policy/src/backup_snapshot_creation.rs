@@ -105,6 +105,7 @@ fn added(before: &BTreeSet<String>, after: &BTreeSet<String>, number: u64) -> Re
         "backup snapshot directory lacks the created snapshot",
     )
 }
+/// A source snapshot created once under a durable record.
 pub struct Created<'a, 'c, 'g> {
     snapshot: Snapshot<'a, 'g>,
     record: Retained,
@@ -208,10 +209,20 @@ impl<'a, 'c, 'g> Created<'a, 'c, 'g> {
         captured.recheck()?;
         Ok(captured)
     }
+    /// The created snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record or snapshot changed.
     pub fn snapshot(&self) -> Result<&Snapshot<'a, 'g>> {
         self.recheck()?;
         Ok(&self.snapshot)
     }
+    /// JSON evidence for the creation record.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(value!({"receipt":self.value,"record_epoch":self.record.evidence()?}))

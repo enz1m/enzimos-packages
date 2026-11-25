@@ -3,6 +3,7 @@
 use crate::backup_worker_intent::{Completed, Intent};
 use enzimos_platform::{Result, require};
 use serde_json::Value;
+/// A completed provision attempt with its bound result.
 pub struct Provisioned<'g> {
     completed: Completed<'g>,
     original: Value,
@@ -41,10 +42,20 @@ impl<'g> Provisioned<'g> {
             "original completed provision record changed",
         )
     }
+    /// The provision result.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed.
     pub fn result(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.original["result"])
     }
+    /// Bind a completed worker intent to its result.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent is not a completed provision matching `bound`.
     pub fn from_bound(
         intent: Intent<'g>,
         bound: crate::backup_setup_binding::Bound<'g>,

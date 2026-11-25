@@ -232,6 +232,7 @@ fn lineage(source: &Value, snapshot: &Value, readonly: bool) -> Result<()> {
         "backup snapshot identity/readonly lineage mismatch",
     )
 }
+/// A read-only source snapshot with its lineage.
 pub struct Snapshot<'a, 'g> {
     source: &'a Source<'g>,
     number: u64,

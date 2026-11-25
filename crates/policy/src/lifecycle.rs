@@ -5,6 +5,7 @@ use serde_json::{Value, json as value};
 use std::collections::{BTreeMap, BTreeSet};
 type Names = BTreeSet<String>;
 const MAX: usize = 256;
+/// Largest inventory document in bytes.
 pub const LIMIT: usize = 2 * 1024 * 1024;
 fn text(v: &Value) -> Result<&str> {
     v.as_str()
@@ -80,6 +81,16 @@ fn closure(mut found: Names, deps: &BTreeMap<String, Names>) -> Names {
     }
     found
 }
+/// Preview which generations and resources could be retired, keeping `keep_good` known-good
+/// generations.
+///
+/// # Errors
+///
+/// Fails when the inventory is invalid or fewer than two known-good generations would remain.
+///
+/// # Panics
+///
+/// Never for an inventory that passes validation, which requires integer ordinals.
 pub fn plan(inventory: &Value, keep_good: usize) -> Result<Value> {
     require(
         (2..=8).contains(&keep_good),

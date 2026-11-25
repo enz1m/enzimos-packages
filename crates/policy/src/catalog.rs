@@ -18,6 +18,12 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str> {
         .as_str()
         .ok_or_else(|| Error("registry text field".into()))
 }
+/// Validate the registered material of `generation`: kernels, files, options, root identity and
+/// inventory digest.
+///
+/// # Errors
+///
+/// Fails when a field is missing, ambiguous or invalid.
 pub fn material(v: &Value, generation: &str) -> Result<()> {
     json::fields(v, "kernels files options root_identity inventory_sha256")?;
     let kernels = &v["kernels"];
@@ -72,10 +78,20 @@ pub fn material(v: &Value, generation: &str) -> Result<()> {
     }
     Ok(())
 }
+/// A new, empty registry for the filesystem `fs_uuid`.
+///
+/// # Errors
+///
+/// Fails unless `fs_uuid` is a valid UUID.
 pub fn empty(fs_uuid: &str) -> Result<Value> {
     uuid(fs_uuid)?;
     Ok(value!({"schema":1,"filesystem_uuid":fs_uuid,"next_ordinal":1,"generations":{}}))
 }
+/// Validate a registry document for the filesystem `fs_uuid`.
+///
+/// # Errors
+///
+/// Fails when the schema, filesystem, ordinals or a generation record is invalid.
 pub fn validate(v: &Value, fs_uuid: &str) -> Result<()> {
     if v.get("retired").is_some() {
         json::fields(v, "schema filesystem_uuid next_ordinal generations retired")?;
@@ -209,6 +225,11 @@ pub fn validate(v: &Value, fs_uuid: &str) -> Result<()> {
     }
     Ok(())
 }
+/// Write a validated registry document privately at `path`.
+///
+/// # Errors
+///
+/// Fails when the document is too large or the destination is unsafe.
 pub fn save_document(path: &Path, v: &Value) -> Result<()> {
     let mut body = json::canonical(v)?;
     body.push(b'\n');
@@ -223,6 +244,10 @@ pub fn save_document(path: &Path, v: &Value) -> Result<()> {
 }
 /// Pure ledger transition. Callers must collect material under the operation lock
 /// and recheck the mounted storage before committing the returned document.
+///
+/// # Errors
+///
+/// Fails when the name is retired or registered with other material, or the registry is full.
 pub fn reserve_document(data: &Value, name: &str, input: &Value, boot: &str) -> Result<Value> {
     let fs = text(data, "filesystem_uuid")?;
     validate(data, fs)?;
@@ -259,6 +284,10 @@ pub fn reserve_document(data: &Value, name: &str, input: &Value, boot: &str) -> 
 }
 /// Fingerprints are observations of both actual loader entries, not declarations
 /// from an untrusted request. This function provides no filesystem authority.
+///
+/// # Errors
+///
+/// Fails when the generation is not being prepared.
 pub fn publish_document(data: &Value, name: &str, fingerprints: &Value) -> Result<Value> {
     validate(data, text(data, "filesystem_uuid")?)?;
     require(
@@ -275,6 +304,10 @@ pub fn publish_document(data: &Value, name: &str, fingerprints: &Value) -> Resul
 }
 /// The runtime observer must additionally verify the live mount, root UUID,
 /// package inventory, selected entry and unchanged loader fingerprints.
+///
+/// # Errors
+///
+/// Fails when the generation is not ready or its publication is incomplete.
 pub fn confirm_document(data: &Value, name: &str, observation: &Value) -> Result<Value> {
     validate(data, text(data, "filesystem_uuid")?)?;
     require(
@@ -292,9 +325,12 @@ pub fn confirm_document(data: &Value, name: &str, observation: &Value) -> Result
     validate(&next, text(data, "filesystem_uuid")?)?;
     Ok(next)
 }
+/// An open, locked registry transaction on the control mount.
 pub struct Transaction {
+    /// Validated storage configuration.
     pub config: Value,
     directory: PathBuf,
+    /// Registry document being edited.
     pub data: Value,
     _lock: files::Lock,
     guard: crate::storage_runtime::Guard,
@@ -304,6 +340,12 @@ pub struct Transaction {
     owned: Option<enzimos_platform::publication::Committed>,
 }
 impl Transaction {
+    /// Lock the registry and load its document.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry is not on independently mounted control storage, has interrupted
+    /// members, or is invalid.
     pub fn begin() -> Result<Self> {
         let guard = crate::storage_runtime::Guard::observe()?;
         let config = guard.configuration.clone();
@@ -344,6 +386,11 @@ impl Transaction {
             owned: None,
         })
     }
+    /// Verify the lock, directory, record and storage are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed or unknown members appeared.
     pub fn recheck(&self) -> Result<()> {
         if let Some(owned) = &self.owned {
             owned.recheck()?;
@@ -387,6 +434,11 @@ impl Transaction {
         }
         self.guard.recheck()
     }
+    /// JSON evidence for the registry record, lock and mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Transaction::recheck`].
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let original = self
@@ -453,6 +505,11 @@ impl Transaction {
     }
     /// Exact owned catalog temporary is admitted only by the live writer while
     /// every other transition record is freshly checked by the original snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the commit was already made, another record changed, `authorize` fails, or the
+    /// publication differs.
     pub fn commit_idle_authorized(
         &mut self,
         idle: &crate::transition_idle::Snapshot,
@@ -504,6 +561,11 @@ impl Transaction {
         idle.recheck()?;
         authorize()
     }
+    /// Publish the edited document.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a commit was already made or the publication fails.
     pub fn commit(&mut self) -> Result<()> {
         require(
             self.owned.is_none(),

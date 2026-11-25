@@ -57,6 +57,7 @@ fn closure(inventory: &Records, targets: &Value) -> Result<()> {
         "unrecorded nested subvolume protects offline root",
     )
 }
+/// The complete kernel subvolume inventory.
 pub struct Inventory<'a, 's> {
     mounts: &'a Mounts<'s>,
     targets: &'a Targets<'a, 's>,
@@ -162,6 +163,11 @@ impl<'a, 's> Inventory<'a, 's> {
         closure(&current, self.targets.rows()?)?;
         self.targets.require_original_mounts(self.mounts)
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let result = value!({"subvolumes":self.original,"execution_authorized":false,

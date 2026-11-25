@@ -35,6 +35,11 @@ fn values(fd: i32) -> Result<(u64, u64, bool)> {
     )?;
     Ok((sequence, size, read_only == 1))
 }
+/// Identity of the block device `fd`.
+///
+/// # Errors
+///
+/// Fails when the descriptor is not a protected block device or changes while observed.
 pub fn observe(fd: BorrowedFd<'_>) -> Result<Value> {
     let file = File::from(fd.try_clone_to_owned()?);
     let before = file.metadata()?;

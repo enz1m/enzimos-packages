@@ -24,6 +24,11 @@ impl Read for Pread<'_> {
         Ok(count)
     }
 }
+/// Verify that the database archive `file` lists exactly `packages`.
+///
+/// # Errors
+///
+/// Fails when the archive is unsafe or its entries differ.
 pub fn verify(file: &File, packages: &[Value]) -> Result<()> {
     let metadata = file.metadata()?;
     require(

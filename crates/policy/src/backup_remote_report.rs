@@ -13,6 +13,7 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{fs::File, os::fd::AsFd, sync::Arc, time::Duration};
+/// The network share copy worker's report.
 pub struct Reported<'g> {
     guard: &'g Guard,
     request: Value,
@@ -197,6 +198,11 @@ impl<'g> Reported<'g> {
         self.recheck()?;
         Ok(&self.report)
     }
+    /// Close the report with the worker's closed request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request belongs to another worker.
     pub fn close(self, closed: ClosedRequest) -> Result<Closed<'g>> {
         self.recheck()?;
         closed.require_request(&self.request, &self.actor)?;
@@ -208,6 +214,7 @@ impl<'g> Reported<'g> {
         Ok(this)
     }
 }
+/// A closed network share copy.
 pub struct Closed<'g> {
     original: Reported<'g>,
     closed: ClosedRequest,
@@ -218,6 +225,11 @@ impl Closed<'_> {
         self.closed
             .require_request(&self.original.request, &self.original.actor)
     }
+    /// Require that the copy was made for `context`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the local binding changed or `authorize` fails.
     pub fn require_context(
         &self,
         context: &crate::backup_remote_copy_context::Context<'_, '_>,
@@ -236,6 +248,10 @@ impl Closed<'_> {
     }
     /// Explicitly consume the original admitted receipt only after the actual
     /// whole kernel scope closes. Its metadata cannot recreate this actor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the copy is not a closed retrieval of `context` or the receipt cannot be written.
     pub fn complete_retrieval(
         mut self,
         context: &crate::backup_remote_copy_context::Context<'_, '_>,

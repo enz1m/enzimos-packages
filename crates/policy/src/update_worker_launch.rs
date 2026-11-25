@@ -40,6 +40,11 @@ fn input_directory(file: &File) -> Result<(u64, u64, u32, u32, u32, u64)> {
         mount_identity::id(file.as_fd(), true)?,
     ))
 }
+/// Record the intent and run the update worker `id` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the intent cannot be recorded or the worker fails.
 pub fn run_locked(
     id: &str,
     view: &mut ModuleView,

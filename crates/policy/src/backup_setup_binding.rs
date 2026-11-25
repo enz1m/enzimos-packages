@@ -13,6 +13,7 @@ use std::{
     path::Path,
 };
 const NAME: &str = "backup-destination.json";
+/// The published repository pin bound to its setup.
 pub struct Bound<'g> {
     guard: &'g Guard,
     lock: &'g files::Lock,
@@ -23,6 +24,11 @@ pub struct Bound<'g> {
     value: Value,
 }
 impl<'g> Bound<'g> {
+    /// Publish the repository pin from the worker's report and closed scope.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the report, closure or scope differ from the plan, or the pin cannot be written.
     #[expect(
         clippy::too_many_arguments,
         reason = "Each argument is a distinct retained input of this step."

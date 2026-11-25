@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: MIT
+//! Validation of identifiers, UUIDs and digests used in records.
 use enzimos_platform::{Result, require};
+/// Require a safe identifier: ASCII alphanumerics, `.`, `_` and `-` within a length bound.
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn safe_id(s: &str) -> Result<&str> {
     require(
         !s.is_empty()
@@ -11,6 +17,11 @@ pub fn safe_id(s: &str) -> Result<&str> {
     )?;
     Ok(s)
 }
+/// Require a lowercase hyphenated UUID.
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn uuid(s: &str) -> Result<&str> {
     require(
         s.len() == 36
@@ -25,6 +36,11 @@ pub fn uuid(s: &str) -> Result<&str> {
     )?;
     Ok(s)
 }
+/// Require a lowercase hex SHA-256.
+///
+/// # Errors
+///
+/// Fails for any other form.
 pub fn sha(s: &str) -> Result<&str> {
     require(
         s.len() == 64

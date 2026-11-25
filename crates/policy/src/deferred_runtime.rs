@@ -57,6 +57,11 @@ fn original_directory(guard: &Guard, held: &std::fs::File, folder: &str) -> Resu
     )?;
     guard.recheck()
 }
+/// Owed deferred actions.
+///
+/// # Errors
+///
+/// Fails when the marker storage cannot be read.
 pub fn status() -> Result<Value> {
     let _lock = lock()?;
     let guard = Guard::observe()?;
@@ -128,6 +133,11 @@ pub(crate) fn contended(action: &str) -> Result<Value> {
     guard.recheck()?;
     Ok(record)
 }
+/// Clear the deferred marker of `action`, archiving it; returns whether one existed.
+///
+/// # Errors
+///
+/// Fails when the marker changed or the archive cannot be written.
 pub fn clear(action: &str) -> Result<bool> {
     deferred::unit(action)?;
     let _lock = lock()?;
@@ -178,6 +188,11 @@ fn start_finished(
         })
     })
 }
+/// Start every owed deferred action once.
+///
+/// # Errors
+///
+/// Fails when a marker changed, the archive is full, or a start fails.
 pub fn resume() -> Result<Value> {
     let _lock = lock()?;
     let guard = Guard::observe()?;

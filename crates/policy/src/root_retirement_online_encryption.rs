@@ -19,6 +19,7 @@ fn one(bytes: &[u8]) -> Result<&str> {
     )?;
     Ok(text)
 }
+/// The LUKS source of the root filesystem.
 pub struct Source<'a> {
     guard: &'a Guard,
     lock: &'a files::Lock,
@@ -30,6 +31,11 @@ pub struct Source<'a> {
     uuid: String,
 }
 impl<'a> Source<'a> {
+    /// Observe the LUKS source of the root filesystem.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the source cannot be retained read-only or `authorize` fails.
     pub fn observe(
         guard: &'a Guard,
         lock: &'a files::Lock,

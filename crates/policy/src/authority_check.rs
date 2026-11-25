@@ -4,6 +4,11 @@ use crate::{authority_build, authority_mount, operation, transition_idle};
 use enzimos_platform::{Result, files};
 use serde_json::Value;
 use std::path::Path;
+/// Check the package authority against the installed keyring while `_lock` is held.
+///
+/// # Errors
+///
+/// Fails when a build or comparison step fails.
 pub fn check_locked(_lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     let snapshot = transition_idle::Snapshot::online()?;

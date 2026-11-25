@@ -7,6 +7,11 @@ use crate::{
 use enzimos_platform::{Result, files, json, mount_identity, require};
 use serde_json::{Value, json as value};
 use std::{os::fd::AsFd, path::Path};
+/// Build and publish a refreshed package authority while `_lock` is held.
+///
+/// # Errors
+///
+/// Fails when the authority changes during publication or a build step fails.
 pub fn refresh_locked(_lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     let mut package_lock = PacmanLock::acquire()?;

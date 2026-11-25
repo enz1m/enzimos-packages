@@ -15,6 +15,7 @@ const REQUESTS: &[u32] = &[0x81f8943c, 0x5000940f];
 fn row(code: u16, jt: u8, jf: u8, k: u32) -> libc::sock_filter {
     libc::sock_filter { code, jt, jf, k }
 }
+/// Seccomp program of the offline coordinator.
 pub fn program() -> Vec<libc::sock_filter> {
     let mut out = vec![
         row(0x20, 0, 0, 4),
@@ -39,6 +40,11 @@ pub fn program() -> Vec<libc::sock_filter> {
     out.push(row(0x06, 0, 0, DENY));
     out
 }
+/// Evaluate the program for one syscall, for tests.
+///
+/// # Errors
+///
+/// Fails when the program is malformed.
 pub fn evaluate(nr: u32, arch: u32, arg1: u64) -> Result<u32> {
     let rows = program();
     let mut pc = 0;
@@ -65,6 +71,11 @@ pub fn evaluate(nr: u32, arch: u32, arg1: u64) -> Result<u32> {
     }
     Err(Error("unterminated filter".into()))
 }
+/// Install the coordinator syscall filter.
+///
+/// # Errors
+///
+/// Fails outside the single-threaded x86-64 PID 1 coordinator or when installation fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (prctl).")]
 pub fn install() -> Result<()> {
     require(

@@ -140,10 +140,20 @@ impl Scope {
         Ok(result)
     }
 }
+/// The cancellation observation for request `body`.
+///
+/// # Errors
+///
+/// Fails when the request is invalid or the grant cannot be read.
 pub fn observation(body: &Value) -> Result<Value> {
     let (id, digest) = selection(body)?;
     Scope::open(id)?.view(id, digest)
 }
+/// Cancel the grant in request `body` if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the review or grant changed, `authorize` fails, or the write fails.
 pub fn cancel<F: FnMut() -> Result<()>>(
     body: &Value,
     expected: &Value,
@@ -175,6 +185,10 @@ pub fn cancel<F: FnMut() -> Result<()>>(
     completion(id)
 }
 /// Root CLI status retains the original record without resolving private account/export data.
+///
+/// # Errors
+///
+/// Fails when the grant cannot be read.
 pub fn status(id: &str) -> Result<Value> {
     identity::safe_id(id)?;
     let lock = operation::lock()?;

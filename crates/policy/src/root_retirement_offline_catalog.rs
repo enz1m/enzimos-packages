@@ -86,6 +86,7 @@ pub(crate) fn unmentioned(data: &Value, targets: &Value) -> Result<()> {
     }
     Ok(())
 }
+/// The generation registry and its lock.
 pub struct Catalog<'a, 's> {
     control: &'a Control<'a, 's>,
     ledgers: &'a Ledgers<'a, 's>,
@@ -226,6 +227,11 @@ impl<'a, 's> Catalog<'a, 's> {
         unmentioned(self.record.value()?, targets.rows()?)?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

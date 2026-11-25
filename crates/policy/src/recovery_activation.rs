@@ -12,6 +12,11 @@ pub(crate) fn entry_names(identifier: &str, flavor: &str) -> Result<(String, Str
         format!("enzimOS staged {identifier} {flavor}"),
     ))
 }
+/// Validate a recovery policy file set.
+///
+/// # Errors
+///
+/// Fails when files are missing or unexpected.
 pub fn policy_files(v: &Value, native: bool, image: bool) -> Result<()> {
     let rows = v
         .as_object()
@@ -76,6 +81,11 @@ fn config_name(name: &str) -> bool {
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_-".contains(&b))
     })
 }
+/// Validate activation record `identifier`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(v: &Value, identifier: &str) -> Result<()> {
     let text = records::text;
     if v.get("superseded").is_some() {

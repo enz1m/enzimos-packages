@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: MIT
 //! Closed boot-family decoding. This data grants no Root operation or replay.
 use enzimos_platform::Result;
+/// Kernel command line parameters of a native boot, by family.
 pub enum Parameters {
+    /// A recovery run.
     Recovery(crate::recovery_run_parameters::Parameters),
+    /// A root retirement.
     Root(crate::root_retirement_parameters::Parameters),
 }
+/// Whether the command line describes a root retirement.
 pub fn is_root(body: &str) -> bool {
     body.split_whitespace()
         .any(|word| word.split('=').next() == Some("enzimos.root-retirement"))
 }
 impl Parameters {
+    /// Parse the command line of either family.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the parameters of the detected family are invalid.
     pub fn parse(body: &str) -> Result<Self> {
         if is_root(body) {
             crate::root_retirement_parameters::Parameters::parse(body).map(Self::Root)
@@ -17,6 +26,7 @@ impl Parameters {
             crate::recovery_run_parameters::Parameters::parse(body).map(Self::Recovery)
         }
     }
+    /// Whether the system powers off afterwards.
     pub fn poweroff(&self) -> bool {
         match self {
             Self::Recovery(p) => p.exit == "poweroff",

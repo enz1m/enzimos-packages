@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Btrfs filesystem identity and label of an open descriptor.
 use enzimos_platform::{Result, require};
 use serde_json::{Value, json};
 use std::os::fd::{AsRawFd, BorrowedFd};
@@ -7,6 +8,11 @@ use std::os::fd::{AsRawFd, BorrowedFd};
 const FILESYSTEM_INFO: libc::c_ulong = 0x8400941f;
 // linux/fs.h FS_IOC_GETFSLABEL: _IOR(0x94,49,char[FSLABEL_MAX=256]).
 const GET_LABEL: libc::c_ulong = 0x81009431;
+/// Btrfs label of `fd`, or `None` when empty.
+///
+/// # Errors
+///
+/// Fails when the label cannot be read or the filesystem changed.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn label(fd: BorrowedFd<'_>) -> Result<Option<String>> {
     let before = observe(fd)?;
@@ -37,6 +43,11 @@ fn label_bytes(bytes: &[u8; 256]) -> Result<Option<String>> {
     Ok((length != 0).then(|| label.to_owned()))
 }
 
+/// UUID and member count of the Btrfs filesystem of `fd`.
+///
+/// # Errors
+///
+/// Fails when `fd` is not on Btrfs.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn observe(fd: BorrowedFd<'_>) -> Result<Value> {
     let mut buffer = [0u64; 128];

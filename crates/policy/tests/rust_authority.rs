@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Package authority quorum over the pinned master keys.
 use enzimos_policy::authority;
 use std::collections::{BTreeMap, BTreeSet};
 fn listing(fp: &str, uid: &str, validity: &str) -> String {

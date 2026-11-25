@@ -8,6 +8,7 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{fs::File, os::fd::AsFd, time::Duration};
+/// The transfer worker's report.
 pub struct Observation {
     request: Value,
     report: Value,
@@ -138,6 +139,7 @@ fn output(file: &File, report: &Value) -> Result<(Vec<u8>, Value)> {
     Ok((bytes, summary))
 }
 impl Observation {
+    /// The report document.
     pub fn value(&self) -> &Value {
         &self.report["result"]
     }
@@ -157,6 +159,11 @@ impl Observation {
             &self.report,
         )
     }
+    /// Require that `request` and `sources` are this report's closed request and released sources.
+    ///
+    /// # Errors
+    ///
+    /// Fails when either differs.
     pub fn require_closed(
         &self,
         request: &crate::backup_transfer_reservation::ClosedRequest,
@@ -173,6 +180,10 @@ impl Observation {
         )
     }
     /// Review with the retained actual closed actors, without copying authority.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request or sources differ.
     pub fn closed_evidence(
         &self,
         request: &crate::backup_transfer_reservation::ClosedRequest,
@@ -186,6 +197,10 @@ impl Observation {
     }
     /// Combine two actual retirement actors. Neither transfer observation nor a
     /// copied closure receipt can retire original source descriptions.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request or sources differ.
     pub fn close<'a>(
         self,
         request: &'a crate::backup_transfer_reservation::ClosedRequest,
@@ -273,6 +288,11 @@ impl ClosedObservation<'_> {
         )
     }
 
+    /// Verify the closure is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         require(
             *self.request.binding()? == self.original.worker,

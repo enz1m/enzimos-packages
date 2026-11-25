@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Durable update apply records never authorize skipped or replayed steps.
 use enzimos_policy::update_apply_record as record;
 use serde_json::{Value, json};
 const ID: &str = "api-0123456789abcdef0123456789abcdef";

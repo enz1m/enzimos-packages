@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Memory pressure (earlyoom) policy: configuration, service state and launch.
 use crate::{operation, settings_command::Command, settings_file::Config};
 use enzimos_platform::{Error, Result, files, json, process_identity, require};
 use serde_json::{Value, json as value};
@@ -349,6 +350,11 @@ fn service_state_with(command: &Command) -> Result<Value> {
     }
     Ok(v)
 }
+/// The effective memory policy with its modes and protected processes.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be read or is invalid.
 pub fn policy() -> Result<Value> {
     let (v, b) = read()?;
     Ok(
@@ -366,11 +372,34 @@ pub(crate) fn converged(mode: &str, state: &Value) -> bool {
 /// Side effects of one policy change. The pure transition below is unit-tested.
 pub trait Effects {
     /// Fresh caller authorization; refusal must precede every mutation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the caller is no longer authorized.
     fn authorize(&mut self) -> Result<()>;
     /// Recheck the retained configuration, provider and lock identities.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a retained identity changed.
     fn recheck(&mut self) -> Result<()>;
+    /// Publish the new configuration document.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the write fails.
     fn publish(&mut self, body: &[u8]) -> Result<()>;
+    /// Restart the memory service.
+    ///
+    /// # Errors
+    ///
+    /// Fails when systemd refuses the restart.
     fn restart(&mut self) -> Result<()>;
+    /// Current service state.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the state cannot be read.
     fn state(&mut self) -> Result<Value>;
     /// Start a fresh confirmation window.
     fn begin(&mut self);
@@ -391,6 +420,11 @@ fn settle(mode: &str, fx: &mut dyn Effects) -> Result<()> {
 /// Publish `mode`, restart and confirm it running. On any failure after
 /// publication the previous document is restored, restarted and confirmed; the
 /// error states which of those happened. Nothing is touched before authorization.
+///
+/// # Errors
+///
+/// Fails when authorization, publication or confirmation fails; the error reports whether the
+/// previous policy was restored.
 pub fn transition(mode: &str, before: &[u8], fx: &mut dyn Effects) -> Result<Value> {
     let previous = json::decode(before, 1024)?;
     validate_document(&previous)?;
@@ -458,6 +492,11 @@ fn restart(command: &Command) -> Result<()> {
     command.run_timeout(&["restart", UNIT], &[0], 16384, Duration::from_secs(10))?;
     Ok(())
 }
+/// Switch to the mode in `v` after `authorization`.
+///
+/// # Errors
+///
+/// Fails when the mode is invalid, authorization fails, or the transition fails.
 pub fn set_policy<F: FnMut() -> Result<()>>(v: &Value, authorization: F) -> Result<Value> {
     operation::root_only()?;
     validate_selection(v)?;
@@ -479,6 +518,11 @@ pub fn set_policy<F: FnMut() -> Result<()>>(v: &Value, authorization: F) -> Resu
         &mut live,
     )
 }
+/// The current observation under the operation lock.
+///
+/// # Errors
+///
+/// Fails when the lock is held or the observation fails.
 pub fn plan() -> Result<Value> {
     let lock = operation::lock()?;
     let body = observation()?;
@@ -486,6 +530,10 @@ pub fn plan() -> Result<Value> {
     Ok(body)
 }
 /// Read-only binding also used inside the original setter's existing lock.
+///
+/// # Errors
+///
+/// Fails when the configuration, policy or provider cannot be read.
 pub fn observation() -> Result<Value> {
     let config = Config::open(CONFIG, 1024)?;
     let mut state = policy()?;
@@ -494,6 +542,11 @@ pub fn observation() -> Result<Value> {
     config.recheck()?;
     Ok(value!({"state":state,"configuration":config.evidence()?,"provider":command.evidence()?}))
 }
+/// Service arguments of the configured mode, or `None` when the policy is off.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be read or is invalid.
 pub fn configured_arguments() -> Result<Option<Vec<String>>> {
     let (v, _) = read()?;
     if v["mode"] == "off" {
@@ -507,6 +560,10 @@ pub fn configured_arguments() -> Result<Option<Vec<String>>> {
 
 /// Service entry point: retains the configuration and vendor ELF until execveat.
 /// Runs with the existing service identity; it does not acquire a Root mutation lock.
+///
+/// # Errors
+///
+/// Fails for unknown actions, an invalid configuration, or an unexpected service executable.
 #[allow(unsafe_code, reason = "Linux syscall ABI (syscall).")]
 pub fn launch(action: &str) -> Result<Value> {
     use std::{

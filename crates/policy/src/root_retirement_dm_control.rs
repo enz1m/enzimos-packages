@@ -336,10 +336,12 @@ pub(crate) struct Original<'s> {
     uuid: String,
     name: OriginalName,
 }
+/// The mapping unmounted and ready to close.
 pub struct CloseReady<'s> {
     control: Original<'s>,
     unmounted: ReleasedMount<'s>,
 }
+/// The mapper description closed.
 pub struct DescriptionClosed<'s, 'm> {
     original: CloseReady<'s>,
     closed: crate::recovery_unlock::ClosedDescription<'m>,
@@ -357,6 +359,7 @@ impl RemovalSucceeded<'_> {
         )
     }
 }
+/// The mapping removed.
 pub struct Removed<'s, 'm> {
     control: Original<'s>,
     unmounted: ReleasedMount<'s>,
@@ -565,6 +568,11 @@ impl<'s> CloseReady<'s> {
         self.unmounted.recheck()?;
         self.control.recheck()
     }
+    /// JSON evidence of this step; it grants no further mutation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -678,6 +686,11 @@ impl<'s, 'm> DescriptionClosed<'s, 'm> {
         self.closed.recheck()?;
         self.original.recheck()
     }
+    /// JSON evidence of this step; it grants no further mutation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -698,6 +711,11 @@ impl Removed<'_, '_> {
         kernel_absent(&self.control)?;
         self.source.recheck()
     }
+    /// JSON evidence of this step; it grants no further mutation.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

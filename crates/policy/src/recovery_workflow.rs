@@ -22,6 +22,12 @@ fn checkpoint(
     value["action"] = json!(action);
     journal.save(id, value.clone(), Some(&previous), lock)
 }
+/// Run recovery workflow `id` with plan digest `digest` and kernel `flavor`.
+///
+/// # Errors
+///
+/// Fails when the plan is not exact and unstarted, the workflow was already attempted, or a step
+/// fails.
 pub fn execute_locked<F: FnMut(&str, &Value) -> Result<()>>(
     id: &str,
     digest: &str,
@@ -94,6 +100,11 @@ pub fn execute_locked<F: FnMut(&str, &Value) -> Result<()>>(
         json!({"status":"recovery-workflow-disk-defaults-selected","id":id,"flavor":flavor,"boot_confirmed":false,"home_overwritten":false,"authority_overwritten":false,"retirement_enabled":false}),
     )
 }
+/// Status of workflow `id` for plan `plan_sha`.
+///
+/// # Errors
+///
+/// Fails when the workflow is missing.
 pub fn status_locked(id: &str, plan_sha: &str, _lock: &files::Lock) -> Result<Value> {
     let plan = stage::load_plan(id, plan_sha)?;
     let journal = Journal::open_independent(Kind::Workflows, false, &plan)?;

@@ -63,6 +63,11 @@ fn persistent_mount(
         Ok(())
     }
 }
+/// Confirm the restored boot material of the running recovery while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the restored material differs or the record cannot be written.
 pub fn confirm_locked(lock: &files::Lock) -> Result<Value> {
     inspect_current(Some(lock))
 }
@@ -229,6 +234,11 @@ fn inspect_current(lock: Option<&files::Lock>) -> Result<Value> {
     }
     Ok(value!({"id":id,"observation":observation,"uefi":uefi,"retirement_enabled":false}))
 }
+/// Finish recovery run `id` while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the run is missing or not executed.
 pub fn finish_locked(id: &str, lock: &files::Lock) -> Result<Value> {
     records::job_id(id)?;
     let confirmation = confirm_locked(lock)?;

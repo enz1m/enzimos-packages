@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Recovery image publication and boot observation records.
 use enzimos_platform::json as document;
 use enzimos_policy::{
     recovery_image as image,

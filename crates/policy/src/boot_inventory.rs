@@ -231,6 +231,11 @@ fn process_references() -> Result<Value> {
         "scope":"bounded leader descriptor and mapping inspection; not a global atomic or all-thread ownership census"}),
     )
 }
+/// Collect the boot inventory report.
+///
+/// # Errors
+///
+/// Fails when a measurement cannot be taken.
 pub fn collect() -> Result<Value> {
     operation::root_only()?;
     crate::namespaces::initial()?;

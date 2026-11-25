@@ -7,6 +7,11 @@ use crate::{
 };
 use enzimos_platform::{Result, files, json, require};
 use serde_json::{Value, json as value};
+/// Validate media restore record `id`.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(v: &Value, id: &str) -> Result<()> {
     json::fields(v, "schema id phase plan_sha256 media_origin")?;
     records::job_id(id)?;
@@ -22,6 +27,11 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
     crate::identity::sha(records::text(v, "plan_sha256")?)?;
     records::media_origin(&v["media_origin"])
 }
+/// Complete media restore `id` while `lock` is held; returns whether it completed now.
+///
+/// # Errors
+///
+/// Fails when the restore did not complete or its activation is missing.
 pub fn complete_locked(id: &str, lock: &files::Lock) -> Result<bool> {
     records::job_id(id)?;
     operation::root_only()?;

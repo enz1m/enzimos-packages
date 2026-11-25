@@ -34,6 +34,7 @@ fn read(file: &File) -> Result<String> {
     bytes.truncate(used);
     String::from_utf8(bytes).map_err(|_| Error("actual kernel command line encoding".into()))
 }
+/// The running kernel's command line joined to the retirement record.
 pub struct Original<'a> {
     scope: &'a Scope,
     descriptor: File,
@@ -119,6 +120,11 @@ impl<'a> Original<'a> {
         self.parameters.matches_record(record)?;
         self.recheck()
     }
+    /// JSON evidence of this retained state; it grants no deletion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

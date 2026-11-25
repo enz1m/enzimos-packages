@@ -157,6 +157,7 @@ impl Member {
         self.recheck()
     }
 }
+/// A backup ready for terminal publication with its retired cleanup actors.
 pub struct Prepared<'p, 's, 'g> {
     attempt: &'p Attempt<'g>,
     source: &'p backup_source_capture::Retired<'s, 'g>,
@@ -173,6 +174,12 @@ pub struct Prepared<'p, 's, 'g> {
     ready: bool,
 }
 impl<'p, 's, 'g> Prepared<'p, 's, 'g> {
+    /// Enter completion for `attempt` once its source and stage are retired and the worker closed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the completion registry is unsafe or full, the legacy data directory is on
+    /// another filesystem, or a record cannot be written.
     pub fn enter(
         attempt: &'p Attempt<'g>,
         source: &'p backup_source_capture::Retired<'s, 'g>,
@@ -302,6 +309,11 @@ impl<'p, 's, 'g> Prepared<'p, 's, 'g> {
                 .to_owned(),
         )
     }
+    /// Publish the completed backup and its summary.
+    ///
+    /// # Errors
+    ///
+    /// Fails when completion was already entered or the publication fails.
     pub fn publish(
         mut self,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -336,12 +348,17 @@ impl<'p, 's, 'g> Prepared<'p, 's, 'g> {
         Ok(completed)
     }
 }
+/// A published backup completion.
 pub struct Completed<'p, 's, 'g> {
     original: Prepared<'p, 's, 'g>,
 }
 impl Completed<'_, '_, '_> {
     /// Exact original vendor summary is returned only after this actual durable
     /// completion; named legacy JSON or a copied receipt cannot reconstruct it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the summary binding changed.
     pub fn summary(&self) -> Result<Value> {
         let receipt = self.evidence()?;
         let summary = self.original.closed.original_summary()?;
@@ -353,6 +370,11 @@ impl Completed<'_, '_, '_> {
         self.evidence()?;
         Ok(summary)
     }
+    /// JSON evidence for the completion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the publication changed.
     pub fn evidence(&self) -> Result<Value> {
         self.original.retained()?;
         require(

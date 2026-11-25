@@ -2,6 +2,11 @@
 //! The unchanged cohort publication journal has only preparation and completion.
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::Value;
+/// Validate an update admission journal record.
+///
+/// # Errors
+///
+/// Fails when a field is missing or invalid.
 pub fn validate(body: &Value) -> Result<()> {
     json::fields(
         body,
@@ -45,6 +50,11 @@ pub fn validate(body: &Value) -> Result<()> {
     }
     Ok(())
 }
+/// Require that `after` is a valid successor of `before`.
+///
+/// # Errors
+///
+/// Fails when the transition replays or skips completion, or changes the cohort.
 pub fn transition(before: Option<&Value>, after: &Value) -> Result<()> {
     validate(after)?;
     if let Some(before) = before {

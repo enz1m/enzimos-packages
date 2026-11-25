@@ -500,6 +500,10 @@ fn destroy_snapshot(
 /// backup operation lock: at attempt start (again after abandoning an
 /// interrupted attempt), after a backup failed in its own process, and after
 /// a successful backup's own cleanup.
+///
+/// # Errors
+///
+/// Fails when the history cannot be read or a record cannot be retired.
 pub fn retire_failed_locked(guard: &Guard, lock: &files::Lock) -> Result<Value> {
     crate::operation::root_only()?;
     guard.recheck()?;

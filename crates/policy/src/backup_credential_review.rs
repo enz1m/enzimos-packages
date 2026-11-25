@@ -7,12 +7,22 @@ use crate::{
 };
 use enzimos_platform::{Result, json, require};
 use serde_json::{Value, json as value};
+/// Require a credential review operation name.
+///
+/// # Errors
+///
+/// Fails for any other operation.
 pub fn role(operation: &str) -> Result<()> {
     require(
         matches!(operation, "credential-review" | "credential-complete"),
         "closed credential operation required",
     )
 }
+/// Review document of credential `operation` for enrollment `id`.
+///
+/// # Errors
+///
+/// Fails when the operation or enrollment is invalid or its context cannot be observed.
 pub fn observe(guard: &Guard, operation: &str, id: &str) -> Result<Value> {
     role(operation)?;
     let lock = crate::operation::lock()?;
@@ -34,6 +44,11 @@ pub fn observe(guard: &Guard, operation: &str, id: &str) -> Result<Value> {
     )?;
     measure(&context, operation, &mut permission)
 }
+/// Measure the review document of `operation` for `context`.
+///
+/// # Errors
+///
+/// Fails when the context changed or `authorize` fails.
 pub fn measure(
     context: &Context<'_, '_>,
     operation: &str,

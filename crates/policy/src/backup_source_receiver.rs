@@ -68,6 +68,7 @@ struct Chunk {
     files: Vec<File>,
     numbers: Vec<u32>,
 }
+/// Source descriptions received from the worker for one transfer.
 pub struct Received<'a> {
     handoff: &'a Handoff,
     scope: &'a Scope,
@@ -96,6 +97,10 @@ impl PreparedChild<'_, '_> {
     }
     /// Consume this one-use preparation. Intent precedes child spawn; failures
     /// retain it. No retry or cleanup actor can be manufactured from the output.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the transfer intent changed, `authorize` fails, or the consumer fails.
     pub fn run(
         self,
         runtime: &crate::backup_restic_runtime::Runtime,
@@ -129,6 +134,11 @@ impl PreparedChild<'_, '_> {
         self.received.recheck_partial()?;
         Ok(observed)
     }
+    /// JSON evidence for the received sources and progress.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -141,6 +151,11 @@ impl PreparedChild<'_, '_> {
 impl<'a> Received<'a> {
     /// Persist the one-shot intent before preparing any child attachment. Failure
     /// retains that intent; neither dropping the borrow nor receipts permit retry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the transfer intent changed, the reviewed arguments are missing, or `authorize`
+    /// fails.
     pub fn prepare_child(
         &mut self,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -243,6 +258,11 @@ impl<'a> Received<'a> {
     }
     /// All chunks are admitted before any source may be borrowed. An interrupted
     /// durable intent is retained and cannot be reopened as an admission actor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the offer differs from the actual request, worker or caller, or a chunk is
+    /// malformed.
     pub fn receive(
         handoff: &'a Handoff,
         scope: &'a Scope,
@@ -412,6 +432,11 @@ impl<'a> Received<'a> {
             "incomplete source receiver cannot lend descriptions",
         )
     }
+    /// The received source directories by name.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the received sources changed or `authorize` fails.
     pub fn directories(
         &self,
         authorize: &mut dyn FnMut() -> Result<()>,
@@ -424,6 +449,11 @@ impl<'a> Received<'a> {
             .map(|(target, (chunk, index))| (target.as_str(), &self.chunks[*chunk].files[*index]))
             .collect())
     }
+    /// JSON evidence for the received sources.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

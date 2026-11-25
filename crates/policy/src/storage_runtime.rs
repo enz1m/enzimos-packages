@@ -9,6 +9,11 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+/// Mount table of the current process.
+///
+/// # Errors
+///
+/// Fails when mountinfo cannot be read or parsed.
 pub fn rows() -> Result<Vec<mountinfo::Row>> {
     let body = files::read_kernel(
         &PathBuf::from(format!("/proc/{}/mountinfo", std::process::id())),
@@ -24,6 +29,11 @@ fn namespace(pid: u32) -> Result<(u64, u64)> {
     let m = std::fs::metadata(p)?;
     Ok((m.dev(), m.ino()))
 }
+/// Require the caller to run in the initial mount namespace.
+///
+/// # Errors
+///
+/// Fails in any other mount namespace.
 pub fn initial_namespace() -> Result<()> {
     operation::root_only()?;
     require(
@@ -31,6 +41,11 @@ pub fn initial_namespace() -> Result<()> {
         "initial system mount namespace required",
     )
 }
+/// The unique, unshadowed Btrfs mount row of `path` with the expected root and mount ID.
+///
+/// # Errors
+///
+/// Fails when the path is not mounted, is shadowed, or the row differs.
 pub fn mount_row<'a>(
     rows: &'a [mountinfo::Row],
     path: &str,
@@ -96,7 +111,9 @@ impl Mounted {
         )
     }
 }
+/// The installed system's Btrfs control and root mounts with their configuration.
 pub struct Guard {
+    /// Validated storage configuration.
     pub configuration: Value,
     original_configuration: crate::storage_configuration::Configuration,
     control: Mounted,
@@ -105,6 +122,12 @@ pub struct Guard {
     namespace: (u64, u64),
 }
 impl Guard {
+    /// Observe the configured control and root mounts and their filesystem.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the configuration is invalid, the control storage is unsafe, or the mounted
+    /// filesystem differs.
     pub fn observe() -> Result<Self> {
         initial_namespace()?;
         let original_configuration = crate::storage_configuration::Configuration::open()?;
@@ -148,9 +171,11 @@ impl Guard {
         guard.recheck()?;
         Ok(guard)
     }
+    /// The retained control directory.
     pub fn control(&self) -> &File {
         &self.control.file
     }
+    /// Mount ID of the control mount.
     pub fn control_mount_id(&self) -> u64 {
         self.control.unique
     }
@@ -158,9 +183,11 @@ impl Guard {
         self.recheck()?;
         Ok(&self.root.file)
     }
+    /// Mount ID of the root mount.
     pub fn root_mount_id(&self) -> u64 {
         self.root.unique
     }
+    /// Device of the root mount.
     pub fn root_device(&self) -> u64 {
         self.root.identity.0
     }
@@ -168,6 +195,11 @@ impl Guard {
         self.recheck()?;
         Ok(self.topology.json())
     }
+    /// JSON binding of the writable live root subvolume for backup records.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the root subvolume is not the configured writable one.
     pub fn backup_root_binding(&self) -> Result<Value> {
         self.recheck()?;
         let root_path = enzimos_platform::json::string(&self.configuration["root_subvol"])?;
@@ -185,6 +217,11 @@ impl Guard {
         self.recheck()?;
         Ok(value)
     }
+    /// Verify the mounts, filesystem and topology are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         enzimos_platform::recheck_scope::once(self, "storage-guard", || self.recheck_fresh())
     }
@@ -219,16 +256,26 @@ impl Guard {
         self.original_configuration.recheck()
     }
 }
+/// The Btrfs top level mounted privately for one transaction.
 pub struct TopMount {
     path: PathBuf,
     mounted: Option<Mounted>,
     close_on_drop: bool,
 }
 impl TopMount {
+    /// Mount the Btrfs top level, unmounting it when dropped.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the guard changed or the top level cannot be mounted and verified.
     pub fn open(guard: &Guard) -> Result<Self> {
         Self::open_inner(guard, true)
     }
     /// Explicit normal cleanup only; an uncertain close is never repeated by Drop.
+    ///
+    /// # Errors
+    ///
+    /// As [`TopMount::open`].
     pub fn open_retained(guard: &Guard) -> Result<Self> {
         Self::open_inner(guard, false)
     }
@@ -296,15 +343,26 @@ impl TopMount {
         }
         Ok(top)
     }
+    /// Mount point of the top level.
     pub fn path(&self) -> &Path {
         &self.path
     }
+    /// The top-level directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails after the mount was closed.
     pub fn directory(&self) -> Result<&File> {
         self.mounted
             .as_ref()
             .map(|m| &m.file)
             .ok_or_else(|| Error("top mount closed".into()))
     }
+    /// Verify the top-level mount is still the one opened.
+    ///
+    /// # Errors
+    ///
+    /// Fails after close or when the mount changed.
     pub fn recheck(&self) -> Result<()> {
         initial_namespace()?;
         let m = self
@@ -322,6 +380,11 @@ impl TopMount {
         )?;
         Ok(())
     }
+    /// Unmount the top level.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the unmount fails or is uncertain; the path is then retained for review.
     pub fn close(&mut self) -> Result<()> {
         if self.mounted.is_none() {
             return Ok(());
@@ -394,7 +457,14 @@ pub struct IndependentGuard {
     topology: topology::Graph,
 }
 impl IndependentGuard {
+    /// Mount point of the recovery top level.
     pub const TOP: &str = "/run/enzimos/recovery-top";
+    /// Observe the independent recovery environment for `plan`.
+    ///
+    /// # Errors
+    ///
+    /// Fails outside the independent RAM-root recovery environment or when its filesystem differs
+    /// from the plan.
     pub fn observe(plan: &Value) -> Result<Self> {
         crate::recovery_records::plan(plan)?;
         let namespaces = crate::namespaces::initial()?;
@@ -421,18 +491,27 @@ impl IndependentGuard {
         guard.recheck()?;
         Ok(guard)
     }
+    /// Mount ID of the control mount.
     pub fn control_mount_id(&self) -> u64 {
         self.control.unique
     }
+    /// The retained control directory.
     pub fn control(&self) -> &File {
         &self.control.file
     }
+    /// The retained top-level directory.
     pub fn top(&self) -> &File {
         &self.top.file
     }
+    /// The recovery plan this guard was observed for.
     pub fn plan(&self) -> &Value {
         &self.plan
     }
+    /// Verify the recovery namespaces, RAM root and filesystem are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when any of them changed.
     pub fn recheck(&self) -> Result<()> {
         require(
             crate::namespaces::initial()? == self.namespaces,

@@ -188,6 +188,12 @@ impl<'a> Destination<'a> {
             "destination_free_bytes":free,"repository_bytes":null}),
         )
     }
+    /// Open the configured local repository destination.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the destination is not independent of the source and control filesystems, or
+    /// unsafe.
     pub fn open(config: &'a Configuration, source: &'a storage_runtime::Guard) -> Result<Self> {
         config.recheck()?;
         source.recheck()?;
@@ -253,6 +259,11 @@ impl<'a> Destination<'a> {
         this.recheck()?;
         Ok(this)
     }
+    /// Verify the destination is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed or was replaced.
     pub fn recheck(&self) -> Result<()> {
         self.config.recheck()?;
         self.source.recheck()?;
@@ -333,6 +344,11 @@ impl<'a> Destination<'a> {
             "original transfer repository minimum free space",
         )
     }
+    /// Require that the destination is mounted writable.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it is read-only.
     pub fn require_writable(&self) -> Result<()> {
         self.recheck()?;
         writable(&self.mount)

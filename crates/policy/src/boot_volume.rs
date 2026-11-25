@@ -25,15 +25,24 @@ fn probe_uuid(device: &File) -> Result<String> {
     recovery_records::fat_uuid(&uuid)?;
     Ok(uuid)
 }
+/// The mounted ESP at `/boot`, retained by its root directory, mount and disk topology.
 pub struct Volume {
+    /// Root directory of the ESP mount.
     pub directory: File,
+    /// ESP filesystem UUID.
     pub uuid: String,
+    /// Boot-unique mount ID of the ESP.
     pub unique: u64,
     normal: u64,
     device: topology::Device,
     topology: topology::Graph,
 }
 impl Volume {
+    /// Require that the ESP is mounted writable.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `/boot` is not mounted or is mounted read-only.
     pub fn writable(&self) -> Result<()> {
         self.recheck()?;
         let rows = storage_runtime::rows()?;
@@ -46,6 +55,11 @@ impl Volume {
             "boot mount is read-only",
         )
     }
+    /// Observe the vfat filesystem mounted at `/boot`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `/boot` is not a vfat mount or its identity changes while observed.
     pub fn observe() -> Result<Self> {
         storage_runtime::initial_namespace()?;
         let directory = files::directory(Path::new("/boot"), Some(0))?;
@@ -79,6 +93,11 @@ impl Volume {
         volume.recheck()?;
         Ok(volume)
     }
+    /// Verify the ESP mount, filesystem and disk topology are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the mount was replaced, shadowed or the disk topology changed.
     pub fn recheck(&self) -> Result<()> {
         storage_runtime::initial_namespace()?;
         let current = files::directory(Path::new("/boot"), Some(0))?;
@@ -107,6 +126,11 @@ impl Volume {
             "boot disk topology or disk sequence changed",
         )
     }
+    /// Open a directory below the ESP root without leaving its mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the path is unsafe or crosses another mount.
     pub fn directory(&self, relative: &Path) -> Result<File> {
         let path = self.path(relative)?;
         let file = files::directory(&path, Some(0))?;
@@ -117,6 +141,11 @@ impl Volume {
         self.recheck()?;
         Ok(file)
     }
+    /// Absolute path of `relative` below `/boot`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `relative` is not a canonical relative path.
     pub fn path(&self, relative: &Path) -> Result<PathBuf> {
         require(
             !relative.is_absolute()
@@ -128,6 +157,11 @@ impl Volume {
         )?;
         Ok(Path::new("/boot").join(relative))
     }
+    /// Retain a regular file below the ESP of at most `limit` bytes with its digest.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the path is invalid, crosses another mount, or the file is unsafe or too large.
     pub fn artifact(&self, relative: &Path, limit: u64) -> Result<Artifact> {
         self.recheck()?;
         let path = self.path(relative)?;
@@ -159,11 +193,16 @@ impl Volume {
         Ok(artifact)
     }
 }
+/// A file on the ESP retained with its identity and SHA-256.
 pub struct Artifact {
+    /// Absolute path of the artifact.
     pub path: PathBuf,
+    /// The retained file.
     pub file: File,
     metadata: files::FileIdentity,
+    /// Size in bytes.
     pub bytes: u64,
+    /// Lowercase hex SHA-256 of the content.
     pub sha: String,
     unique: u64,
 }
@@ -171,6 +210,10 @@ impl Artifact {
     /// Recognize only the actual retirement of this original inventory member.
     /// Used before retiring its parent directory; a decoded before/after tuple
     /// cannot supply the retained Removed actor or the old file description.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `removed` is not the removal of this artifact from its parent.
     pub fn require_owned_removal(
         &self,
         removed: &enzimos_platform::named_retirement::Removed,
@@ -204,6 +247,11 @@ impl Artifact {
     }
     /// Bind destructive preparation to this original private epoch before
     /// mutation. A post-removal comparison alone cannot protect changed bytes.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `parent` is not this artifact's parent, the artifact changed, or `authorize`
+    /// fails.
     pub fn quarantine_original(
         &self,
         parent: &File,
@@ -239,6 +287,11 @@ impl Artifact {
             authorize,
         )
     }
+    /// Require that `pending` replaces this artifact's path in its original parent.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the pending publication targets another parent or name, or this artifact changed.
     pub fn require_original_publication(
         &self,
         pending: &enzimos_platform::publication::Prepared,
@@ -247,6 +300,10 @@ impl Artifact {
     }
     /// Join this independently retained artifact to an actual replacement.
     /// Decoded epochs and freshly reopened paths cannot supply its predecessor.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `committed` did not replace this artifact.
     pub fn require_owned_replacement(
         &self,
         committed: &enzimos_platform::publication::Committed,
@@ -278,6 +335,10 @@ impl Artifact {
     /// Consume only the actual replacement of this independently held original
     /// artifact. Existing output data or a newly reopened old filename cannot
     /// supply the publication's retained predecessor description.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `committed` did not replace this artifact.
     pub fn into_replaced(
         self,
         committed: enzimos_platform::publication::Committed,
@@ -314,6 +375,10 @@ impl Artifact {
     /// Consume this original inventory artifact into its actual owned removal.
     /// Admission occurs while the original parent still exists. Later checks
     /// retain descriptors and do not reopen a deliberately retired directory.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `removed` is not the removal of this artifact.
     pub fn into_retired(
         self,
         removed: enzimos_platform::named_retirement::Removed,
@@ -326,6 +391,11 @@ impl Artifact {
         retired.recheck()?;
         Ok(retired)
     }
+    /// Verify the artifact is unchanged at its path and mount.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it was replaced or changed.
     pub fn recheck(&self) -> Result<()> {
         let parent = files::directory(
             self.path
@@ -363,6 +433,11 @@ impl RetiredArtifact {
         Ok(&self.removed)
     }
 
+    /// Verify the removed artifact is unchanged and its name did not reappear.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed outside the owned removal.
     pub fn recheck(&self) -> Result<()> {
         self.removed.recheck()?;
         require(
@@ -385,6 +460,10 @@ impl RetiredArtifact {
     }
     /// Join another independently retained observation of this same original
     /// artifact to the actual removal. JSON/inode claims cannot supply either.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `original` is not this artifact or the removal changed.
     pub fn require_original(&self, original: &Artifact) -> Result<()> {
         self.recheck()?;
         require(
@@ -400,6 +479,11 @@ impl RetiredArtifact {
         )?;
         self.recheck()
     }
+    /// Original path of the removed artifact.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`RetiredArtifact::recheck`].
     pub fn path(&self) -> Result<&Path> {
         self.recheck()?;
         Ok(&self.original.path)
@@ -442,6 +526,11 @@ impl ReplacedArtifact {
         self.recheck()
     }
 
+    /// Verify the replacement is still the owned publication over the original.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the replacement changed outside the owned publication.
     pub fn recheck(&self) -> Result<()> {
         self.committed.recheck()?;
         let parent = files::directory(
@@ -472,6 +561,11 @@ impl ReplacedArtifact {
         )?;
         self.committed.recheck()
     }
+    /// The replacement file.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`ReplacedArtifact::recheck`].
     pub fn file(&self) -> Result<&File> {
         self.recheck()?;
         self.committed.file()

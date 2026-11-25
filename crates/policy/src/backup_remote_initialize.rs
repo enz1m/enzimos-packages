@@ -233,6 +233,11 @@ impl<'a> Entered<'a> {
         )
     }
 }
+/// Initialize the network share repository while `lock` is held.
+///
+/// # Errors
+///
+/// Fails when the share or inputs are invalid, `authorize` fails, or initialization fails.
 pub fn initialize_locked(
     guard: &Guard,
     lock: &files::Lock,

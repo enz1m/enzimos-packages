@@ -1,19 +1,37 @@
 // SPDX-License-Identifier: MIT
+//! The global policy operation lock, Root checks and fixed command queries.
 use enzimos_platform::{Result, files, require};
 use std::path::Path;
+/// Directory of persistent policy state.
 pub const STATE: &str = "/var/lib/enzimos";
+/// Directory of the control storage mount.
 pub const CONTROL: &str = "/var/lib/enzimos-control";
+/// Error returned when another operation holds the lock.
 pub const BUSY: &str = "service-busy";
+/// Require the effective UID to be Root.
+///
+/// # Errors
+///
+/// Fails for any other UID.
 pub fn root_only() -> Result<()> {
     require(
         enzimos_platform::process_identity::effective_uid() == 0,
         "root authorization required",
     )
 }
+/// Take the operation lock without waiting.
+///
+/// # Errors
+///
+/// Fails with [`BUSY`] when another process holds it, or as [`try_lock`] does.
 pub fn lock() -> Result<files::Lock> {
     try_lock()?.ok_or_else(|| enzimos_platform::Error(BUSY.into()))
 }
 /// Wait a bounded time for other boot-time policy work to release the lock.
+///
+/// # Errors
+///
+/// Fails with [`BUSY`] when the lock is still held after `timeout`, or as [`try_lock`] does.
 pub fn lock_wait(timeout: std::time::Duration) -> Result<files::Lock> {
     let deadline = std::time::Instant::now() + timeout;
     loop {
@@ -24,6 +42,11 @@ pub fn lock_wait(timeout: std::time::Duration) -> Result<files::Lock> {
         std::thread::sleep(std::time::Duration::from_secs(2));
     }
 }
+/// Take the operation lock, or `None` when another process holds it.
+///
+/// # Errors
+///
+/// Fails when the lock file is unsafe or an unfinished operation needs review first.
 pub fn try_lock() -> Result<Option<files::Lock>> {
     root_only()?;
     let directory = Path::new("/run/enzimos");
@@ -37,6 +60,10 @@ pub fn try_lock() -> Result<Option<files::Lock>> {
 }
 /// Whether another process holds the operation lock; a probe that never
 /// keeps it and skips the pending-entry checks of [`try_lock`].
+///
+/// # Errors
+///
+/// Fails when the lock file is unsafe or cannot be probed.
 pub fn busy() -> Result<bool> {
     root_only()?;
     let directory = Path::new("/run/enzimos");
@@ -46,6 +73,10 @@ pub fn busy() -> Result<bool> {
 /// The operation lock for `secure-boot abandon` only: it skips the refusal of
 /// an unfinished owner boot enablement (which it exists to end) and the update
 /// apply review, so neither pending state can lock the other out.
+///
+/// # Errors
+///
+/// Fails when the lock file is unsafe or cannot be taken.
 pub fn lock_for_enable_abandon() -> Result<files::Lock> {
     root_only()?;
     let directory = Path::new("/run/enzimos");
@@ -66,6 +97,11 @@ pub(crate) fn independent_lock(plan: &serde_json::Value) -> Result<files::Lock> 
     lock.recheck()?;
     Ok(lock)
 }
+/// Kernel boot ID.
+///
+/// # Errors
+///
+/// Fails when it cannot be read or is malformed.
 pub fn boot_id() -> Result<String> {
     let bytes = files::read_kernel(Path::new("/proc/sys/kernel/random/boot_id"), 64)?;
     let s = std::str::from_utf8(&bytes)
@@ -73,6 +109,11 @@ pub fn boot_id() -> Result<String> {
         .trim();
     Ok(crate::identity::uuid(s)?.into())
 }
+/// Run a fixed program and return its stdout when it exits with one of `codes`.
+///
+/// # Errors
+///
+/// Fails when the program is refused, exceeds its bounds, or exits with another code.
 pub fn query(
     program: &str,
     args: &[&str],

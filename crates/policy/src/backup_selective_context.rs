@@ -17,6 +17,7 @@ use std::{
     path::Path,
 };
 const FOLDER: &str = "selective-export-launches";
+/// Inputs of one selective export from an existing repository.
 pub struct Context<'a, 'g> {
     guard: &'g Guard,
     actor: std::sync::Arc<()>,
@@ -48,6 +49,12 @@ impl<'a, 'g> Context<'a, 'g> {
         self.caller.require_description(file, number)
     }
 
+    /// Observe the inputs of file export `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the selection, destination or storage is invalid or changes, or `authorize`
+    /// fails.
     pub fn observe(
         guard: &'g Guard,
         lock: &'a files::Lock,
@@ -66,6 +73,12 @@ impl<'a, 'g> Context<'a, 'g> {
             crate::backup_selective_request::Kind::File,
         )
     }
+    /// Observe the inputs of tree export `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the selection, destination or storage is invalid or changes, or `authorize`
+    /// fails.
     pub fn observe_tree(
         guard: &'g Guard,
         lock: &'a files::Lock,
@@ -174,6 +187,11 @@ impl<'a, 'g> Context<'a, 'g> {
             "live_home_written":false,"metadata_restored":false,"per_user_authorized":false}),
         )
     }
+    /// Verify the inputs are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         authorize()?;
         require(
@@ -239,6 +257,11 @@ impl<'a, 'g> Context<'a, 'g> {
         boundary()?;
         Ok(details)
     }
+    /// JSON evidence for the export context.
+    ///
+    /// # Errors
+    ///
+    /// Fails on [`Context::recheck`].
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         self.recheck(authorize)?;
         Ok(&self.original)
@@ -282,6 +305,10 @@ impl<'a, 'g> Context<'a, 'g> {
     }
     /// Fence one original PID1 start before sockets or worker creation. It grants
     /// neither an observed file result nor authority to publish an export.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the launch registry is unsafe or full, or the context changed.
     pub fn enter_launch(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Launch<'g>> {
         self.recheck(authorize)?;
         let parent =
@@ -324,6 +351,7 @@ fn launch_shape(file: &File) -> Result<LaunchShape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
+/// A recorded launch intent of one selective export worker.
 pub struct Launch<'g> {
     guard: &'g Guard,
     parent: File,
@@ -333,6 +361,11 @@ pub struct Launch<'g> {
     value: Value,
 }
 impl Launch<'_> {
+    /// Verify the launch intent is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the registry or intent changed.
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
         let named = files::directory_relative(self.guard.control(), Path::new(FOLDER), Some(0))?;

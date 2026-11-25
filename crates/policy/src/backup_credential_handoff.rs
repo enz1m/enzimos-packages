@@ -39,6 +39,7 @@ fn named(path: &str) -> Result<File> {
         ),
     )
 }
+/// Descriptors received from the backend for one credential review.
 pub struct Handoff {
     request: Value,
     frame: Value,
@@ -52,6 +53,11 @@ pub struct Handoff {
     header: crate::backup_repository_header::Header,
 }
 impl Handoff {
+    /// Receive the handoff from `message` for the worker in `scope`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the sender is not the original worker or the descriptors differ.
     pub fn receive(message: Message, scope: &Scope) -> Result<Self> {
         Self::receive_original(message, || scope)
     }
@@ -409,6 +415,11 @@ impl Handoff {
         identity(&named, &proof["file"])?;
         identity(&self.files[11], &proof["file"])
     }
+    /// The received request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the handoff changed.
     pub fn request(&self) -> Result<&Value> {
         self.recheck()?;
         Ok(&self.request)

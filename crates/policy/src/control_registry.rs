@@ -11,6 +11,11 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+/// Records of control registry `folder`, each checked by `validate`.
+///
+/// # Errors
+///
+/// Fails when the folder is unsafe, has too many records, or a record is invalid.
 pub fn read<F: FnMut(&Value, &str) -> Result<()>>(
     guard: &Guard,
     folder: &str,

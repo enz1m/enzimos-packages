@@ -161,6 +161,11 @@ pub struct Enrollment<'g> {
     id: String,
 }
 impl<'g> Enrollment<'g> {
+    /// Open the enrollment journal of `id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the journal is unsafe, missing or invalid.
     pub fn observe(guard: &'g Guard, lock: &'g files::Lock, id: &str) -> Result<Self> {
         crate::operation::root_only()?;
         crate::namespaces::initial()?;
@@ -205,6 +210,11 @@ impl<'g> Enrollment<'g> {
         self.recheck()?;
         Ok(&self.store.prepared(&self.id)?.file)
     }
+    /// Require that `candidate` is the input the enrollment was made for.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the candidate input changed.
     pub fn require_input(
         &self,
         candidate: &crate::backup_credential_candidate::Candidate<'_>,
@@ -229,6 +239,11 @@ impl<'g> Enrollment<'g> {
         self.recheck()?;
         Ok(&self.store.prepared(&self.id)?.value)
     }
+    /// Record completion of the reviewed enrollment.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the review changed or the record cannot be written.
     pub fn complete<'a>(
         mut self,
         closed: crate::backup_credential_report::Closed<'g>,
@@ -310,6 +325,11 @@ pub struct Completed<'a, 'g> {
     candidate: &'a crate::backup_credential_candidate::Candidate<'g>,
 }
 impl Completed<'_, '_> {
+    /// Result document of the completed enrollment.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the result differs from the journal.
     pub fn result(&self) -> Result<Value> {
         self.recheck()?;
         let mut result = self.closed.result()?;
@@ -344,6 +364,11 @@ impl Completed<'_, '_> {
             "original completed enrollment or input changed",
         )
     }
+    /// JSON evidence for the journal record.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the record changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let row = &self.store.rows[&format!("{}.json", self.id)];

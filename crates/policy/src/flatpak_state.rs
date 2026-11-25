@@ -160,6 +160,11 @@ pub fn deployments(
     )?;
     Ok(rows)
 }
+/// Require that the deployed metadata `bytes` describes `app`.
+///
+/// # Errors
+///
+/// Fails when the metadata is missing or names another application.
 pub fn metadata(bytes: &[u8], app: &str) -> Result<()> {
     let sections = sections(bytes)?;
     let application = sections

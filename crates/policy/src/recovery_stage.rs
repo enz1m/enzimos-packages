@@ -19,6 +19,10 @@ use std::{
 };
 
 /// Read-only original journal and complete subvolume census under the global lock.
+///
+/// # Errors
+///
+/// Fails when the subvolume census changes during observation.
 pub fn status_locked(lock: &files::Lock) -> Result<Value> {
     operation::root_only()?;
     namespaces::initial()?;
@@ -168,6 +172,11 @@ pub(crate) fn verify_staged(context: &Context, job: &Value) -> Result<Value> {
         value!({"root":job["root"],"history":job["history"],"package_inventory_sha256":context.plan["material"]["inventory_sha256"],"storage_sha256":json::sha256(&storage),"fstab_sha256":json::sha256(&fstab)}),
     )
 }
+/// Review staged recovery job `id` with digest `digest` while `_lock` is held.
+///
+/// # Errors
+///
+/// Fails when the job is gone, staging is unfinished, or the review changed.
 pub fn review_locked(id: &str, digest: &str, _lock: &files::Lock) -> Result<Value> {
     let plan = load_plan(id, digest)?;
     let jobs = Journal::open_independent(Kind::Jobs, false, &plan)?;
@@ -187,6 +196,11 @@ pub fn review_locked(id: &str, digest: &str, _lock: &files::Lock) -> Result<Valu
         value!({"status":"OBSERVED-staged-root-not-activated","id":id,"plan_sha256":digest,"job_sha256":json::fingerprint(job)?,"material":material,"boot_activation_available":false,"retirement_enabled":false,"assurance":"software-local-staged-data-not-boot-or-application-health"}),
     )
 }
+/// Stage recovery job `id` with digest `digest`, reporting progress to `observer`.
+///
+/// # Errors
+///
+/// Fails when the job is gone, staging already started, or a step fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (fstatvfs).")]
 pub fn stage_locked<F: FnMut(&str, &Value) -> Result<()>>(
     id: &str,

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
+//! Kernel command line options that bind a root subvolume and enzimOS markers.
 use crate::identity::safe_id;
 use enzimos_platform::{Error, Result, require};
+/// Kernel options `options` bound to root `subvolume`.
+///
+/// # Errors
+///
+/// Fails when the options are invalid or already bind another subvolume ambiguously.
 pub fn root_options(options: &str, subvolume: &str) -> Result<String> {
     safe_id(subvolume)?;
     require(
@@ -44,6 +50,11 @@ pub(crate) fn generation_options(options: &str, generation: &str) -> Result<Stri
     words.push(&marker);
     Ok(words.join(" "))
 }
+/// The root subvolume named by `options`.
+///
+/// # Errors
+///
+/// Fails without exactly one named root subvolume.
 pub fn subvolume_from_options(options: &str) -> Result<String> {
     let values = options
         .split_whitespace()
@@ -62,6 +73,11 @@ pub fn subvolume_from_options(options: &str) -> Result<String> {
     require(roots.len() == 1, "one named root subvolume required")?;
     Ok(safe_id(roots[0])?.into())
 }
+/// Value of the enzimOS boot marker `key` in `cmdline`.
+///
+/// # Errors
+///
+/// Fails for unknown keys or without exactly one marker.
 pub fn marker(cmdline: &str, key: &str) -> Result<String> {
     require(
         cmdline.len() <= 65536

@@ -46,6 +46,11 @@ pub(crate) fn decode_info(bytes: &[u8], path: &str) -> Result<(Value, bool)> {
         number(288) & 1 != 0,
     ))
 }
+/// Subvolume identity of `fd` at `path`, and whether it is read-only.
+///
+/// # Errors
+///
+/// Fails when `fd` is not a Btrfs subvolume.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn observe(fd: BorrowedFd<'_>, path: &str) -> Result<(Value, bool)> {
     let mut buffer = [0u64; 63];
@@ -98,6 +103,11 @@ pub(crate) fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
         "parent_uuid":if bytes[312..328].iter().any(|byte| *byte != 0) {Some(uuid(&bytes[312..328]))} else {None},"readonly":flags & 1 != 0}),
     )
 }
+/// Creation time of the subvolume in seconds.
+///
+/// # Errors
+///
+/// Fails when `fd` is not a subvolume or the time is out of range.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn creation_time(fd: BorrowedFd<'_>) -> Result<i64> {
     let mut buffer = [0u64; 63];
@@ -148,6 +158,11 @@ fn create(
     }
     sync(parent)
 }
+/// Sync the Btrfs filesystem of `fd`.
+///
+/// # Errors
+///
+/// Fails when the sync fails.
 #[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn sync(fd: BorrowedFd<'_>) -> Result<()> {
     require(
@@ -156,6 +171,11 @@ pub fn sync(fd: BorrowedFd<'_>) -> Result<()> {
         "Btrfs filesystem durability uncertain",
     )
 }
+/// Snapshot `source` as `name` in `parent`, optionally read-only.
+///
+/// # Errors
+///
+/// Fails when the name is invalid or the snapshot is refused.
 /// Caller must hold the global operation lock and publish its intent first.
 pub fn snapshot(
     parent: BorrowedFd<'_>,
@@ -165,6 +185,11 @@ pub fn snapshot(
 ) -> Result<()> {
     create(parent, Some(source), name, readonly)
 }
+/// Create an empty subvolume `name` in `parent`.
+///
+/// # Errors
+///
+/// Fails when the name is invalid or creation is refused.
 /// Caller must hold the global operation lock and publish its intent first.
 pub fn new(parent: BorrowedFd<'_>, name: &str) -> Result<()> {
     create(parent, None, name, false)

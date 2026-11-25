@@ -28,6 +28,10 @@ pub(crate) const NOT_MOUNTED: &str = "backup-destination-not-mounted";
 
 /// Whether the fixed target currently holds a mount to borrow. Nested or
 /// stacked mounts are never borrowed or treated as absent.
+///
+/// # Errors
+///
+/// Fails when the destination mount is ambiguous or nested.
 pub fn mounted() -> Result<bool> {
     let rows = storage_runtime::rows()?;
     let mounts = rows
@@ -128,6 +132,10 @@ pub(crate) fn detached_evidence(
 /// `None`: an existing mount is borrowed. `Some(active)`: this call owns one
 /// reviewed temporary mount; the body must close it (`close`/`close_result`),
 /// otherwise its rollback guard detaches it and the intent stays unfinished.
+///
+/// # Errors
+///
+/// Fails when the destination differs from the configuration, `authorize` fails, or the body fails.
 pub fn attach<T>(
     guard: &Guard,
     lock: &files::Lock,
@@ -166,6 +174,10 @@ pub fn attach<T>(
 }
 /// `attach` for bodies that do not need to close the destination early: an
 /// owned mount is closed normally after the body, also when it failed.
+///
+/// # Errors
+///
+/// Fails when the destination is unavailable or differs, or the body fails.
 pub fn with_destination<T>(
     guard: &Guard,
     lock: &files::Lock,

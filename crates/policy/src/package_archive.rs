@@ -24,6 +24,11 @@ impl Read for Pread<'_> {
         Ok(count)
     }
 }
+/// Identity fields of a package's `.PKGINFO`.
+///
+/// # Errors
+///
+/// Fails when the metadata is too large, malformed or has invalid fields.
 pub fn metadata(body: &str) -> Result<Value> {
     require(
         body.len() <= 256 * 1024 && !body.contains('\0'),
@@ -91,6 +96,7 @@ pub fn version_matches(container: &str, version: &str) -> bool {
                 && container == body
         })
 }
+/// Whether `filename` is the archive name of package `name` at `version`.
 pub fn filename_matches(filename: &str, name: &str, version: &str) -> bool {
     filename
         .strip_prefix(&format!("{name}-"))

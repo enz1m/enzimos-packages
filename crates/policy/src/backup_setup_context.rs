@@ -24,6 +24,7 @@ pub(crate) enum Step {
     Configuration,
     Repository,
 }
+/// The published outer setup intent, retained for the setup body.
 pub struct Prepared<'p, 'a, 'r, 'd> {
     plan: &'p Plan<'a, 'r, 'd>,
     file: File,
@@ -34,6 +35,10 @@ pub struct Prepared<'p, 'a, 'r, 'd> {
 impl<'p, 'a, 'r, 'd> Prepared<'p, 'a, 'r, 'd> {
     /// Replace only this original prepared intent after native provision, pin,
     /// worker and normal mount closure. Interrupted receipts are never adopted.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the provisioned result does not match the plan or the record cannot be written.
     pub fn complete<'g>(
         self,
         provisioned: crate::backup_provisioned::Provisioned<'g>,
@@ -83,6 +88,11 @@ impl<'p, 'a, 'r, 'd> Prepared<'p, 'a, 'r, 'd> {
         authorize()?;
         Ok(this)
     }
+    /// Publish the outer setup intent for `plan`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the plan changed, a record exists, or `authorize` fails.
     pub fn begin(
         plan: &'p Plan<'a, 'r, 'd>,
         review_sha: &str,
@@ -148,6 +158,10 @@ impl<'p, 'a, 'r, 'd> Prepared<'p, 'a, 'r, 'd> {
     }
     /// Failure rollback: remove this original prepared intent so a fresh,
     /// reviewed attempt is possible. Never used after completion.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent changed or cannot be removed.
     pub fn retract(&self, lock: &files::Lock) -> Result<()> {
         lock.recheck()?;
         self.recheck()?;
@@ -176,6 +190,11 @@ impl<'p, 'a, 'r, 'd> Prepared<'p, 'a, 'r, 'd> {
             .as_str()
             .expect("setup plans are validated with a destination UUID string")
     }
+    /// The intent record file.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent changed.
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;
         Ok(&self.file)
@@ -223,6 +242,11 @@ impl Completed<'_, '_, '_, '_, '_> {
             "original completed outer setup receipt or native provision changed",
         )
     }
+    /// Result document of the completed setup.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the intent changed or is not complete.
     pub fn result(&self) -> Result<Value> {
         self.recheck()?;
         Ok(self.result.clone())

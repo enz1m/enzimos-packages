@@ -228,9 +228,19 @@ impl Scope {
         Ok(result)
     }
 }
+/// The completion observation for request `body`.
+///
+/// # Errors
+///
+/// Fails when the request is invalid or the live root cannot be measured.
 pub fn observation(body: &Value) -> Result<Value> {
     Scope::open(id(body)?)?.view(false)
 }
+/// Complete the run in request `body` if it still matches `expected`.
+///
+/// # Errors
+///
+/// Fails when the plan or state changed, `authorize` fails, or the record cannot be written.
 pub fn finish<F: FnMut() -> Result<()>>(
     body: &Value,
     expected: &Value,

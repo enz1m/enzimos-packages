@@ -175,9 +175,19 @@ fn sample() -> Result<(Value, Value)> {
     guard.recheck()?;
     Ok((Value::Object(snapshots), Value::Object(history)))
 }
+/// Snapshots of the configured history.
+///
+/// # Errors
+///
+/// Fails when Snapper or its configuration cannot be read.
 pub fn snapshots() -> Result<Value> {
     Ok(sample()?.0)
 }
+/// History settings and the home timer state.
+///
+/// # Errors
+///
+/// Fails when the configuration or timer state cannot be read.
 pub fn history() -> Result<Value> {
     let timer = Command::open("/usr/bin/systemctl")?;
     let home_history = crate::home_history_control::parse(&timer.run_timeout(

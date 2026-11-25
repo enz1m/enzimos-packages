@@ -64,6 +64,11 @@ impl<'a> PendingBios<'a> {
         )?;
         Ok(result)
     }
+    /// JSON evidence for the pending BIOS entry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(
@@ -197,6 +202,11 @@ impl<'a> CommittedBios<'a> {
         )?;
         Ok(result)
     }
+    /// JSON evidence for the committed BIOS entry.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         self.recheck(authorize)?;
         Ok(

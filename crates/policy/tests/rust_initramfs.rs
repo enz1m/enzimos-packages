@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Initramfs archive construction.
 use enzimos_policy::initramfs;
 fn base(body: &[u8]) -> Vec<u8> {
     zstd::stream::encode_all(

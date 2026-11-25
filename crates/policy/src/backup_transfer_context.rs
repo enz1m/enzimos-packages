@@ -34,6 +34,7 @@ enum Target<'a, 'g> {
         remote: crate::backup_remote_context::Context<'a>,
     },
 }
+/// Inputs of one backup transfer: capture, lock, destination and caller.
 pub struct Context<'a, 'b, 'c, 's, 'cfg, 'g> {
     inputs: &'a Inputs<'b, 'c, 's, 'cfg, 'g>,
     lock: &'a files::Lock,
@@ -60,11 +61,19 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
         self.caller_actor().require_description(file, number)
     }
     /// Retain the exact original backend caller for the separate source offer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the context changed or `authorize` fails.
     pub fn caller(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Caller> {
         self.recheck(authorize)?;
         Ok(self.caller_actor())
     }
     /// Fence the one PID1 start before any service or transient socket exists.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the launch registry is unsafe or full, or the context changed.
     pub fn enter_launch(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Launch> {
         self.recheck(authorize)?;
         let guard = self.guard();
@@ -98,6 +107,10 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
     }
     /// Current native backend plus actual original capture, operation lock and
     /// independently qualified existing repository. No setup-plan adoption.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the destination does not retain the capture guard, or `authorize` fails.
     pub fn observe(
         inputs: &'a Inputs<'b, 'c, 's, 'cfg, 'g>,
         lock: &'a files::Lock,
@@ -232,6 +245,11 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
             "transfer_complete":false,"worker_kernel_closed":false,"cleanup_complete":false,
             "backup_complete":false}))
     }
+    /// Verify the inputs are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed or `authorize` fails.
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         enzimos_platform::recheck_scope::evaluation(|| {
             authorize()?;
@@ -241,6 +259,11 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
             )
         })
     }
+    /// JSON evidence for the transfer context.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the context changed or `authorize` fails.
     pub fn evidence(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<&Value> {
         enzimos_platform::recheck_scope::evaluation(|| {
             self.recheck(authorize)?;
@@ -303,6 +326,11 @@ pub struct Launch {
     value: Value,
 }
 impl Launch {
+    /// Verify the launch fence is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when it changed.
     pub fn recheck(&self) -> Result<()> {
         self.record.recheck()?;
         require(

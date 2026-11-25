@@ -11,6 +11,7 @@ use enzimos_platform::{
 };
 use serde_json::{Value, json as value};
 use std::{fs::File, os::fd::AsFd, time::Duration};
+/// The selective export worker's report.
 pub struct Reported {
     request: Value,
     report: Value,
@@ -134,6 +135,11 @@ impl Reported {
         )
     }
 
+    /// Close the report with the worker's closed request.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the request belongs to another worker.
     pub fn close<'g>(self, closed: ClosedRequest<'g>) -> Result<Closed<'g>> {
         self.recheck()?;
         closed.require_request(&self.request)?;
@@ -166,11 +172,20 @@ impl Closed<'_> {
         )
     }
 
+    /// Verify the report and closure are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         self.closed.require_request(&self.original.request)
     }
     /// Only the original closed worker observation may satisfy the reviewed tree.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the report is not the expected tree export.
     pub fn require_tree(&self, expected: &Value) -> Result<()> {
         self.recheck()?;
         require(
@@ -188,6 +203,11 @@ impl Closed<'_> {
         )?;
         self.recheck()
     }
+    /// JSON evidence for the report and closure.
+    ///
+    /// # Errors
+    ///
+    /// Fails when they changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(

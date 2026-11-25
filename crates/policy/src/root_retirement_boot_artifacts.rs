@@ -141,6 +141,7 @@ impl BootText {
         Ok(result)
     }
 }
+/// The ESP boot artifacts of a retirement, joined to the running boot and native image.
 pub struct Original<'a, 's> {
     scope: &'s Scope,
     kernel_boot: &'a root_retirement_kernel_boot::Original<'s>,
@@ -393,6 +394,11 @@ impl<'a, 's> Original<'a, 's> {
         restored.recheck()?;
         Ok(restored)
     }
+    /// JSON evidence for the artifacts.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
@@ -400,6 +406,7 @@ impl<'a, 's> Original<'a, 's> {
         )
     }
 }
+/// The boot artifacts after the defaults were restored.
 pub struct Restored<'a, 's> {
     original: Original<'a, 's>,
 }
@@ -496,6 +503,11 @@ impl Restored<'_, '_> {
             "actual owned loader restoration readback differs",
         )
     }
+    /// JSON evidence for the restored artifacts.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained state changed.
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         Ok(
