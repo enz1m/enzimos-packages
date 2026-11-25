@@ -648,4 +648,14 @@ mod tests {
             Probe::Unknown("remote-share-unreachable")
         );
     }
+    #[test]
+    fn live_and_staged_share_inputs_never_enter_a_backup() {
+        for name in INPUTS.iter().chain(&STAGED) {
+            let path = format!("/backup-source/system/etc/enzimos/{name}");
+            assert!(
+                enzimos_platform::backup_command::EXCLUDES.contains(&path.as_str()),
+                "{path} is backed up"
+            );
+        }
+    }
 }
