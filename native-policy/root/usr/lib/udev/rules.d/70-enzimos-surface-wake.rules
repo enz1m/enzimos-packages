@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+# The Surface Aggregator carries the keyboard on Surface Laptop 1 and 2; with
+# its wakeup off, only the power button wakes the system from sleep.
+ACTION=="add|bind", SUBSYSTEM=="serial", DRIVER=="surface_serial_hub", ATTR{power/wakeup}="enabled"
