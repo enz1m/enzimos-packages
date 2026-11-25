@@ -6,6 +6,7 @@ use crate::{
 use enzimos_platform::{Error, Result, require};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 pub(crate) type Metadata = BTreeMap<String, Option<String>>;
 pub(crate) struct Entries {
     pub uefi: BTreeMap<String, String>,
@@ -44,7 +45,10 @@ pub(crate) fn entries(job: &Value) -> Result<Entries> {
         let (name, title) = activation::entry_names(id, flavor)?;
         uefi.insert(name.clone(),format!("title {title}\nlinux {prefix}/vmlinuz-{flavor}\ninitrd {prefix}/initramfs-{flavor}.img\noptions {options}\n"));
         sequence.push(format!("loader/entries/{name}"));
-        bios.push_str(&format!("/{title}\n protocol: linux\n path: boot():{prefix}/vmlinuz-{flavor}\n module_path: boot():{prefix}/initramfs-{flavor}.img\n cmdline: {options}\n"));
+        let _ = write!(
+            bios,
+            "/{title}\n protocol: linux\n path: boot():{prefix}/vmlinuz-{flavor}\n module_path: boot():{prefix}/initramfs-{flavor}.img\n cmdline: {options}\n"
+        );
     }
     sequence.push("limine/limine.conf".into());
     Ok(Entries {

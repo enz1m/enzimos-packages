@@ -176,16 +176,17 @@ pub(crate) fn join(
     for (name, row) in enzimos_platform::json::object(&catalog["generations"])? {
         let bound = &row["material"]["root_identity"];
         let observed = inventory.get(text(bound, "path")?);
-        let valid = observed.is_some_and(|actual| {
-            ["path", "id", "uuid"]
-                .iter()
-                .all(|k| actual[*k] == bound[*k])
-        });
-        let key = if valid {
-            Some(text(observed.unwrap(), "uuid")?.to_owned())
-        } else {
-            None
+        let key = match observed {
+            Some(actual)
+                if ["path", "id", "uuid"]
+                    .iter()
+                    .all(|k| actual[*k] == bound[*k]) =>
+            {
+                Some(text(actual, "uuid")?.to_owned())
+            }
+            _ => None,
         };
+        let valid = key.is_some();
         if !valid {
             blockers.insert(format!("generation-root-identity-drift:{name}"));
         }
@@ -283,7 +284,11 @@ pub(crate) fn join(
     }
     let unclaimed: Vec<_> = resources
         .iter()
-        .filter(|(_, r)| r["required_by_generations"].as_array().unwrap().is_empty())
+        .filter(|(_, r)| {
+            r["required_by_generations"]
+                .as_array()
+                .is_some_and(Vec::is_empty)
+        })
         .map(|(id, _)| id)
         .collect();
     Ok(

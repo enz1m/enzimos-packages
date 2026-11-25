@@ -70,8 +70,12 @@ fn mount(
         CString::new(source).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let target =
         CString::new(target).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
-    let kind_c = CString::new(kind).unwrap();
-    let data = data.map(|s| CString::new(s).unwrap());
+    let kind_c =
+        CString::new(kind).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    let data = data
+        .map(CString::new)
+        .transpose()
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
         // SAFETY: All non-null pointers are NUL-terminated CStrings that outlive the call.
         unsafe {

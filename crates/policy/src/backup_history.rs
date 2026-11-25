@@ -44,7 +44,12 @@ fn job(id: &str) -> bool {
 }
 /// Whether receipt `name` in `folder` belongs to job `j`.
 pub(crate) fn belongs(folder: &str, name: &str, j: &str) -> bool {
-    let digest = || json::sha256(j.as_bytes())[..48].to_owned();
+    let digest = || {
+        json::sha256(j.as_bytes())
+            .chars()
+            .take(48)
+            .collect::<String>()
+    };
     let indexed = |prefix: &str| {
         name.strip_prefix(prefix)
             .and_then(|rest| rest.strip_prefix('-'))

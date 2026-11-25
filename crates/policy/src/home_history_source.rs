@@ -96,7 +96,10 @@ pub(crate) fn configuration_for(bytes: &[u8], expected: &str) -> Result<()> {
                 && contents.len() >= 2,
             "home Snapper configuration grammar",
         )?;
-        let contents = &contents[1..contents.len() - 1];
+        let contents = contents
+            .strip_prefix('"')
+            .and_then(|c| c.strip_suffix('"'))
+            .ok_or_else(|| Error("home Snapper configuration grammar".into()))?;
         require(
             !contents.contains('"')
                 && !contents.chars().any(char::is_control)

@@ -92,6 +92,10 @@ pub struct Observed<'h> {
     request: Value,
 }
 impl<'h> Observed<'h> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is one bracketing observation of the copy."
+    )]
     pub(crate) fn seal(
         handoff: &'h crate::backup_remote_handoff::Handoff<'_>,
         source_first: Value,

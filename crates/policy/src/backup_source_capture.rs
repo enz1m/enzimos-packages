@@ -318,7 +318,10 @@ pub fn capture<'s, 'cfg, 'g, F: FnMut() -> Result<()>>(
         .snapshot()?;
     let boot_id = format!(
         "boot-{}",
-        &enzimos_platform::json::sha256(id.as_bytes())[..48]
+        enzimos_platform::json::sha256(id.as_bytes())
+            .chars()
+            .take(48)
+            .collect::<String>()
     );
     let boot = {
         let mut checkpoint = || {

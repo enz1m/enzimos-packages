@@ -204,7 +204,9 @@ impl<'a> Store<'a> {
         enzimos_platform::flock_identity::exclusive(lock.as_file())
     }
     pub fn id(&self) -> &str {
-        self.current["id"].as_str().unwrap()
+        self.current["id"]
+            .as_str()
+            .expect("update records are validated with a string id")
     }
     pub fn current(&self) -> &Value {
         &self.current

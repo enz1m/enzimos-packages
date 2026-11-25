@@ -259,7 +259,13 @@ pub fn save(input: File, directory: &Path, name: &str, backup_uuid: &str) -> Res
         output.sync_all()?;
         destination.recheck(directory, backup_uuid)?;
         require(source(&input)? == epoch, "sealed recovery input changed")?;
-        let named = files::open_relative(&destination.file, Path::new(name.to_str().unwrap()))?;
+        let named = files::open_relative(
+            &destination.file,
+            Path::new(
+                name.to_str()
+                    .map_err(|_| enzimos_platform::Error("path encoding".into()))?,
+            ),
+        )?;
         let m = output.metadata()?;
         require(
             (m.dev(), m.ino()) == (created.0, created.1)

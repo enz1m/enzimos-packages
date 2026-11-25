@@ -484,7 +484,10 @@ pub(crate) fn validate_staging_transition(before: &Value, next: &Value, id: &str
         ),
         "staging receipt must identify original Root UUID",
     )?;
-    let entry = format!("enzimos-root-retire-{}.conf", &id[5..21]);
+    let entry = format!(
+        "enzimos-root-retire-{}.conf",
+        id.get(5..21).unwrap_or_default()
+    );
     require(
         next["coordinator"]["uefi_entry"] == entry
             && next["coordinator"].get("uefi_mode").is_some(),

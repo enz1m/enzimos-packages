@@ -13,6 +13,7 @@ use crate::{
 };
 use enzimos_platform::{Error, Result, files, json, mount_identity, require};
 use serde_json::{Value, json as value};
+use std::fmt::Write as _;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
@@ -528,7 +529,13 @@ pub fn stage<'c, 's, 'cfg, 'g>(
         let sources = database_configuration.sources()?;
         let mut exports = Vec::new();
         for (index, source) in sources.iter().enumerate() {
-            let export_id = format!("db-{}-{index}", &json::sha256(id.as_bytes())[..48]);
+            let export_id = format!(
+                "db-{}-{index}",
+                enzimos_platform::json::sha256(id.as_bytes())
+            )
+            .chars()
+            .take(48)
+            .collect::<String>();
             let mut checkpoint = || {
                 authorize()?;
                 boundary(&record)?;
@@ -571,7 +578,7 @@ pub fn stage<'c, 's, 'cfg, 'g>(
     let packages = capture.installed_packages()?;
     let mut text = String::new();
     for (name, version) in packages {
-        text.push_str(&format!("{name} {version}\n"));
+        let _ = writeln!(text, "{name} {version}");
     }
     let skipped = skipped_document(capture)?;
     authorize()?;

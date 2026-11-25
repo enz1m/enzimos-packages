@@ -163,7 +163,7 @@ impl Core {
     pub(crate) fn source_uuid(&self) -> &str {
         self.original.filesystem["filesystem_uuid"]
             .as_str()
-            .unwrap()
+            .expect("filesystem observations always carry a UUID string")
     }
     pub(crate) fn covered(&self) -> Result<()> {
         self.original.recheck()?;

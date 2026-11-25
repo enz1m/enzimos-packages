@@ -58,15 +58,20 @@ impl Parameters {
         require(
             id.len() == 37
                 && id.starts_with("root-")
-                && id[5..]
+                && id
                     .bytes()
+                    .skip(5)
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
             "retirement boot identity",
         )?;
         let uefi_previous = field("enzimos.uefi-restore")?;
         records::literal_entry(uefi_previous)?;
         require(
-            uefi_previous != format!("enzimos-root-retire-{}.conf", &id[5..21]),
+            uefi_previous
+                != format!(
+                    "enzimos-root-retire-{}.conf",
+                    id.get(5..21).unwrap_or_default()
+                ),
             "retirement entry cannot restore itself",
         )?;
         let (previous, own) = field("enzimos.bios-restore")?
@@ -117,7 +122,10 @@ impl Parameters {
             Self::parse(records::text(coordinator, "options")?)? == *self
                 && record["filesystem_uuid"] == self.filesystem
                 && coordinator["uefi_entry"]
-                    == format!("enzimos-root-retire-{}.conf", &self.id[5..21])
+                    == format!(
+                        "enzimos-root-retire-{}.conf",
+                        self.id.get(5..21).unwrap_or_default()
+                    )
                 && coordinator["uefi_previous"] == self.uefi_previous
                 && coordinator["bios_previous"].as_u64() == Some(self.bios_previous as u64)
                 && coordinator["bios_own"].as_u64() == Some(self.bios_own as u64),

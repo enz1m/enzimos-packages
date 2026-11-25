@@ -36,7 +36,10 @@ fn native_options(options: &str) -> Result<Parameters> {
 pub fn entries(options: &str, image: &str) -> Result<Entries> {
     let p = native_options(options)?;
     recovery_image::identifier(image)?;
-    let title = format!("enzimOS root retirement {}", &p.id[5..21]);
+    let title = format!(
+        "enzimOS root retirement {}",
+        p.id.get(5..21).unwrap_or_default()
+    );
     let prefix = format!("/enzimos/recovery-images/{image}");
     Ok(Entries {
         uefi: format!(
@@ -101,7 +104,10 @@ pub(crate) fn restore_original(
     )?;
     let expected = entries(options, image)?;
     exact(uefi, &expected.uefi, false)?;
-    let name = format!("enzimos-root-retire-{}.conf", &p.id[5..21]);
+    let name = format!(
+        "enzimos-root-retire-{}.conf",
+        p.id.get(5..21).unwrap_or_default()
+    );
     let loader = boot_entries::fields(defaults, false)?;
     let selected = loader
         .get("default")
@@ -115,7 +121,10 @@ pub(crate) fn restore_original(
         menu.entries.len() == p.bios_own
             && matches!(menu.selected, n if n == p.bios_own || n == p.bios_previous)
             && menu.entries[p.bios_own - 1].title
-                == format!("enzimOS root retirement {}", &p.id[5..21]),
+                == format!(
+                    "enzimOS root retirement {}",
+                    p.id.get(5..21).unwrap_or_default()
+                ),
         "original last retirement BIOS entry/default differs",
     )?;
     exact(&menu.entries[p.bios_own - 1].text, &expected.bios, true)?;

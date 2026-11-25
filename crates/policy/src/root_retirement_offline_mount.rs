@@ -139,7 +139,7 @@ impl<'a, 's> OwnedTop<'a, 's> {
             "/proc/self/fd/{}",
             mapping.descriptor()?.as_raw_fd()
         ))
-        .unwrap();
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let before_mount = exclusive.release()?;
         before_mount.require_original_mapping(mapping)?;
         require(

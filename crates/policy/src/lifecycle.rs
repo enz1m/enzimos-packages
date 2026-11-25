@@ -237,7 +237,13 @@ pub fn plan(inventory: &Value, keep_good: usize) -> Result<Value> {
                 && g["confirmed"] == true
         })
         .collect();
-    good.sort_by_key(|(_, g)| std::cmp::Reverse(g["ordinal"].as_u64().unwrap()));
+    good.sort_by_key(|(_, g)| {
+        std::cmp::Reverse(
+            g["ordinal"]
+                .as_u64()
+                .expect("plan validates every generation ordinal"),
+        )
+    });
     let mut distinct = Names::new();
     let mut retained = Vec::new();
     for (n, _) in good {

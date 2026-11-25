@@ -17,6 +17,10 @@ pub struct State {
     failed: bool,
     finished: bool,
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 pub enum Event<'g> {
     Checkpoint,
     Observed(Reported<'g>),

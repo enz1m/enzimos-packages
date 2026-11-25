@@ -80,7 +80,8 @@ fn parse(v: &Value, owned: &BTreeSet<u64>) -> Result<Vec<Row>> {
     let mut result = Vec::new();
     for row in rows {
         require(row.is_object(), "snapshot record object required")?;
-        let n = number(&row["number"], false)?.unwrap();
+        let n = number(&row["number"], false)?
+            .ok_or_else(|| enzimos_platform::Error("snapshot number required".into()))?;
         if n == 0 {
             continue;
         }

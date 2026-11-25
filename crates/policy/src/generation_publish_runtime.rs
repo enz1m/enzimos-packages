@@ -446,7 +446,9 @@ pub fn publish_authorized(
         .iter()
         .map(|(name, text)| {
             (
-                name.strip_prefix("loader/entries/").unwrap().to_owned(),
+                name.strip_prefix("loader/entries/")
+                    .expect("journal entries are all named under loader/entries/")
+                    .to_owned(),
                 text.clone(),
             )
         })

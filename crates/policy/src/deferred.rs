@@ -54,10 +54,18 @@ pub fn next(previous: Option<&Value>, action: &str, boot: &str, now: u64) -> Res
             "clock moved backwards during deferred admission",
         )?;
     }
+    let first = previous
+        .map(|v| json::unsigned(&v["first_deferred_unix"]))
+        .transpose()?
+        .unwrap_or(now);
+    let deferrals = previous
+        .map(|v| json::unsigned(&v["deferrals"]).map(|n| (n + 1).min(MAX_DEFERRALS)))
+        .transpose()?
+        .unwrap_or(1);
     let record = value!({"schema":1,"action":action,
-        "first_deferred_unix":previous.map_or(now, |v| v["first_deferred_unix"].as_u64().unwrap()),
+        "first_deferred_unix":first,
         "last_deferred_unix":now,"last_boot_id":boot,
-        "deferrals":previous.map_or(1, |v| (v["deferrals"].as_u64().unwrap() + 1).min(MAX_DEFERRALS))});
+        "deferrals":deferrals});
     validate(&record, action)?;
     Ok(record)
 }

@@ -19,7 +19,7 @@ fn archive(path: &Path, duplicate: bool, link: Option<&str>) -> File {
         header.set_cksum();
         builder
             .append_data(&mut header, "./usr/bin/demo", Cursor::new(b"example"))
-            .unwrap();
+            .expect("test fixture");
     }
     if let Some(target) = link {
         let mut header = tar::Header::new_gnu();
@@ -31,13 +31,15 @@ fn archive(path: &Path, duplicate: bool, link: Option<&str>) -> File {
         header.set_cksum();
         builder
             .append_link(&mut header, "./usr/bin/demo-link", target)
-            .unwrap();
+            .expect("test fixture");
     }
-    builder.finish().unwrap();
-    let body = zstd::stream::encode_all(Cursor::new(builder.into_inner().unwrap()), 1).unwrap();
-    std::fs::write(path, body).unwrap();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
-    File::open(path).unwrap()
+    builder.finish().expect("test fixture");
+    let body =
+        zstd::stream::encode_all(Cursor::new(builder.into_inner().expect("test fixture")), 1)
+            .expect("test fixture");
+    std::fs::write(path, body).expect("test fixture");
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).expect("test fixture");
+    File::open(path).expect("test fixture")
 }
 #[test]
 fn reviews_complete_archive_then_streams_executable_and_internal_link_into_owned_target() {

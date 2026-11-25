@@ -85,6 +85,10 @@ impl Directory {
         self.recheck(volume, None)
     }
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 enum Bios {
     Original(Artifact),
     Replaced(ReplacedArtifact),

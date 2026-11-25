@@ -118,7 +118,6 @@ pub fn enroll_locked(
     ongoing()?;
     runtime.empty()?;
     require_incorrect(probe.status.code())?;
-    drop(ongoing);
     let row = prepared(
         id,
         &backup_destination::legacy_binding(&destination.evidence()?, guard)?,
@@ -170,7 +169,6 @@ pub fn enroll_locked(
     let after = query(&current)?;
     let recovered = query(&next)?;
     let new_key = record::sole_added_key(&row, &after, &recovered)?;
-    drop(query);
     let checked = local_restic::credential_review(
         CredentialReview::Metadata,
         image.descriptor()?,
@@ -203,7 +201,6 @@ pub fn enroll_locked(
         )?;
     }
     ongoing()?;
-    drop(ongoing);
     let mut complete = row;
     complete["phase"] = value!("complete");
     complete["new_key"] = value!(new_key);

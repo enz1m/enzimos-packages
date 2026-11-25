@@ -199,10 +199,10 @@ pub fn validate(record: &Value, id: &str) -> Result<()> {
         identity::sha(text(step, "sha256")?)?;
     }
     require(
-        record["phase"]
-            == steps
-                .last()
-                .map_or("intent", |row| row["phase"].as_str().unwrap())
+        steps
+            .last()
+            .map_or(Some("intent"), |row| row["phase"].as_str())
+            .is_some_and(|phase| record["phase"] == phase)
             && if record["phase"] == "complete" {
                 steps.len() == expected.len()
                     && (shortcut || record["result"] == "prepared-not-rebooted")

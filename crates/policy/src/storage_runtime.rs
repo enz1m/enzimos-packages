@@ -239,7 +239,9 @@ impl TopMount {
         let path = base.join("root-birth-top");
         files::ensure_directory(&path, 0o700, 0)?;
         require(
-            !rows()?.iter().any(|r| r.target == path.to_str().unwrap())
+            !rows()?
+                .iter()
+                .any(|r| path.to_str() == Some(r.target.as_str()))
                 && std::fs::read_dir(&path)?.next().is_none(),
             "birth inspection mount occupied",
         )?;
@@ -367,7 +369,7 @@ impl TopMount {
         require(
             !rows()?
                 .iter()
-                .any(|r| r.target == self.path.to_str().unwrap()),
+                .any(|r| self.path.to_str() == Some(r.target.as_str())),
             "top mount cleanup uncertain",
         )
     }

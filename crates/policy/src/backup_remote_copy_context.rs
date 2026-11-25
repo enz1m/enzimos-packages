@@ -43,6 +43,10 @@ pub struct Context<'a, 'g> {
     original: Value,
 }
 impl<'a, 'g: 'a> Context<'a, 'g> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub fn observe(
         guard: &'g Guard,
         lock: &'a files::Lock,

@@ -78,6 +78,10 @@ pub fn stage_locked(
         lock.recheck()
     })
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this step."
+)]
 pub(crate) fn stage_authorized<F: FnMut() -> Result<()>>(
     id: &str,
     digest: &str,

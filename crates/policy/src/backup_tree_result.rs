@@ -175,18 +175,28 @@ pub(crate) fn verify_tar(bytes: &[u8], path: &str, listing: &Listing) -> Result<
     let relative = listing
         .nodes
         .iter()
-        .map(|(k, v)| (k[parent.len() + 1..].to_owned(), v.clone()))
+        .map(|(k, v)| {
+            (
+                k.get(parent.len() + 1..).unwrap_or_default().to_owned(),
+                v.clone(),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     let inside = listing
         .nodes
         .iter()
         .filter(|(k, _)| k.as_str() != path)
-        .map(|(k, v)| (k[path.len() + 1..].to_owned(), v.clone()))
+        .map(|(k, v)| {
+            (
+                k.get(path.len() + 1..).unwrap_or_default().to_owned(),
+                v.clone(),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     let mut without_absolute = absolute.clone();
     without_absolute.remove(path.trim_start_matches('/'));
     let mut without_relative = relative.clone();
-    without_relative.remove(&path[parent.len() + 1..]);
+    without_relative.remove(path.get(parent.len() + 1..).unwrap_or_default());
     require(
         [
             absolute,

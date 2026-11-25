@@ -36,14 +36,21 @@ impl Mounts {
             std::fs::read_dir(target)?.next().is_none()
                 && !storage_runtime::rows()?
                     .iter()
-                    .any(|r| r.target == target.to_str().unwrap()),
+                    .any(|r| target.to_str() == Some(r.target.as_str())),
             "independent mount target must be empty and unmounted",
         )?;
-        let source = CString::new(format!("/proc/self/fd/{}", source.as_raw_fd())).unwrap();
+        let source = CString::new(format!("/proc/self/fd/{}", source.as_raw_fd()))
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let named = CString::new(target.as_os_str().as_encoded_bytes())
             .map_err(|_| Error("mount target path".into()))?;
-        let filesystem = kind.map(|s| CString::new(s).unwrap());
-        let options = data.map(|s| CString::new(s).unwrap());
+        let filesystem = kind
+            .map(CString::new)
+            .transpose()
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        let options = data
+            .map(CString::new)
+            .transpose()
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let flags = if kind.is_some() {
             libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC
         } else {
@@ -122,12 +129,12 @@ impl Mounts {
                     )? == mount.unique
                     && rows
                         .iter()
-                        .filter(|r| r.target == mount.path.to_str().unwrap())
+                        .filter(|r| mount.path.to_str() == Some(r.target.as_str()))
                         .count()
                         == 1
-                    && rows
-                        .iter()
-                        .any(|r| r.target == mount.path.to_str().unwrap() && r.id == mount.normal),
+                    && rows.iter().any(|r| {
+                        mount.path.to_str() == Some(r.target.as_str()) && r.id == mount.normal
+                    }),
                 "independent owned mount replaced or shadowed",
             )?;
         }
@@ -161,7 +168,7 @@ impl Mounts {
             require(
                 !storage_runtime::rows()?
                     .iter()
-                    .any(|r| r.target == mount.path.to_str().unwrap()),
+                    .any(|r| mount.path.to_str() == Some(r.target.as_str())),
                 "independent mount cleanup uncertain",
             )?;
             self.mounts.pop();

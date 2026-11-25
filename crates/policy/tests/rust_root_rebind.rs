@@ -6,12 +6,16 @@ use enzimos_policy::{
 };
 use serde_json::{Value, json as value};
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 const FS: &str = "11111111-1111-4111-8111-111111111111";
 const TARGET: &str = "22222222-2222-4222-8222-222222222222";
 const BOOT: &str = "33333333-3333-4333-8333-333333333333";
 fn seal(mut journal: Value) -> Value {
-    journal.as_object_mut().unwrap().remove("journal_sha256");
-    let digest = json::fingerprint(&journal).unwrap();
+    journal
+        .as_object_mut()
+        .expect("test fixture")
+        .remove("journal_sha256");
+    let digest = json::fingerprint(&journal).expect("test fixture");
     journal["journal_sha256"] = value!(digest);
     journal
 }
@@ -19,7 +23,7 @@ fn journal() -> Value {
     let files = fixture();
     let source = root("root", 256, FS);
     let target = root("fallback", 300, TARGET);
-    let before = catalog::empty(FS).unwrap();
+    let before = catalog::empty(FS).expect("test fixture");
     let result = plan::redirect(
         &before,
         &source,
@@ -29,7 +33,7 @@ fn journal() -> Value {
         &owners(),
         |s| Ok(s.into()),
     )
-    .unwrap();
+    .expect("test fixture");
     let hash = json::sha256(b"fixture");
     seal(
         value!({"schema":1,"id":"g1","phase":"prepared","filesystem_uuid":FS,"source":source,"target":target,
@@ -50,27 +54,30 @@ struct Fixture {
 impl Fixture {
     fn new(journal: &Value) -> Self {
         let root = tempfile::tempdir_in(std::env::var_os("ENZIMOS_TEST_TMPDIR").map_or_else(
-            || std::env::current_dir().unwrap(),
+            || std::env::current_dir().expect("test fixture"),
             std::path::PathBuf::from,
         ))
-        .unwrap();
+        .expect("test fixture");
         let names = journal["before_files"]
             .as_object()
-            .unwrap()
+            .expect("test fixture")
             .keys()
             .cloned()
             .collect::<Vec<_>>();
         for name in &names {
             let path = root.path().join(name);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::create_dir_all(path.parent().expect("test fixture")).expect("test fixture");
             enzimos_platform::files::atomic(
                 &path,
-                journal["before_files"][name].as_str().unwrap().as_bytes(),
+                journal["before_files"][name]
+                    .as_str()
+                    .expect("test fixture")
+                    .as_bytes(),
                 0o600,
                 Some(enzimos_platform::process_identity::effective_uid()),
                 false,
             )
-            .unwrap();
+            .expect("test fixture");
         }
         Self {
             root,
@@ -100,7 +107,7 @@ impl enzimos_policy::root_rebind_apply::Adapter for Fixture {
                     Some(enzimos_platform::process_identity::effective_uid()),
                     true,
                 )?;
-                Ok((name.clone(), String::from_utf8(body).unwrap()))
+                Ok((name.clone(), String::from_utf8(body).expect("test fixture")))
             })
             .collect()
     }
@@ -171,12 +178,15 @@ fn fixture() -> Texts {
     ]);
     for flavor in ["linux", "linux-lts"] {
         files.insert(format!("loader/entries/{flavor}.conf"),format!("title enzimOS {flavor}\nlinux /vmlinuz-{flavor}\ninitrd /initramfs-{flavor}.img\noptions root=UUID={FS} rootflags=compress=zstd,subvol=root quiet\n"));
-        files.get_mut("limine/limine.conf").unwrap().push_str(&format!("/enzimOS {flavor}\n protocol: linux\n path: boot():/vmlinuz-{flavor}\n module_path: boot():/initramfs-{flavor}.img\n cmdline: root=UUID={FS} rootflags=compress=zstd,subvol=root quiet\n"));
+        let _ = write!(
+            files.get_mut("limine/limine.conf").expect("test fixture"),
+            "/enzimOS {flavor}\n protocol: linux\n path: boot():/vmlinuz-{flavor}\n module_path: boot():/initramfs-{flavor}.img\n cmdline: root=UUID={FS} rootflags=compress=zstd,subvol=root quiet\n"
+        );
     }
     files.insert("loader/entries/recovery.conf".into(),"title Independent enzimOS lab recovery\nlinux /enzimos-recovery/kernel\ninitrd /enzimos-recovery/initrd.img\noptions enzimos.recovery=1\n".into());
-    files.get_mut("limine/limine.conf").unwrap().push_str("/Independent enzimOS lab recovery\n protocol: linux\n path: boot():/enzimos-recovery/kernel\n module_path: boot():/enzimos-recovery/initrd.img\n cmdline: enzimos.recovery=1\n");
+    files.get_mut("limine/limine.conf").expect("test fixture").push_str("/Independent enzimOS lab recovery\n protocol: linux\n path: boot():/enzimos-recovery/kernel\n module_path: boot():/enzimos-recovery/initrd.img\n cmdline: enzimos.recovery=1\n");
     files
 }
 fn owners() -> RecoveryOwners {
-    RecoveryOwners::from_records(&BTreeMap::new(), &BTreeMap::new()).unwrap()
+    RecoveryOwners::from_records(&BTreeMap::new(), &BTreeMap::new()).expect("test fixture")
 }

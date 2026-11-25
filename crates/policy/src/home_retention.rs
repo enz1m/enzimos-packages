@@ -6,6 +6,7 @@ use crate::{
 };
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
+use std::fmt::Write as _;
 const KEYS: [(&str, &str); 6] = [
     ("hourly", "TIMELINE_LIMIT_HOURLY"),
     ("daily", "TIMELINE_LIMIT_DAILY"),
@@ -25,8 +26,8 @@ pub fn validate(policy: &Value) -> Result<()> {
     let timeline = KEYS
         .iter()
         .filter(|(k, _)| *k != "manual")
-        .map(|(k, _)| policy[*k].as_u64().unwrap())
-        .sum::<u64>();
+        .map(|(k, _)| enzimos_platform::json::unsigned(&policy[*k]))
+        .sum::<Result<u64>>()?;
     require(
         enzimos_platform::json::unsigned(&policy["manual"])? > 0 && (1..=1000).contains(&timeline),
         "home retention timeline or manual bounds",
@@ -43,7 +44,10 @@ pub fn policy(bytes: &[u8]) -> Result<Value> {
             continue;
         };
         if let Some((label, _)) = KEYS.iter().find(|(_, expected)| *expected == key) {
-            let contents = &contents[1..contents.len() - 1];
+            let mut inner = contents.chars();
+            inner.next();
+            inner.next_back();
+            let contents = inner.as_str();
             require(
                 !contents.is_empty()
                     && contents.len() <= 5
@@ -80,8 +84,8 @@ pub fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
                     None
                 }
             });
-        if let Some(label) = chosen {
-            let prefix = &line[..line.len() - line.trim_start().len()];
+        if let (Some(label), Some(key)) = (chosen, key) {
+            let prefix = line.split_at(line.len() - line.trim_start().len()).0;
             let end = if line.ends_with("\r\n") {
                 "\r\n"
             } else if line.ends_with('\n') {
@@ -89,11 +93,12 @@ pub fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
             } else {
                 ""
             };
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "{prefix}{}=\"{}\"{end}",
-                key.unwrap(),
+                key,
                 enzimos_platform::json::unsigned(&next[label])?
-            ));
+            );
         } else {
             out.push_str(line);
         }
@@ -102,10 +107,11 @@ pub fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
         if !out.ends_with('\n') {
             out.push('\n');
         }
-        out.push_str(&format!(
-            "NUMBER_LIMIT_IMPORTANT=\"{}\"\n",
+        let _ = writeln!(
+            out,
+            "NUMBER_LIMIT_IMPORTANT=\"{}\"",
             enzimos_platform::json::unsigned(&next["manual"])?
-        ));
+        );
     }
     home_history_source::configuration(out.as_bytes())?;
     require(

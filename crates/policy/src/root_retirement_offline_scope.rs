@@ -61,7 +61,7 @@ fn classify(stat: &str, status: &str, pid: u32) -> Result<(u64, bool)> {
     };
     let suffix = stat
         .rsplit_once(')')
-        .unwrap()
+        .ok_or_else(|| enzimos_platform::Error("process stat shape".into()))?
         .1
         .split_whitespace()
         .collect::<Vec<_>>();

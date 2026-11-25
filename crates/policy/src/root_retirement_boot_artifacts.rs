@@ -57,6 +57,10 @@ fn text(artifact: &Artifact) -> Result<String> {
     artifact.recheck()?;
     String::from_utf8(bytes).map_err(|_| Error("actual retirement boot artifact encoding".into()))
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 enum TextState {
     Original(Artifact),
     Replaced(ReplacedArtifact),
@@ -181,7 +185,7 @@ impl<'a, 's> Original<'a, 's> {
         let entry = volume.artifact(
             Path::new(&format!(
                 "loader/entries/enzimos-root-retire-{}.conf",
-                &p.id[5..21]
+                p.id.get(5..21).unwrap_or_default()
             )),
             boot_entries::MAX_TEXT as u64,
         )?;

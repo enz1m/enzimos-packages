@@ -370,6 +370,10 @@ fn root_loaders_unmentioned(texts: &BTreeMap<String, String>, targets: &Value) -
     crate::root_retirement_offline_loaders::unmentioned(&roots, targets)?;
     Ok(())
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 enum TransactionActor {
     Owned(Transaction),
     Shared(std::sync::Arc<Transaction>),

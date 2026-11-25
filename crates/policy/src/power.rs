@@ -28,16 +28,16 @@ fn header(line: &str) -> Result<Option<&str>> {
     if !s.starts_with('[') {
         return Ok(None);
     }
-    let end = s
-        .find(']')
+    let (head, tail) = s
+        .split_once(']')
         .ok_or_else(|| Error("invalid power section".into()))?;
-    let tail = s[end + 1..].trim();
+    let tail = tail.trim();
     require(
         tail.is_empty() || tail.starts_with(['#', ';']),
         "invalid power section",
     )?;
-    require(end > 1, "empty power section")?;
-    Ok(Some(s[1..end].trim()))
+    require(head.len() > 1, "empty power section")?;
+    Ok(Some(head.strip_prefix('[').unwrap_or(head).trim()))
 }
 pub fn parse(text: &str) -> Result<(String, bool)> {
     require(
@@ -114,8 +114,11 @@ pub fn replacement(text: &str, action: &str) -> Result<String> {
             inside = h == "UPower";
         }
         let key = line.split_once('=').map(|p| p.0.trim());
-        if inside && let Some(replacement) = key.and_then(|k| changes.remove(k)) {
-            out.push(format!("{}={replacement}", key.unwrap()));
+        if inside
+            && let Some(key) = key
+            && let Some(replacement) = changes.remove(key)
+        {
+            out.push(format!("{key}={replacement}"));
             continue;
         }
         out.push(line.into());

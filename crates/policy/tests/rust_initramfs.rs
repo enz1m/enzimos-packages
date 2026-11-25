@@ -2,10 +2,12 @@
 use enzimos_policy::initramfs;
 fn base(body: &[u8]) -> Vec<u8> {
     zstd::stream::encode_all(
-        initramfs::newc("init", body, 0o100755).unwrap().as_slice(),
+        initramfs::newc("init", body, 0o100755)
+            .expect("test fixture")
+            .as_slice(),
         3,
     )
-    .unwrap()
+    .expect("test fixture")
 }
 #[test]
 fn private_key_append_keeps_key_only_in_a_ram_archive_with_private_mode() {

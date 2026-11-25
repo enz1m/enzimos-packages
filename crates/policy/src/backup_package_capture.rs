@@ -307,7 +307,8 @@ impl Library {
             "native x86-64 ALPM image required",
         )?;
         let (_, sha) = stream_copy::hash_borrowed(&file, 32 * 1024 * 1024, Some(0))?;
-        let alias = CString::new(format!("/proc/self/fd/{}", file.as_raw_fd())).unwrap();
+        let alias = CString::new(format!("/proc/self/fd/{}", file.as_raw_fd()))
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         // SAFETY: `alias` is a NUL-terminated CString naming the retained, verified library file.
         let handle = unsafe {
             libc::dlmopen(
@@ -717,6 +718,10 @@ impl Drop for Capture<'_, '_> {
         if !self.closed
             && let Some(l) = self.library.take()
         {
+            #[expect(
+                clippy::mem_forget,
+                reason = "An unclosed capture keeps ALPM loaded rather than unload it mid-use."
+            )]
             std::mem::forget(l);
         }
     }

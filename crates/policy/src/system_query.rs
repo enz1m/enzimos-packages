@@ -255,13 +255,17 @@ pub fn generations(data: &Value) -> Result<Value> {
     let mut rows = enzimos_platform::json::object(&data["generations"])?
         .iter()
         .collect::<Vec<_>>();
-    rows.sort_by_key(|(_, row)| row["ordinal"].as_u64().unwrap());
+    rows.sort_by_key(|(_, row)| {
+        row["ordinal"]
+            .as_u64()
+            .expect("catalog validation requires integer ordinals")
+    });
     Ok(Value::Array(
         rows.into_iter()
             .map(|(name, row)| {
                 let mut kernels = row["material"]["kernels"]
                     .as_object()
-                    .unwrap()
+                    .expect("catalog validation requires a kernels object")
                     .keys()
                     .cloned()
                     .collect::<Vec<_>>();

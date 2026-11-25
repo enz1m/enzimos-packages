@@ -472,7 +472,11 @@ impl Mask {
             )?;
             if let Some(old) = &self.original {
                 require(
-                    owned_unlink(self.epoch.unwrap(), files::identity(&old.metadata()?)),
+                    owned_unlink(
+                        self.epoch
+                            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+                        files::identity(&old.metadata()?),
+                    ),
                     "owned updater unit changed outside known unlink",
                 )?;
             }

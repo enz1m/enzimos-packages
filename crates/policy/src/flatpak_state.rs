@@ -22,7 +22,10 @@ fn sections(bytes: &[u8]) -> Result<BTreeMap<String, BTreeMap<String, String>>> 
                 line.ends_with(']') && line.len() > 2 && output.len() < 128,
                 "Flatpak state section bound",
             )?;
-            let name = &line[1..line.len() - 1];
+            let name = line
+                .strip_prefix('[')
+                .and_then(|line| line.strip_suffix(']'))
+                .ok_or_else(|| Error("Flatpak state section bound".into()))?;
             require(
                 !name.chars().any(char::is_control)
                     && output.insert(name.into(), BTreeMap::new()).is_none(),
@@ -45,7 +48,7 @@ fn sections(bytes: &[u8]) -> Result<BTreeMap<String, BTreeMap<String, String>>> 
                         .as_deref()
                         .ok_or_else(|| Error("Flatpak state key outside section".into()))?,
                 )
-                .unwrap();
+                .ok_or_else(|| Error("Flatpak state section missing".into()))?;
             require(
                 rows.len() < 1024 && rows.insert(key.into(), contents.into()).is_none(),
                 "duplicate Flatpak state key",

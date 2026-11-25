@@ -70,8 +70,7 @@ fn roles(intent: &Value) -> Result<Vec<Role>> {
                 bios += 1;
                 Role::File("limine/limine.conf".into())
             }
-            ("boot-file", name) if name.starts_with("file-") => {
-                let leaf = &name[5..];
+            ("boot-file", name) if let Some(leaf) = name.strip_prefix("file-") => {
                 require(
                     crate::boot_retirement_plan::MEMBERS.contains(&leaf)
                         && members.insert(leaf.to_owned()),
@@ -79,8 +78,7 @@ fn roles(intent: &Value) -> Result<Vec<Role>> {
                 )?;
                 Role::File(format!("enzimos/generations/{generation}/{leaf}").into())
             }
-            ("boot-file", name) if name.starts_with("uki-") => {
-                let sha = &name[4..];
+            ("boot-file", name) if let Some(sha) = name.strip_prefix("uki-") => {
                 identity::sha(sha)?;
                 ukis += 1;
                 require(ukis <= 2, "owned UKI continuation bound")?;
@@ -486,7 +484,12 @@ impl<'a> Admission<'a> {
                             .artifacts
                             .keys()
                             .filter(|p| p.parent() == Some(path.as_path()))
-                            .map(|p| p.file_name().unwrap().to_str().unwrap().to_owned())
+                            .map(|p| {
+                                p.file_name()
+                                    .and_then(|name| name.to_str())
+                                    .expect("artifact paths are UTF-8 with a parent directory")
+                                    .to_owned()
+                            })
                             .collect();
                         let (current, precondition) = directory_precondition(
                             current_names,

@@ -205,7 +205,7 @@ pub fn job(v: &Value, identifier: &str) -> Result<()> {
 pub fn run_entry_names(identifier: &str) -> Result<(String, String)> {
     job_id(identifier)?;
     let digest = json::sha256(identifier.as_bytes());
-    let short = &digest[..16];
+    let short = digest.get(..16).unwrap_or(&digest);
     Ok((
         format!("enzimos-recovery-run-{short}.conf"),
         format!("enzimOS recovery run {short}"),

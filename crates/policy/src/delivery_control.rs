@@ -42,6 +42,10 @@ fn shape(file: &File) -> Result<(u64, u64, u32, u32, u32)> {
     )?;
     Ok((m.dev(), m.ino(), m.uid(), m.gid(), m.mode()))
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 enum Storage<'g> {
     Original(Guard),
     Borrowed(&'g Guard),

@@ -322,6 +322,10 @@ pub(crate) fn retire_terminal(
     guard.recheck()?;
     Ok(retired)
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this step."
+)]
 pub(crate) fn retire_in(
     control: &std::fs::File,
     mount: u64,

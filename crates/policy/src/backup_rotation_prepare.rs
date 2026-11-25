@@ -100,6 +100,10 @@ fn query(
     }
     Ok(output)
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this step."
+)]
 fn mutate(
     runtime: &Runtime,
     task: RotationPrepare,

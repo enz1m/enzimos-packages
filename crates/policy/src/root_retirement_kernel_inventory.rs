@@ -403,6 +403,10 @@ pub(crate) fn query(top: &File) -> Result<Records> {
     let mut count = 0usize;
     let mut bytes_seen = 0usize;
     loop {
+        #[expect(
+            clippy::large_stack_arrays,
+            reason = "One search page is built per iteration and moved straight into its Box."
+        )]
         let mut page = Box::new(Search {
             key: SearchKey {
                 tree: 1,

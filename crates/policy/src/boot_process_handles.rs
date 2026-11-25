@@ -262,8 +262,8 @@ pub(super) fn inspect(process: &Process) -> Result<Measurement> {
         .as_array()
         .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .iter()
-        .map(|r| r["fd"].as_u64().unwrap().to_string())
-        .collect();
+        .map(|r| enzimos_platform::json::unsigned(&r["fd"]).map(|fd| fd.to_string()))
+        .collect::<enzimos_platform::Result<_>>()?;
     if after != before {
         result
             .blockers

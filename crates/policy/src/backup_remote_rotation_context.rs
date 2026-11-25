@@ -441,7 +441,7 @@ impl<'a> Context<'a> {
             new_rows.len() == copies.len()
                 && copies
                     .values()
-                    .all(|id| new_rows.contains_key(id.as_str().unwrap())),
+                    .all(|id| id.as_str().is_some_and(|id| new_rows.contains_key(id))),
             "new remote rotation copied inventory differs from original map",
         )?;
         let old_points = if let (Some(configuration), Some(password)) = (old_config, old_password) {

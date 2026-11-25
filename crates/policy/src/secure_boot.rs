@@ -85,7 +85,11 @@ pub fn db_contains(body: &[u8], certificate: &[u8]) -> Result<bool> {
             count <= 128 && position + 28 <= body.len(),
             "firmware db list bound",
         )?;
-        let word = |p| u32::from_le_bytes(body[p..p + 4].try_into().unwrap()) as usize;
+        let word = |p: usize| {
+            let mut bytes = [0u8; 4];
+            bytes.copy_from_slice(&body[p..p + 4]);
+            u32::from_le_bytes(bytes) as usize
+        };
         let size = word(position + 16);
         let header = word(position + 20);
         let entry = word(position + 24);

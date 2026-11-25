@@ -28,10 +28,11 @@ pub(crate) fn additional(name: &str, path: &str) -> Result<()> {
     require(
         path.starts_with("/var/lib/")
             && path.len() < 4096
-            && path[9..]
+            && path
                 .bytes()
+                .skip(9)
                 .all(|b| b.is_ascii_alphanumeric() || b"._/-".contains(&b))
-            && !path[9..].is_empty()
+            && path.len() > 9
             && !path.split('/').any(|p| p == ".." || p == ".")
             && !path.contains("//")
             && !path.ends_with('/')

@@ -136,7 +136,9 @@ fn no_pending_rebind(store: &Store) -> Result<()> {
         )?;
         let digest = enzimos_platform::json::object_mut(&mut record)?
             .remove("journal_sha256")
-            .unwrap();
+            .ok_or_else(|| {
+                enzimos_platform::Error("root rebinding journal digest missing".into())
+            })?;
         require(
             digest == json::fingerprint(&record)?,
             "root rebind journal digest mismatch",
@@ -186,7 +188,7 @@ pub(crate) fn normalize(target: &Path, name: &str, config: &Value, root: &File) 
             && std::fs::read_dir(&history_path)?.next().is_none()
             && !storage_runtime::rows()?
                 .iter()
-                .any(|r| r.target == history_path.to_str().unwrap()),
+                .any(|r| history_path.to_str() == Some(r.target.as_str())),
         "fallback history placeholder is occupied or mounted",
     )?;
     absent(&target.join("etc/fstab.partial"))?;

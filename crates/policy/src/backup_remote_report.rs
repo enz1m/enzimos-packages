@@ -21,6 +21,10 @@ pub struct Reported<'g> {
     intent: Option<Intent>,
     actor: Arc<()>,
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 pub enum Incoming<'g> {
     Challenge(Message),
     Observed(Reported<'g>),

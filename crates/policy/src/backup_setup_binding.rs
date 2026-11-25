@@ -23,6 +23,10 @@ pub struct Bound<'g> {
     value: Value,
 }
 impl<'g> Bound<'g> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub fn publish(
         plan: &'g Plan<'_, '_, '_>,
         intent: &Intent<'_>,

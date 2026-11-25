@@ -183,7 +183,7 @@ impl<'g> Snapshot<'g> {
         )?;
         produced.recheck()?;
         require(
-            produced.value()? == record && shape(parent)? == self.shape.unwrap(),
+            produced.value()? == record && Some(shape(parent)?) == self.shape,
             "actual generation pin producer differs",
         )?;
         let mut expected = self.names.clone();

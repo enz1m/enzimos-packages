@@ -226,7 +226,7 @@ fn detach_mounts(destinations: &[String]) -> Result<Vec<String>> {
                 )));
             }
             Mount::AreaBind | Mount::Destination => {
-                let target: &CStr = c"/backup-repository";
+                let target = c"/backup-repository";
                 require(
                     // SAFETY: `target` is a NUL-terminated CString.
                     unsafe { libc::umount2(target.as_ptr(), 0) } == 0,
@@ -325,7 +325,8 @@ fn probe(uuid: &str, source_uuid: &str) -> Result<Repository> {
     require(raw >= 0, "read-only destination probe refused")?;
     // SAFETY: `raw` was just returned by fsopen and is owned by nothing else.
     let context = unsafe { File::from_raw_fd(raw as i32) };
-    let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd())).unwrap();
+    let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd()))
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let configure = |command: u32, key: Option<&CStr>, val: Option<&CStr>| {
         let null = std::ptr::null::<libc::c_char>();
         require(

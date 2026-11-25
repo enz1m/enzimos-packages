@@ -366,7 +366,7 @@ fn remote_summary(body: Option<&[u8]>) -> Value {
     // the pinned repository (for exactly this configuration) are in place.
     for (key, ready) in crate::backup_restic_runtime::remote_share::readiness(bytes)
         .as_object()
-        .unwrap()
+        .expect("readiness is always a JSON object")
     {
         summary[key] = ready.clone();
     }

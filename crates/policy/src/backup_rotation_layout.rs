@@ -25,7 +25,9 @@ fn permitted(relative: &Path, directory: bool, partial: bool) -> bool {
     if parts.is_empty() || parts.len() > 3 {
         return false;
     }
-    let name = *parts.last().unwrap();
+    let Some(&name) = parts.last() else {
+        return false;
+    };
     if directory {
         (parts.len() == 1 && ROOT_NAMES.contains(&name))
             || (parts.len() == 2

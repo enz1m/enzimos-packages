@@ -7,7 +7,9 @@ fn append(archive: &mut tar::Builder<Vec<u8>>, name: &str, body: &[u8]) {
     header.set_mode(0o644);
     header.set_size(body.len() as u64);
     header.set_cksum();
-    archive.append_data(&mut header, name, body).unwrap();
+    archive
+        .append_data(&mut header, name, body)
+        .expect("test fixture");
 }
 fn archive(name: &str, release: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
@@ -21,7 +23,8 @@ fn archive(name: &str, release: &str) -> Vec<u8> {
         &format!("usr/lib/modules/{release}/vmlinuz"),
         b"owned kernel bytes",
     );
-    zstd::stream::encode_all(tar.into_inner().unwrap().as_slice(), 3).unwrap()
+    zstd::stream::encode_all(tar.into_inner().expect("test fixture").as_slice(), 3)
+        .expect("test fixture")
 }
 fn write(path: &Path, bytes: &[u8]) {
     let mut file = OpenOptions::new()
@@ -29,20 +32,20 @@ fn write(path: &Path, bytes: &[u8]) {
         .create_new(true)
         .mode(0o600)
         .open(path)
-        .unwrap();
-    file.write_all(bytes).unwrap();
-    file.sync_all().unwrap();
+        .expect("test fixture");
+    file.write_all(bytes).expect("test fixture");
+    file.sync_all().expect("test fixture");
 }
 fn fixture(root: &Path) -> Value {
     let mut files = json!({});
     let mut database = tar::Builder::new(Vec::new());
-    std::fs::create_dir(root.join("packages")).unwrap();
+    std::fs::create_dir(root.join("packages")).expect("test fixture");
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(
         root.join("packages"),
         std::fs::Permissions::from_mode(0o700),
     )
-    .unwrap();
+    .expect("test fixture");
     for (name, release) in [("linux", "6.18.1-arch1-1"), ("linux-lts", "6.12.99-1-lts")] {
         let filename = format!("{name}-6.18.1-1-x86_64.pkg.tar.zst");
         let body = archive(name, release);
@@ -66,15 +69,17 @@ fn fixture(root: &Path) -> Value {
         );
     }
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-    encoder.write_all(&database.into_inner().unwrap()).unwrap();
-    let bytes = encoder.finish().unwrap();
+    encoder
+        .write_all(&database.into_inner().expect("test fixture"))
+        .expect("test fixture");
+    let bytes = encoder.finish().expect("test fixture");
     write(&root.join("packages/verified.db"), &bytes);
     files["verified.db"] =
         json!({"bytes":bytes.len(),"sha256":enzimos_platform::json::sha256(&bytes)});
     let document = json!({"schema":1,"files":files,"expires_at":"2099-01-01T00:00:00Z","signature_policy":"Required TrustedOnly"});
     write(
         &root.join("admission.json"),
-        &enzimos_platform::json::canonical(&document).unwrap(),
+        &enzimos_platform::json::canonical(&document).expect("test fixture"),
     );
     document
 }
@@ -89,7 +94,7 @@ fn directory() -> tempfile::TempDir {
         .prefix("rust-update-cohort-")
         .permissions(std::fs::Permissions::from_mode(0o700))
         .tempdir_in(work)
-        .unwrap()
+        .expect("test fixture")
 }
 #[test]
 fn original_cohort_requires_exact_database_kernels_and_preserves_replacement_refusal() {

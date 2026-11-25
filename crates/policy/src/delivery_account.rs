@@ -62,7 +62,7 @@ fn local(body: &[u8], uid: u32) -> Result<Local> {
     )?;
     Ok(Local {
         name: name.into(),
-        gid: gid.unwrap(),
+        gid: gid.ok_or_else(|| enzimos_platform::Error("unsupported local home/account".into()))?,
         home: row[5].into(),
         shell: row[6].into(),
         row: row.join(":"),

@@ -27,7 +27,7 @@ fn independent_quorum_requires_three_pinned_masters_for_the_same_arch_identity()
         .collect::<BTreeMap<String, String>>();
     assert_eq!(
         authority::quorum(&contexts, &BTreeSet::new()).unwrap(),
-        [fp.clone()]
+        std::slice::from_ref(&fp)
     );
     contexts.insert(
         authority::MASTERS[2].into(),

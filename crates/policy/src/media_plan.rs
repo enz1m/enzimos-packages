@@ -15,6 +15,10 @@ use std::{
     os::{fd::AsFd, unix::fs::MetadataExt},
     path::Path,
 };
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is one independently reviewed plan input."
+)]
 pub(crate) fn document(
     id: &str,
     config: &Value,

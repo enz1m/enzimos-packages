@@ -30,14 +30,14 @@ impl Unit {
         }
     }
     fn mode(&self) -> String {
-        serde_json::from_slice::<Value>(&self.document).unwrap()["mode"]
+        serde_json::from_slice::<Value>(&self.document).expect("test fixture")["mode"]
             .as_str()
-            .unwrap()
+            .expect("test fixture")
             .to_owned()
     }
 }
 fn doc(mode: &str) -> Vec<u8> {
-    enzimos_platform::json::canonical(&json!({"schema":1,"mode":mode})).unwrap()
+    enzimos_platform::json::canonical(&json!({"schema":1,"mode":mode})).expect("test fixture")
 }
 impl memory::Effects for Unit {
     fn authorize(&mut self) -> enzimos_platform::Result<()> {

@@ -4,6 +4,7 @@ use crate::{boot_entries, catalog, identity};
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 pub(crate) const MEMBERS: [&str; 6] = [
     "vmlinuz-linux",
     "vmlinuz-linux-lts",
@@ -54,7 +55,7 @@ pub(crate) fn without_bios(text: &str, generation: &str) -> Result<String> {
     for line in menu.header.split_inclusive('\n') {
         if line.starts_with("default_entry:") {
             defaults += 1;
-            rewritten.push_str(&format!("default_entry: {selected}\n"));
+            let _ = writeln!(rewritten, "default_entry: {selected}");
         } else {
             rewritten.push_str(line);
         }
@@ -120,7 +121,7 @@ pub fn retention(
     let ordinal = enzimos_platform::json::unsigned(&candidate["ordinal"])?;
     require(
         rows.values()
-            .filter(|r| r["state"] == "ready" && r["ordinal"].as_u64().unwrap() > ordinal)
+            .filter(|r| r["state"] == "ready" && r["ordinal"].as_u64().is_some_and(|o| o > ordinal))
             .count()
             >= 2,
         "two newer ready generations must remain",
@@ -139,8 +140,8 @@ pub fn retention(
         let confirmed = retained
             .iter()
             .filter(|r| !r["first_confirmation"].is_null())
-            .map(|r| r["material"]["root_identity"]["uuid"].as_str().unwrap())
-            .collect::<BTreeSet<_>>();
+            .map(|r| enzimos_platform::json::string(&r["material"]["root_identity"]["uuid"]))
+            .collect::<enzimos_platform::Result<BTreeSet<_>>>()?;
         require(
             confirmed.len() >= 2,
             "last bootable entry of confirmed root protected",
@@ -247,6 +248,10 @@ pub(crate) fn file_state(sha: &str) -> Result<String> {
 }
 /// Legacy immutable intent calculation from observed bytes, never a mutation actor.
 /// Actual callers must retain their original files and complete reference actors.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is one independently reviewed plan input."
+)]
 pub fn intent(
     data: &Value,
     generation: &str,

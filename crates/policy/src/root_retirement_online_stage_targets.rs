@@ -24,6 +24,10 @@ pub struct Protected<'a> {
     namespaces: crate::namespaces::Observation,
 }
 impl<'a> Protected<'a> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub fn observe(
         guard: &'a Guard,
         top: &'a TopMount,

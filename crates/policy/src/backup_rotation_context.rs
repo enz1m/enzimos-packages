@@ -457,9 +457,11 @@ impl<'a> Context<'a> {
             .as_object()
             .ok_or_else(|| enzimos_platform::Error("copied rotation mapping unavailable".into()))?;
         require(
-            copies
-                .values()
-                .all(|target| points.contains_key(target.as_str().unwrap())),
+            copies.values().all(|target| {
+                target
+                    .as_str()
+                    .is_some_and(|target| points.contains_key(target))
+            }),
             "new repository lost copied points",
         )?;
         let old_credential = find_credential("old")?;

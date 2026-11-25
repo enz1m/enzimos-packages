@@ -3,6 +3,7 @@
 use enzimos_platform::mount_identity;
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 use std::{
     collections::BTreeSet,
     fs::File,
@@ -152,7 +153,7 @@ pub fn cups(body: &str) -> Result<String> {
     let mut out = format!("{}\n", lines.join("\n").trim_end());
     for (key, values) in CUPS {
         for value in *values {
-            out.push_str(&format!("{key} {value}\n"));
+            let _ = writeln!(out, "{key} {value}");
         }
     }
     Ok(out)
@@ -169,23 +170,28 @@ pub fn ini(body: &str, overrides: &[(&str, &[(&str, &str)])]) -> Result<String> 
         }
         if s.starts_with('[') {
             require(s.ends_with(']') && s.len() > 2, "invalid INI section")?;
-            let name = &s[1..s.len() - 1];
+            let name = s
+                .strip_prefix('[')
+                .and_then(|s| s.strip_suffix(']'))
+                .ok_or_else(|| Error("invalid INI section".into()))?;
             require(seen.insert(name.to_owned()), "duplicate INI section")?;
             sections.push((name.into(), Vec::new()));
             continue;
         }
-        let index = s
-            .find(['=', ':'])
+        let (key, value) = s
+            .split_once(['=', ':'])
             .ok_or_else(|| Error("invalid INI option".into()))?;
-        let key = s[..index].trim().to_ascii_lowercase();
+        let key = key.trim().to_ascii_lowercase();
         require(!key.is_empty(), "empty INI option")?;
-        let value = s[index + 1..].trim();
+        let value = value.trim();
         let value = value
             .char_indices()
             .find(|(i, c)| {
-                *i > 0 && matches!(c, '#' | ';') && value[..*i].ends_with(char::is_whitespace)
+                *i > 0
+                    && matches!(c, '#' | ';')
+                    && value.split_at(*i).0.ends_with(char::is_whitespace)
             })
-            .map_or(value, |(i, _)| value[..i].trim_end());
+            .map_or(value, |(i, _)| value.split_at(i).0.trim_end());
         let options = &mut sections
             .last_mut()
             .ok_or_else(|| Error("INI section required".into()))?
@@ -214,9 +220,9 @@ pub fn ini(body: &str, overrides: &[(&str, &[(&str, &str)])]) -> Result<String> 
     }
     let mut output = String::new();
     for (name, options) in sections {
-        output.push_str(&format!("[{name}]\n"));
+        let _ = writeln!(output, "[{name}]");
         for (k, v) in options {
-            output.push_str(&format!("{k}={v}\n"));
+            let _ = writeln!(output, "{k}={v}");
         }
         output.push('\n');
     }
@@ -660,7 +666,7 @@ impl KeyringSocket {
             ".enzimos-keyring-retired-{}",
             files::random_hex(16)?
         ))
-        .unwrap();
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             // SAFETY: Both names are NUL-terminated and the parent descriptor stays open.
             unsafe {

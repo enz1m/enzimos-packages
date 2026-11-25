@@ -11,6 +11,10 @@ fn command_line() -> Result<String> {
     String::from_utf8(body).map_err(|_| Error("run command line encoding".into()))
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (pause, umask).")]
+#[expect(
+    clippy::print_stdout,
+    reason = "The run result is reported on the console."
+)]
 fn main() {
     // SAFETY: umask takes no pointers and cannot fail.
     unsafe { libc::umask(0o077) };

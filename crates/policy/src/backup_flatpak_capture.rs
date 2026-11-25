@@ -103,7 +103,14 @@ impl HeldLock {
         Ok(this)
     }
     fn recheck(&self, parent: &File) -> Result<()> {
-        let named = files::open_relative(parent, Path::new(self.name.to_str().unwrap()))?;
+        let named = files::open_relative(
+            parent,
+            Path::new(
+                self.name
+                    .to_str()
+                    .map_err(|_| enzimos_platform::Error("path encoding".into()))?,
+            ),
+        )?;
         require(
             files::identity(&self.file.metadata()?) == self.epoch
                 && files::identity(&named.metadata()?) == self.epoch

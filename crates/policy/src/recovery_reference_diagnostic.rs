@@ -20,7 +20,10 @@ fn boot_path(path: &str, bios: bool) -> Result<String> {
             && path.len() <= 4096
             && !path.contains('\\')
             && !path.chars().any(|c| c.is_control() || c.is_whitespace())
-            && path[1..].split('/').all(|p| !matches!(p, "" | "." | "..")),
+            && path
+                .split('/')
+                .skip(1)
+                .all(|p| !matches!(p, "" | "." | "..")),
         "canonical boot reference path required",
     )?;
     Ok(path.into())
@@ -265,10 +268,12 @@ impl Graph {
     }
     fn finish(mut self) -> Value {
         for row in self.nodes.values() {
-            if row["kind"] == "boot-artifact" && row["expected"].as_array().unwrap().is_empty() {
+            if row["kind"] == "boot-artifact"
+                && row["expected"].as_array().is_some_and(Vec::is_empty)
+            {
                 self.blockers.insert(format!(
                     "unowned-boot-reference:{}",
-                    row["path"].as_str().unwrap()
+                    row["path"].as_str().unwrap_or_default()
                 ));
             }
         }

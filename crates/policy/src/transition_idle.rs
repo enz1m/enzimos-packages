@@ -39,6 +39,10 @@ pub struct Snapshot {
     boot_publication: Option<String>,
     root_retirement: Option<crate::control_record::Observation>,
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each optional argument names one independent in-flight marker."
+)]
 fn observe_inner(
     guard: &Guard,
     adoption: Option<&str>,
@@ -67,6 +71,10 @@ fn observe_inner(
         None,
     )
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each optional argument names one independent in-flight marker."
+)]
 fn observe_inner_catalog(
     guard: &Guard,
     adoption: Option<&str>,
@@ -301,6 +309,10 @@ fn observe_inner_catalog(
     )
 }
 // Ordinary online transitions never exempt a retirement receipt.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each optional argument names one independent in-flight marker."
+)]
 fn observe(
     guard: &Guard,
     adoption: Option<&str>,

@@ -117,6 +117,10 @@ impl<'a> Boot<'a> {
             .verify_new_root_receipt(registry, record, targets, authorize)?;
         self.namespace.recheck(authorize)
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub(crate) fn compile_root_stage(
         &self,
         targets: &Targets<'_>,

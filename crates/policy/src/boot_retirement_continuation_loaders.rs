@@ -452,8 +452,10 @@ impl Loaders {
                     .is_some()
                     && admission.states.last().is_some_and(|s| {
                         admission.record.value().is_ok_and(|r| {
-                            r["intent"]["steps"].as_array().unwrap().last().unwrap()["after"]
-                                == s.as_str()
+                            r["intent"]["steps"]
+                                .as_array()
+                                .and_then(|steps| steps.last())
+                                .is_some_and(|step| step["after"] == s.as_str())
                         })
                     })
                     && admission

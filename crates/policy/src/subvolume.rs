@@ -23,7 +23,11 @@ fn uuid(bytes: &[u8]) -> String {
 }
 pub(crate) fn decode_info(bytes: &[u8], path: &str) -> Result<(Value, bool)> {
     require(bytes.len() == 504, "Btrfs subvolume info size")?;
-    let number = |offset| u64::from_ne_bytes(bytes[offset..offset + 8].try_into().unwrap());
+    let number = |offset: usize| {
+        let mut word = [0u8; 8];
+        word.copy_from_slice(&bytes[offset..offset + 8]);
+        u64::from_ne_bytes(word)
+    };
     let id = number(0);
     require(
         id >= 256 && bytes[296..312].iter().any(|b| *b != 0),

@@ -22,7 +22,10 @@ struct Attributes {
     propagation: u64,
     user_namespace: u64,
 }
-const _: () = assert!(std::mem::size_of::<Attributes>() == 32);
+const _: () = assert!(
+    std::mem::size_of::<Attributes>() == 32,
+    "mount_attr is 32 bytes"
+);
 type Shape = (u64, u64, u32, u32, u32, u64);
 fn shape(file: &File) -> Result<Shape> {
     let m = file.metadata()?;

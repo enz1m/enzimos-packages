@@ -312,7 +312,6 @@ pub fn set<F: FnMut() -> Result<()>>(
                 // enable intentionally has no --now and never starts the backup service.
                 command.run(&["stop", TIMER], &[0], 65536)?;
                 boundary()?;
-                drop(boundary);
                 marker.publish(&approval["binding"])?;
                 authorize()?;
                 operation.recheck()?;

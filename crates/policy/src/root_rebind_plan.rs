@@ -82,11 +82,20 @@ fn legacy(v: Option<&Value>) -> Result<Vec<(String, String)>> {
         *v == installer || *v == lab,
         "unreviewed legacy ownership declaration",
     )?;
-    Ok(enzimos_platform::json::array(&v["uefi"])?
+    enzimos_platform::json::array(&v["uefi"])?
         .iter()
-        .zip(v["bios"].as_array().unwrap())
-        .map(|(u, b)| (u.as_str().unwrap().into(), b.as_str().unwrap().into()))
-        .collect())
+        .zip(
+            v["bios"]
+                .as_array()
+                .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?,
+        )
+        .map(|(u, b)| {
+            Ok((
+                enzimos_platform::json::string(u)?.into(),
+                enzimos_platform::json::string(b)?.into(),
+            ))
+        })
+        .collect::<Result<_>>()
 }
 pub(crate) fn replace_options(body: &str, bios: bool, target: &str) -> Result<String> {
     let fields = boot_entries::fields(body, bios)?;
@@ -102,12 +111,14 @@ pub(crate) fn replace_options(body: &str, bios: bool, target: &str) -> Result<St
         let field = if bios {
             trimmed.split_once(':').map(|(key, _)| key.trim())
         } else {
-            trimmed.find(char::is_whitespace).map(|end| &trimmed[..end])
+            trimmed
+                .find(char::is_whitespace)
+                .map(|end| trimmed.split_at(end).0)
         };
         if field == Some(key) {
             count += 1;
             let start = line.len() - trimmed.len();
-            result.push_str(&line[..start]);
+            result.push_str(line.split_at(start).0);
             result.push_str(key);
             result.push_str(if bios { ": " } else { " " });
             result.push_str(&replacement);

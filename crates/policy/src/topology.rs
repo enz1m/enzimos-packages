@@ -28,7 +28,10 @@ impl Graph {
 fn text(path: &Path) -> Result<String> {
     let b = files::read_kernel(path, 4096)?;
     require(b.is_ascii(), "storage topology encoding")?;
-    Ok(String::from_utf8(b).unwrap().trim().to_owned())
+    Ok(String::from_utf8(b)
+        .map_err(|_| enzimos_platform::Error("storage topology encoding".into()))?
+        .trim()
+        .to_owned())
 }
 fn positive(s: &str) -> Result<u64> {
     require(

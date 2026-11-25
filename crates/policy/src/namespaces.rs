@@ -43,17 +43,17 @@ pub fn identity(pid: u32, kind: &str) -> Result<(u64, u64)> {
 }
 pub(crate) fn kernel_thread(body: &str) -> Result<()> {
     ticks(body, 2)?;
-    let start = body
-        .find('(')
+    let (head, rest) = body
+        .rsplit_once(')')
         .ok_or_else(|| Error("kernel thread stat header".into()))?;
-    let end = body
-        .rfind(')')
+    let (_, name) = head
+        .split_once('(')
         .ok_or_else(|| Error("kernel thread stat header".into()))?;
     require(
-        start < end && &body[start + 1..end] == "kthreadd",
+        name == "kthreadd",
         "initial PID namespace kernel thread unavailable",
     )?;
-    let flags = body[end + 1..]
+    let flags = rest
         .split_whitespace()
         .nth(6)
         .and_then(|s| s.parse::<u64>().ok())
@@ -68,20 +68,17 @@ fn ticks(body: &str, pid: u32) -> Result<u64> {
         body.len() <= 8192 && !body.contains('\0'),
         "namespace process stat bound",
     )?;
-    let begin = body
-        .find('(')
+    let (head, rest) = body
+        .rsplit_once(')')
         .ok_or_else(|| Error("namespace process stat shape".into()))?;
-    let end = body
-        .rfind(')')
+    let (number, _) = head
+        .split_once('(')
         .ok_or_else(|| Error("namespace process stat shape".into()))?;
     require(
-        begin < end
-            && body[..begin].trim().parse::<u32>().ok() == Some(pid)
-            && pid > 0
-            && pid < i32::MAX as u32,
+        number.trim().parse::<u32>().ok() == Some(pid) && pid > 0 && pid < i32::MAX as u32,
         "namespace process stat PID mismatch",
     )?;
-    let fields = body[end + 1..].split_whitespace().collect::<Vec<_>>();
+    let fields = rest.split_whitespace().collect::<Vec<_>>();
     require(
         (20..=64).contains(&fields.len())
             && fields[0].len() == 1

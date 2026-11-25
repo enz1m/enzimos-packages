@@ -209,7 +209,7 @@ impl Device {
                 .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
                 .as_encoded_bytes(),
         )
-        .unwrap();
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         // SAFETY: `name` is a NUL-terminated C string and `parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
@@ -269,7 +269,7 @@ impl Device {
                 .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
                 .as_encoded_bytes(),
         )
-        .unwrap();
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         // SAFETY: `name` is a NUL-terminated C string and `self.parent` keeps the descriptor open.
         let raw = unsafe {
             libc::openat(
@@ -304,13 +304,17 @@ impl Device {
         Ok(self.file.as_fd())
     }
     pub fn filesystem(&self) -> &str {
-        self.row["fstype"].as_str().unwrap()
+        self.row["fstype"]
+            .as_str()
+            .expect("devices are admitted only with a known filesystem type")
     }
     pub fn uuid(&self) -> &str {
-        self.row["uuid"].as_str().unwrap()
+        self.row["uuid"]
+            .as_str()
+            .expect("devices are admitted only with a UUID")
     }
     pub fn number(&self) -> topology::Device {
-        number(&self.row["maj:min"]).unwrap()
+        number(&self.row["maj:min"]).expect("devices are admitted only with a valid maj:min")
     }
     pub fn independent(&self, other: &topology::Graph) -> Result<()> {
         require(

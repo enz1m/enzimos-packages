@@ -75,7 +75,9 @@ pub(crate) fn validate(v: &Value) -> Result<()> {
             && a[0].as_u64().is_some_and(|n| n > 0)
             && a[1].as_u64().is_some_and(|n| n > 0)
             && a[2].as_u64().is_some_and(|n| {
-                n > 0 && n <= process::executable_limit(v["path"].as_str().unwrap())
+                v["path"]
+                    .as_str()
+                    .is_some_and(|path| n > 0 && n <= process::executable_limit(path))
             })
             && a[7].as_u64().is_some_and(|n| {
                 n <= u64::from(u32::MAX)

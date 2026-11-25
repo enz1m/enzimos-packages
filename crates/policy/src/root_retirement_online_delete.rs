@@ -290,7 +290,6 @@ fn step(
             Action::Done => Ok(Performed::Done),
             Action::Publish(next) => {
                 let published = journal.publish_progress(&next, &mut barrier)?;
-                drop(barrier);
                 references.verify_staged_root_receipt(&published, authorize)?;
                 if let Some(targets) = &targets {
                     boot.verify_staged_root_receipt(&published, targets, authorize)?;
@@ -299,7 +298,6 @@ fn step(
                 Ok(Performed::Published(published.record()?.clone()))
             }
             Action::Delete(index) => {
-                drop(barrier);
                 let targets = targets
                     .as_ref()
                     .ok_or_else(|| Error("in-flight Root target not retained".into()))?;

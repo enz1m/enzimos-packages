@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt::Write as _;
 
 pub fn publish_locked(lock: &files::Lock, stage_uuid: &str) -> Result<Value> {
     operation::root_only()?;
@@ -453,7 +454,11 @@ pub fn publish_locked(lock: &files::Lock, stage_uuid: &str) -> Result<Value> {
     let mut menu =
         String::from("timeout: 1\nquiet: yes\ndefault_entry: 1\ninterface_branding: enzimOS\n");
     for flavor in ["linux", "linux-lts"] {
-        menu.push_str(&format!("/enzimOS {flavor}\n    protocol: linux\n    path: boot():/vmlinuz-{flavor}\n    module_path: boot():/initramfs-{flavor}.img\n    cmdline: {}\n",enzimos_platform::json::string(&layout["boot_options"])?));
+        let _ = write!(
+            menu,
+            "/enzimOS {flavor}\n    protocol: linux\n    path: boot():/vmlinuz-{flavor}\n    module_path: boot():/initramfs-{flavor}.img\n    cmdline: {}\n",
+            enzimos_platform::json::string(&layout["boot_options"])?
+        );
     }
     let bios_menu = output(&limine, "limine.conf", menu.as_bytes())?;
     outputs.push((limine.try_clone()?, "limine.conf".into(), bios_menu));
@@ -500,16 +505,15 @@ pub fn publish_locked(lock: &files::Lock, stage_uuid: &str) -> Result<Value> {
                 }
                 None => output(&icons, &name, &input.bytes)?,
             };
-            outputs.retain(|(parent, old, _)| {
-                old != &name
-                    || (
-                        parent.metadata().unwrap().dev(),
-                        parent.metadata().unwrap().ino(),
-                    ) != (
-                        icons.metadata().unwrap().dev(),
-                        icons.metadata().unwrap().ino(),
-                    )
-            });
+            let icons_inode = icons.metadata().map(|m| (m.dev(), m.ino()))?;
+            let mut kept = Vec::with_capacity(outputs.len());
+            for output in outputs.drain(..) {
+                let parent_inode = output.0.metadata().map(|m| (m.dev(), m.ino()))?;
+                if output.1 != name || parent_inode != icons_inode {
+                    kept.push(output);
+                }
+            }
+            outputs = kept;
             outputs.push((icons.try_clone()?, name, file));
         }
     }

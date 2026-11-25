@@ -43,7 +43,7 @@ fn hash(file: &mut File) -> Result<(u64, String)> {
         "module file size or links refused",
     )?;
     let mut sum = openssl::sha::Sha256::new();
-    let mut buffer = [0u8; 65536];
+    let mut buffer = vec![0u8; 65536];
     let mut total = 0u64;
     loop {
         let count = file.read(&mut buffer)?;

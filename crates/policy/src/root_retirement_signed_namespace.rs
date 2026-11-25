@@ -81,6 +81,10 @@ pub struct Original<'a> {
 /// The fixed ESP parent exists only once something was published there (a
 /// boot generation or a signed UKI). A fresh install has none; an observation
 /// that is not a signing actor then only proves and rechecks its absence.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 pub enum Namespace<'a> {
     Present(Original<'a>),
     Absent {

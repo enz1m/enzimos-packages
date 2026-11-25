@@ -384,7 +384,8 @@ impl<'g> Store<'g> {
         match self.kind {
             Kind::Review => {
                 v["descriptor_scope_closed"] = Value::Bool(true);
-                v["result"] = result.unwrap();
+                v["result"] = result
+                    .ok_or_else(|| enzimos_platform::Error("review result required".into()))?;
             }
             Kind::Setup | Kind::Area => {
                 v["mount_closed"] = Value::Bool(after == "complete" || after == "rolled-back");

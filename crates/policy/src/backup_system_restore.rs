@@ -114,6 +114,10 @@ impl<'a, 'g> Pin<'a, 'g> {
         }
     }
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 enum Quiet {
     Live(
         crate::backup_rotation_context::Quiet,

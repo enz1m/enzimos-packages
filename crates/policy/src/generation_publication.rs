@@ -4,6 +4,7 @@ use crate::{boot_entries, boot_options, catalog, identity, recovery_boot, signed
 use enzimos_platform::{Error, Result, json, require};
 use serde_json::{Value, json as value};
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 pub(crate) const PHASES: [&str; 11] = [
     "intent",
     "artifacts",
@@ -35,19 +36,16 @@ pub(crate) fn entries(
             enzimos_platform::json::string(&material["options"])?
         );
         let text = if let Some(certificate) = certificate {
-            let digest = |name: &str| {
+            let digest = |name: &str| -> Result<&str> {
                 material["files"]
                     .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|r| r["name"] == name)
-                    .unwrap()["sha256"]
-                    .as_str()
-                    .unwrap()
+                    .and_then(|files| files.iter().find(|r| r["name"] == name))
+                    .and_then(|row| row["sha256"].as_str())
+                    .ok_or_else(|| Error("generation material digest missing".into()))
             };
             let binding = signed_entry::digest(
-                digest(&format!("vmlinuz-{flavor}")),
-                digest(&format!("initramfs-{flavor}.img")),
+                digest(&format!("vmlinuz-{flavor}"))?,
+                digest(&format!("initramfs-{flavor}.img"))?,
                 enzimos_platform::json::string(&material["options"])?,
                 certificate,
             )?;
@@ -77,7 +75,11 @@ pub(crate) fn bios(generation: &str, material: &Value, before: &str) -> Result<S
     let mut result = format!("{before}\n");
     for flavor in ["linux", "linux-lts"] {
         let prefix = format!("/enzimos/generations/{generation}");
-        result.push_str(&format!("/enzimOS {generation} {flavor}\n    protocol: linux\n    path: boot():{prefix}/vmlinuz-{flavor}\n    module_path: boot():{prefix}/initramfs-{flavor}.img\n    cmdline: {}\n",enzimos_platform::json::string(&material["options"])?));
+        let _ = write!(
+            result,
+            "/enzimOS {generation} {flavor}\n    protocol: linux\n    path: boot():{prefix}/vmlinuz-{flavor}\n    module_path: boot():{prefix}/initramfs-{flavor}.img\n    cmdline: {}\n",
+            enzimos_platform::json::string(&material["options"])?
+        );
     }
     boot_entries::menu(&result)?;
     Ok(result)

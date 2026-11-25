@@ -16,7 +16,7 @@ fn request() -> Value {
 }
 fn intent() -> Value {
     let request = request();
-    value!({"schema":1,"id":"update-fixture","phase":"intent","request_sha256":json::sha256(&json::canonical(&request).unwrap()),
+    value!({"schema":1,"id":"update-fixture","phase":"intent","request_sha256":json::sha256(&json::canonical(&request).expect("test fixture")),
         "request":request,"supervisor":null,"invocation":null,"exit_code":null})
 }
 #[test]

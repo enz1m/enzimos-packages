@@ -108,8 +108,15 @@ fn connections_with(command: &Command) -> Result<Vec<Value>> {
             "zone":if zone.is_empty(){Value::Null}else{value!(zone)},"trusted":zone==TRUSTED_ZONE}));
     }
     rows.sort_by(|a, b| {
-        (!a["active"].as_bool().unwrap(), a["name"].as_str().unwrap())
-            .cmp(&(!b["active"].as_bool().unwrap(), b["name"].as_str().unwrap()))
+        // Rows are built above with a Boolean "active" and a string "name".
+        (
+            !a["active"].as_bool().unwrap_or(false),
+            a["name"].as_str().unwrap_or(""),
+        )
+            .cmp(&(
+                !b["active"].as_bool().unwrap_or(false),
+                b["name"].as_str().unwrap_or(""),
+            ))
     });
     Ok(rows)
 }

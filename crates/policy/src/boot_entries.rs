@@ -30,8 +30,7 @@ pub fn fields(text: &str, bios: bool) -> Result<BTreeMap<String, String>> {
         let pair = if bios {
             line.split_once(':')
         } else {
-            line.find(char::is_whitespace)
-                .map(|i| (&line[..i], &line[i..]))
+            line.find(char::is_whitespace).map(|i| line.split_at(i))
         };
         let (key, val) = pair.ok_or_else(|| Error("unrecognized boot entry line".into()))?;
         let (key, val) = (key.trim(), val.trim());

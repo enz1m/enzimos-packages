@@ -2,6 +2,7 @@
 //! Arch package authority uses five independent pinned master contexts, never key discovery.
 use enzimos_platform::{Error, Result, require};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 pub const MASTERS: [&str; 5] = [
     "2AC0A42EFB0B5CBC7A0402ED4DC95B6D7BE9892E",
     "3572FA2A1B067F22C58AF155F8B821B42A6FDCD7",
@@ -221,7 +222,7 @@ pub fn trust(keys: impl IntoIterator<Item = String>) -> Result<String> {
     for key in keys.into_iter().collect::<BTreeSet<_>>() {
         fingerprint(&key)?;
         require(result.len() < 2 * 1024 * 1024, "ownertrust output bound")?;
-        result.push_str(&format!("{key}:5:\n"));
+        let _ = writeln!(result, "{key}:5:");
     }
     Ok(result)
 }

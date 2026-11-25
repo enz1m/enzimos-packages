@@ -14,11 +14,15 @@ fn initial() -> Value {
         &plan,
         &json!({"pid":123,"start_ticks":100,"executable_sha256":hash}),
     )
-    .unwrap()
+    .expect("test fixture")
 }
 fn reseal(value: &mut Value) {
-    value.as_object_mut().unwrap().remove("journal_sha256");
-    value["journal_sha256"] = json!(enzimos_platform::json::fingerprint(value).unwrap());
+    value
+        .as_object_mut()
+        .expect("test fixture")
+        .remove("journal_sha256");
+    value["journal_sha256"] =
+        json!(enzimos_platform::json::fingerprint(value).expect("test fixture"));
 }
 #[test]
 fn every_apply_prefix_is_durable_but_never_authorizes_a_skipped_or_replayed_body() {

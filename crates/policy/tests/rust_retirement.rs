@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 fn intent() -> Value {
     let steps = ["uefi-entry","bios-menu","root-subvolume","catalog"].iter().enumerate().map(|(n,kind)|json!({"id":format!("step{n}"),"kind":kind,"before":"a".repeat(64),"after":"b".repeat(64)})).collect::<Vec<_>>();
     let mut value = json!({"schema":1,"id":"retire-one","filesystem_uuid":"00000000-0000-0000-0000-000000000001","boot_uuid":"ABCD-1234","created_boot":"00000000-0000-0000-0000-000000000002","observation_sha256":"c".repeat(64),"protected_sha256":"d".repeat(64),"steps":steps});
-    value["intent_sha256"] = json!(document::fingerprint(&value).unwrap());
+    value["intent_sha256"] = json!(document::fingerprint(&value).expect("test fixture"));
     value
 }
 struct Memory {
@@ -36,7 +36,11 @@ impl Executor for Memory {
     }
     fn save(&mut self, next: &Value, previous: Option<&Value>) -> Result<()> {
         engine::validate(next, "retire-one")?;
-        assert_eq!(self.records.get("retire-one"), previous);
+        assert_eq!(
+            self.records.get("retire-one"),
+            previous,
+            "saved over the expected previous record"
+        );
         self.records.insert("retire-one".into(), next.clone());
         Ok(())
     }
@@ -44,20 +48,26 @@ impl Executor for Memory {
         engine::intent(intent)
     }
     fn observe(&mut self, step: &Value) -> Result<String> {
-        Ok(self.objects[step["id"].as_str().unwrap()].clone())
+        Ok(self.objects[step["id"].as_str().expect("test fixture")].clone())
     }
     fn apply(&mut self, step: &Value) -> Result<()> {
-        let id = step["id"].as_str().unwrap();
+        let id = step["id"].as_str().expect("test fixture");
         let record = &self.records["retire-one"];
-        assert_eq!(record["phase"], "executing");
-        assert_eq!(record["inflight"], record["next_step"]);
+        assert_eq!(record["phase"], "executing", "applied while executing");
         assert_eq!(
-            record["intent"]["steps"][record["next_step"].as_u64().unwrap() as usize],
-            *step
+            record["inflight"], record["next_step"],
+            "in-flight step recorded before apply"
+        );
+        assert_eq!(
+            record["intent"]["steps"][record["next_step"].as_u64().expect("test fixture") as usize],
+            *step,
+            "applied step is the recorded next step"
         );
         self.applied.push(id.into());
-        self.objects
-            .insert(id.into(), step["after"].as_str().unwrap().into());
+        self.objects.insert(
+            id.into(),
+            step["after"].as_str().expect("test fixture").into(),
+        );
         if self.interrupt && id == "step2" {
             return Err(Error("simulated interruption after side effect".into()));
         }

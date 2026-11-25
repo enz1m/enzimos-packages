@@ -41,7 +41,11 @@ impl Authority {
         let this = Self {
             unique: mount_identity::id(directory.as_fd(), true)?,
             normal: mount_identity::id(directory.as_fd(), false)?,
-            subvolume: subvolume::observe(directory.as_fd(), &root[1..])?,
+            subvolume: subvolume::observe(
+                directory.as_fd(),
+                root.strip_prefix('/')
+                    .ok_or_else(|| Error("absolute package authority root required".into()))?,
+            )?,
             inode: (m.dev(), m.ino(), m.uid(), m.gid(), m.mode()),
             directory,
             root,
@@ -60,7 +64,10 @@ impl Authority {
                 (m.dev(), m.ino(), m.uid(), m.gid(), m.mode()) == self.inode
                     && mount_identity::id(file.as_fd(), true)? == self.unique
                     && filesystem::observe(file.as_fd())? == self.filesystem
-                    && subvolume::observe(file.as_fd(), &self.root[1..])? == self.subvolume,
+                    && subvolume::observe(
+                        file.as_fd(),
+                        self.root.strip_prefix('/').unwrap_or_default(),
+                    )? == self.subvolume,
                 "package authority mount or subvolume changed",
             )?;
         }

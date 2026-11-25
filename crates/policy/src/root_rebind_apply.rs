@@ -68,14 +68,25 @@ pub fn apply(journal: &Value, adapter: &mut impl Adapter) -> Result<Value> {
         .as_object()
         .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .iter()
-        .map(|(name, body)| (name.clone(), body.as_str().unwrap().to_owned()))
-        .collect::<Texts>();
+        .map(|(name, body)| {
+            Ok((
+                name.clone(),
+                enzimos_platform::json::string(body)?.to_owned(),
+            ))
+        })
+        .collect::<Result<Texts>>()?;
     expected.extend(
         journal["replacements"]
             .as_object()
             .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
             .iter()
-            .map(|(name, body)| (name.clone(), body.as_str().unwrap().to_owned())),
+            .map(|(name, body)| {
+                Ok((
+                    name.clone(),
+                    enzimos_platform::json::string(body)?.to_owned(),
+                ))
+            })
+            .collect::<Result<Texts>>()?,
     );
     require(
         adapter.files()? == expected,

@@ -119,7 +119,7 @@ pub fn copy_named(
         "delivery protection refused; output retained",
     )?;
     let mut offset = 0;
-    let mut buffer = [0u8; 65536];
+    let mut buffer = vec![0u8; 65536];
     while offset < bytes {
         let count = source.read_at(
             &mut buffer[..((bytes - offset) as usize).min(65536)],

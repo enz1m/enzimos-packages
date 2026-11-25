@@ -186,7 +186,8 @@ impl Owned {
         let context =
             // SAFETY: The filesystem name is a NUL-terminated literal.
             descriptor(unsafe { libc::syscall(libc::SYS_fsopen, c"btrfs".as_ptr(), 1u32) })?;
-        let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd())).unwrap();
+        let source = CString::new(format!("/proc/self/fd/{}", device.as_raw_fd()))
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         configure(&context, 1, Some(c"source"), Some(&source))?;
         configure(&context, 0, Some(c"rw"), None)?;
         configure(&context, 1, Some(c"subvolid"), Some(c"5"))?;

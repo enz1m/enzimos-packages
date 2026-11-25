@@ -63,8 +63,6 @@ impl Runtime {
             authenticated(&output.stdout, &binding)
         };
         let first = observe()?;
-        drop(observe);
-        drop(boundary);
         context.compare_identity_data(&first, authorize)?;
         let mut boundary = || {
             self.recheck()?;
@@ -106,7 +104,6 @@ impl Runtime {
             last == first,
             "authenticated remote identity changed during metadata check",
         )?;
-        drop(boundary);
         context.compare_identity_data(&last, authorize)?;
         Ok(
             value!({"status":"remote-repository-checked","repository_id":last["repository_id"],"append_only":false}),

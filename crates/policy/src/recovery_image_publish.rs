@@ -253,8 +253,8 @@ pub fn publish_locked(options: &str, lock: &files::Lock) -> Result<Value> {
         .as_object()
         .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .values()
-        .map(|r| r["bytes"].as_u64().unwrap())
-        .sum::<u64>()
+        .map(|r| enzimos_platform::json::unsigned(&r["bytes"]))
+        .sum::<Result<u64>>()?
         + 16 * 1024 * 1024;
     space(&volume, needed)?;
     let mut publications = Journal::open(Kind::Publications, true)?;

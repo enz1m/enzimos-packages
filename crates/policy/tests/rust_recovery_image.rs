@@ -15,7 +15,7 @@ fn descriptor(native: bool) -> Value {
 }
 fn record() -> Value {
     let descriptor = descriptor(true);
-    let id = image::image_id(&descriptor).unwrap();
+    let id = image::image_id(&descriptor).expect("test fixture");
     json!({"schema":1,"id":id,"phase":"intent","created_boot":"00000000-0000-0000-0000-000000000001","filesystem_uuid":"00000000-0000-0000-0000-000000000002","control":{"path":"control","id":260,"uuid":"00000000-0000-0000-0000-000000000003","parent_uuid":null},"boot_uuid":"ABCD-1234","inputs":{"schema":1,"identity":descriptor,"files":{"kernel":{"bytes":200,"sha256":"e".repeat(64)},"initrd.img":{"bytes":300,"sha256":"f".repeat(64)}}},"options":format!("console=tty0 enzimos.recovery={id}"),"observations":{}})
 }
 #[test]

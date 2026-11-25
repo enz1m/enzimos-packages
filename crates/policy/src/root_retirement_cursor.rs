@@ -153,7 +153,10 @@ impl<'j, 'a, 's> State<'j, 'a, 's> {
     }
 }
 impl<'j, 'a, 's> Executing<'j, 'a, 's> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub(crate) fn from_original_next(
         step: StepEntered<'j, 'a, 's>,
         descriptor: i32,

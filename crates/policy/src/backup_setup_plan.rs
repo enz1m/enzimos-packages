@@ -84,8 +84,9 @@ fn topology(v: &Value, root: crate::topology::Device) -> Result<()> {
         require(
             path.starts_with("/sys/devices/")
                 && path.len() <= 4096
-                && path[1..]
+                && path
                     .split('/')
+                    .skip(1)
                     .all(|part| !part.is_empty() && !matches!(part, "." | ".."))
                 && paths.insert(path.to_owned()),
             "setup kernel path is ambiguous",

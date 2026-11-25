@@ -14,7 +14,10 @@ struct Attributes {
     propagation: u64,
     user_namespace: u64,
 }
-const _: () = assert!(std::mem::size_of::<Attributes>() == 32);
+const _: () = assert!(
+    std::mem::size_of::<Attributes>() == 32,
+    "mount_attr is 32 bytes"
+);
 pub(crate) struct Detached {
     file: File,
     original: files::FileIdentity,

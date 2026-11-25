@@ -210,7 +210,7 @@ impl<'a> Source<'a> {
             .dataset
             .path
             .strip_prefix(&self.mount_row.target)
-            .unwrap()
+            .expect("the dataset path lies below its mount target, checked at observation")
             .trim_start_matches('/');
         let root = self.mount_row.root.trim_matches('/');
         if relative.is_empty() {

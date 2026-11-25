@@ -179,6 +179,10 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
         self.reference_registries.remove(index);
         self.root_receipt_barrier(targets, authorize)
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub(crate) fn compile_root_stage(
         &self,
         targets: &crate::root_retirement_objects::Targets<'_>,

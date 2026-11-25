@@ -80,7 +80,7 @@ fn hash(file: &mut File, authorize: &mut dyn FnMut() -> Result<()>) -> Result<[u
         "complete system file byte bound",
     )?;
     let mut sum = openssl::sha::Sha256::new();
-    let mut buffer = [0u8; 65536];
+    let mut buffer = vec![0u8; 65536];
     let mut total = 0u64;
     let mut checkpoint = std::time::Instant::now();
     authorize()?;

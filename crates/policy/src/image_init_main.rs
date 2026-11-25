@@ -2,6 +2,10 @@
 //! A bare coordinator image offers no shell and cannot start an unrecorded operation.
 use enzimos_policy::recovery_bootstrap;
 #[allow(unsafe_code, reason = "Linux syscall ABI (pause).")]
+#[expect(
+    clippy::print_stdout,
+    reason = "The refusal is reported on the console."
+)]
 fn main() {
     if let Err(error) = recovery_bootstrap::initialize() {
         eprintln!("ENZIMOS_RECOVERY_IMAGE_BOOTSTRAP_REFUSED {error}");

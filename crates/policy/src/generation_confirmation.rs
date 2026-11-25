@@ -10,6 +10,10 @@ use serde_json::{Value, json as value};
 use std::{collections::BTreeMap, os::fd::AsFd, path::Path};
 
 /// Pure binding check; every supplied observation is measured by confirm_locked.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is one independently observed boot fact."
+)]
 pub fn observation(
     record: &Value,
     filesystem: &str,

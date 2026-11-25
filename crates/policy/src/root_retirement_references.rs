@@ -19,6 +19,10 @@ pub trait References {
     fn records(&self) -> Result<Value>;
     fn planning_evidence(&self) -> Result<Value>;
 }
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Built once per operation and rarely moved; boxing would only add an allocation."
+)]
 enum Backend<'a> {
     Standalone(crate::boot_backend_references::Observation<'a>),
     Server(&'a dyn References),
@@ -514,7 +518,7 @@ impl<'a> Observation<'a> {
                 .as_array()
                 .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
                 .iter()
-                .filter(|row| rows.as_array().unwrap().contains(row))
+                .filter(|row| rows.as_array().is_some_and(|rows| rows.contains(row)))
                 .cloned()
                 .collect::<Vec<_>>();
             require(

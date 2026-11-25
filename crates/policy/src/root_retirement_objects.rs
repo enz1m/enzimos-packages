@@ -424,7 +424,11 @@ impl<'a> Targets<'a> {
             self.objects
                 .iter()
                 .map(|object| {
-                    let mut row = object.identity.as_object().unwrap().clone();
+                    let mut row = object
+                        .identity
+                        .as_object()
+                        .cloned()
+                        .expect("object identities are recorded as JSON objects");
                     row.insert("role".into(), value!(object.role));
                     Value::Object(row)
                 })

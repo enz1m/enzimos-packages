@@ -51,10 +51,10 @@ pub(super) fn write(
     let epoch = original
         .map(|f| f.metadata().map(|m| files::identity(&m)))
         .transpose()?;
-    if let Some(original) = original {
+    if let (Some(original), Some(epoch)) = (original, epoch) {
         let named = files::open_relative(parent, Path::new(name))?;
         require(
-            files::identity(&named.metadata()?) == epoch.unwrap()
+            files::identity(&named.metadata()?) == epoch
                 && mount_identity::id(original.as_fd(), true)? == mount,
             "original FAT destination differs",
         )?;
@@ -96,11 +96,11 @@ pub(super) fn write(
             && mount_identity::id(parent.as_fd(), true)? == mount,
         "original FAT parent changed",
     )?;
-    if let Some(original) = original {
+    if let (Some(original), Some(epoch)) = (original, epoch) {
         let named = files::open_relative(parent, Path::new(name))?;
         require(
-            files::identity(&original.metadata()?) == epoch.unwrap()
-                && files::identity(&named.metadata()?) == epoch.unwrap(),
+            files::identity(&original.metadata()?) == epoch
+                && files::identity(&named.metadata()?) == epoch,
             "original FAT replacement changed",
         )?;
     }

@@ -1,5 +1,9 @@
 use super::*;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is one independently built diagnostic index."
+)]
 pub(super) fn finish_active_graph(
     mut graph: Graph,
     input: &Value,
@@ -300,7 +304,7 @@ fn terminal_before(nodes: &serde_json::Map<String, Value>, source: &str, reason:
         ("entry:activation-bios:", "activation:", "adopted"),
     ] {
         if let Some(tail) = source.strip_prefix(prefix) {
-            let id = tail.split(':').next().unwrap();
+            let id = tail.split_once(':').map_or(tail, |(id, _)| id);
             return nodes
                 .get(&format!("{owner}{id}"))
                 .is_some_and(|r| r["phase"] == phase || r["phase"] == "concluded");
@@ -347,7 +351,7 @@ pub(crate) fn finish_observation(
     for (key, node) in &nodes {
         let incoming = incoming.get(key);
         let nonempty = incoming.is_some_and(|r| !r.is_empty());
-        let edges = incoming.map(Vec::as_slice).unwrap_or(&[]);
+        let edges = incoming.map_or(&[][..], Vec::as_slice);
         let completed_rebind = |source: &str| {
             nodes
                 .get(source)

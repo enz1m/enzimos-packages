@@ -144,8 +144,8 @@ pub(crate) fn sole_added_key(
         .as_array()
         .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .iter()
-        .map(|key| key.as_str().unwrap())
-        .collect::<BTreeSet<_>>();
+        .map(enzimos_platform::json::string)
+        .collect::<Result<BTreeSet<_>>>()?;
     let actual = current.keys().map(String::as_str).collect::<BTreeSet<_>>();
     let next = candidate
         .keys()

@@ -111,7 +111,9 @@ impl Observation {
         })
     }
     pub fn nonce(&self) -> &str {
-        self.report["nonce"].as_str().unwrap()
+        self.report["nonce"]
+            .as_str()
+            .expect("reports are admitted only with a valid nonce")
     }
     pub fn receipt(&self) -> Result<Value> {
         Ok(

@@ -44,6 +44,7 @@ fn names_root(identity: &Value, root: &Value) -> bool {
         || identity["id"] == root["id"]
         || identity["uuid"] == root["uuid"]
 }
+type Candidates = Vec<(String, String)>;
 /// Retirement candidates `(birth, root UUID)` oldest first, and every ready
 /// birth that is kept with its reason.
 pub(crate) fn candidates(
@@ -52,7 +53,7 @@ pub(crate) fn candidates(
     live: &Value,
     receipts: &Records,
     keep: usize,
-) -> Result<(Vec<(String, String)>, Vec<Value>)> {
+) -> Result<(Candidates, Vec<Value>)> {
     let generations = generations
         .as_object()
         .ok_or_else(|| Error("generation catalog map required".into()))?;

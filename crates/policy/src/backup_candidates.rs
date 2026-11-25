@@ -38,10 +38,14 @@ pub fn rows(bytes: &[u8]) -> Result<Vec<Value>> {
             path.starts_with("/dev/")
                 && (6..=261).contains(&path.len())
                 && path.as_bytes()[5].is_ascii_alphanumeric()
-                && path[5..]
+                && path
                     .bytes()
+                    .skip(5)
                     .all(|b| b.is_ascii_alphanumeric() || b"._/-".contains(&b))
-                && path[1..].split('/').all(|p| !matches!(p, "" | "." | ".."))
+                && path
+                    .split('/')
+                    .skip(1)
+                    .all(|p| !matches!(p, "" | "." | ".."))
                 && paths.insert(path),
             "invalid/duplicate backup device path",
         )?;
@@ -135,12 +139,11 @@ fn reason(row: &Value, rows: &[Value]) -> Option<&'static str> {
         Some("existing-btrfs-required")
     } else if rows.iter().filter(|r| r["uuid"] == row["uuid"]).count() != 1 {
         Some("duplicate-filesystem-uuid")
-    } else if row["mountpoints"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|v| v.as_str().is_some_and(|s| !s.is_empty()))
-    {
+    } else if row["mountpoints"].as_array().is_none_or(|points| {
+        points
+            .iter()
+            .any(|v| v.as_str().is_some_and(|s| !s.is_empty()))
+    }) {
         Some("already-mounted")
     } else if row["ro"] == true {
         Some("read-only")
@@ -674,6 +677,8 @@ impl Selection<'_> {
         self.discovery.token(&self.row, &self.device)
     }
     pub fn uuid_hint(&self) -> &str {
-        self.row["uuid"].as_str().unwrap()
+        self.row["uuid"]
+            .as_str()
+            .expect("candidates are admitted only with a valid filesystem UUID")
     }
 }

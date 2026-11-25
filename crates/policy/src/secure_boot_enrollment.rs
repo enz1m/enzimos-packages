@@ -345,7 +345,8 @@ impl Firmware {
         if read_only {
             mask |= libc::MS_RDONLY;
         }
-        let target = CString::new(format!("/proc/self/fd/{}", self.directory.as_raw_fd())).unwrap();
+        let target = CString::new(format!("/proc/self/fd/{}", self.directory.as_raw_fd()))
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             // SAFETY: `target` is a NUL-terminated CString and the other pointers may be null for a
             // remount.
@@ -402,12 +403,14 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
     let reader_flags = original.as_ref().map(flags).transpose()?;
     if let Some(file) = &original {
         require(
-            reader_flags.unwrap() & (libc::O_ACCMODE | libc::O_PATH) == libc::O_RDONLY,
+            reader_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                & (libc::O_ACCMODE | libc::O_PATH)
+                == libc::O_RDONLY,
             "original EFI db reader role",
         )?;
         require_reader(
             file,
-            reader_flags.unwrap(),
+            reader_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             &firmware.members[secure_boot::DB],
             firmware.mount,
         )?;
@@ -480,7 +483,7 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
         if let Some(file) = &original {
             require_reader(
                 file,
-                reader_flags.unwrap(),
+                reader_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 &firmware.members[secure_boot::DB],
                 firmware.mount,
             )?;
@@ -529,7 +532,7 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
         if let Some(file) = &original {
             require_reader(
                 file,
-                reader_flags.unwrap(),
+                reader_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 after
                     .as_ref()
                     .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
@@ -606,8 +609,9 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
             )?;
             set_inode_flags(
                 file,
-                original_flags.unwrap() & !IMMUTABLE,
-                original_flags.unwrap(),
+                original_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                    & !IMMUTABLE,
+                original_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             )?;
             let restored = Member::open(&firmware.directory, secure_boot::DB, firmware.mount)?;
             if after.is_some() {
@@ -633,7 +637,7 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
     if let Some(file) = &original {
         require_reader(
             file,
-            reader_flags.unwrap(),
+            reader_flags.ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             after
                 .as_ref()
                 .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,

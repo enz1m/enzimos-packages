@@ -275,10 +275,11 @@ impl Authority {
             files::directory_names(&directory, 1)?.is_empty()
                 && !storage_runtime::rows()?
                     .iter()
-                    .any(|r| r.target == path.to_str().unwrap()),
+                    .any(|r| path.to_str() == Some(r.target.as_str())),
             "fresh complete authority mount target required",
         )?;
-        let source = CString::new(format!("/proc/self/fd/{}", device.file.as_raw_fd())).unwrap();
+        let source = CString::new(format!("/proc/self/fd/{}", device.file.as_raw_fd()))
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let target = CString::new(path.as_os_str().as_encoded_bytes())
             .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
@@ -369,7 +370,7 @@ impl Authority {
         let rows = storage_runtime::rows()?;
         require(
             rows.iter()
-                .filter(|r| r.target == self.path.to_str().unwrap())
+                .filter(|r| self.path.to_str() == Some(r.target.as_str()))
                 .collect::<Vec<_>>()
                 == [&self.row],
             "original complete authority mount replaced",

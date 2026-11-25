@@ -361,7 +361,9 @@ impl Runtime<'_, '_> {
                     == files::identity(&original.file.metadata()?),
             "actual original empty generation removal differs",
         )?;
-        let original = self.admission.directories.remove(path).unwrap();
+        let original = self.admission.directories.remove(path).ok_or_else(|| {
+            enzimos_platform::Error("original generation directory missing".into())
+        })?;
         self.admission
             .directories
             .get_mut(

@@ -106,7 +106,9 @@ pub(crate) fn verify_staged(context: &Context, job: &Value) -> Result<Value> {
         inventory
             .iter()
             .filter(|(p, _)| p.starts_with(&prefix))
-            .all(|(p, v)| *p == job["history"]["path"].as_str().unwrap() && *v == job["history"])
+            .all(|(p, v)| {
+                Some(p.as_str()) == job["history"]["path"].as_str() && *v == job["history"]
+            })
             && inventory.get(recovery_records::text(&job["root"], "path")?) == Some(&job["root"])
             && inventory.get(recovery_records::text(&job["history"], "path")?)
                 == Some(&job["history"]),

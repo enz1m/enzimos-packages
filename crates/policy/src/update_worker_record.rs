@@ -142,7 +142,7 @@ pub fn socket_path(id: &str) -> Result<std::path::PathBuf> {
     let digest = json::sha256(id.as_bytes());
     Ok(std::path::PathBuf::from(format!(
         "/run/enzimos/update-workers/{}/request.sock",
-        &digest[..32]
+        digest.get(..32).unwrap_or(&digest)
     )))
 }
 pub fn validate(value: &Value, id: &str) -> Result<()> {

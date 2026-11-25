@@ -107,6 +107,10 @@ impl<'a, 's> Installed<'a, 's> {
         Ok(originals)
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (fcntl, prctl).")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Each argument is a distinct retained input of this step."
+    )]
     pub fn install(
         scope: &'s Scope,
         mounts: &'a Mounts<'s>,

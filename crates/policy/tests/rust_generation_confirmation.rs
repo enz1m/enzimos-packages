@@ -17,11 +17,19 @@ fn ready() -> Value {
     let material = v!({"kernels":{"linux":"6.18.1","linux-lts":"6.12.9"},"files":files,
         "options":OPTIONS,"root_identity":{"path":"root","id":256,"uuid":FS,"ownership":"not-established"},
         "inventory_sha256":json::sha256(b"linux 6.18.1\nlinux-lts 6.12.9")});
-    let reserved =
-        catalog::reserve_document(&catalog::empty(FS).unwrap(), "gen1", &material, CREATED)
-            .unwrap();
-    catalog::publish_document(&reserved, "gen1", &v!({"uefi":{"enzimos-gen1-linux.conf":"c".repeat(64),"enzimos-gen1-linux-lts.conf":"d".repeat(64)},"bios":{"enzimOS gen1 linux":"e".repeat(64),"enzimOS gen1 linux-lts":"f".repeat(64)}})).unwrap()
+    let reserved = catalog::reserve_document(
+        &catalog::empty(FS).expect("test fixture"),
+        "gen1",
+        &material,
+        CREATED,
+    )
+    .expect("test fixture");
+    catalog::publish_document(&reserved, "gen1", &v!({"uefi":{"enzimos-gen1-linux.conf":"c".repeat(64),"enzimos-gen1-linux-lts.conf":"d".repeat(64)},"bios":{"enzimOS gen1 linux":"e".repeat(64),"enzimOS gen1 linux-lts":"f".repeat(64)}})).expect("test fixture")
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Mirrors the observation it builds."
+)]
 fn observe(
     data: &Value,
     boot: &str,

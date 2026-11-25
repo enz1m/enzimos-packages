@@ -297,8 +297,8 @@ pub fn open_offline<'a>(
         mapper_identity["read_only"] == false && source_identity != mapper_identity,
         "new writable distinct offline mapper required",
     )?;
-    let source_device = observed_device(&source_identity);
-    let mapper_device = observed_device(&mapper_identity);
+    let source_device = observed_device(&source_identity)?;
+    let mapper_device = observed_device(&mapper_identity)?;
     let mapper_node = crate::topology::kernel_node(mapper_device)?;
     require(
         mapper_node.dependencies == vec![source_device],
@@ -403,8 +403,8 @@ impl<'s> CreatedMapping<'s> {
             "actual created offline mapping/source changed or fixed name replaced",
         )?;
         require(
-            crate::topology::kernel_node(observed_device(&self.mapper_identity))?.dependencies
-                == vec![observed_device(&self.source_identity)],
+            crate::topology::kernel_node(observed_device(&self.mapper_identity)?)?.dependencies
+                == vec![observed_device(&self.source_identity)?],
             "original mapping source dependency changed",
         )?;
         self.source_holders.recheck()?;
@@ -422,7 +422,7 @@ impl<'s> CreatedMapping<'s> {
         require(
             mounts.filesystem_binding()?["filesystem_uuid"] == self.filesystem
                 && crate::topology::btrfs_roots(&self.filesystem)?
-                    == vec![observed_device(&self.mapper_identity)],
+                    == vec![observed_device(&self.mapper_identity)?],
             "original offline Btrfs mount is not solely the actual created mapper",
         )?;
         self.recheck()?;
@@ -452,11 +452,11 @@ impl<'s> CreatedMapping<'s> {
     }
 }
 
-fn observed_device(value: &serde_json::Value) -> crate::topology::Device {
-    (
-        value["major"].as_u64().unwrap() as u32,
-        value["minor"].as_u64().unwrap() as u32,
-    )
+fn observed_device(value: &serde_json::Value) -> Result<crate::topology::Device> {
+    Ok((
+        enzimos_platform::json::unsigned(&value["major"])? as u32,
+        enzimos_platform::json::unsigned(&value["minor"])? as u32,
+    ))
 }
 struct Holders {
     directory: File,

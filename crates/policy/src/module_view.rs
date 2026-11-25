@@ -28,7 +28,8 @@ fn mounted(path: &str) -> Result<bool> {
 #[allow(unsafe_code, reason = "Linux syscall ABI (mount).")]
 fn bind(source: &File, path: &str) -> Result<()> {
     storage_runtime::initial_namespace()?;
-    let source = CString::new(format!("/proc/self/fd/{}", source.as_raw_fd())).unwrap();
+    let source = CString::new(format!("/proc/self/fd/{}", source.as_raw_fd()))
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let target =
         CString::new(path).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
@@ -397,13 +398,12 @@ impl ModuleView {
     }
     pub fn transaction_directory(&self) -> Result<&File> {
         self.recheck()?;
-        Ok(self
-            .alias
+        self.alias
             .as_ref()
             .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
             .file
             .as_ref()
-            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?)
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))
     }
     pub fn kernel(&self) -> &str {
         &self.kernel

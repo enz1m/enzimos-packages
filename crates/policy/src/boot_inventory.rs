@@ -135,7 +135,11 @@ impl Process {
             require(mounts.len() <= 1, "ambiguous handle mount identity")?;
             handles.push(value!({"fd":fd,"target":link,"device":metadata.dev(),"inode":metadata.ino(),"mode":metadata.mode(),"mount_id":mounts.first()}));
         }
-        handles.sort_by_key(|r| r["fd"].as_u64().unwrap());
+        handles.sort_by_key(|r| {
+            r["fd"]
+                .as_u64()
+                .expect("handle rows are built above with integer descriptors")
+        });
         let maps = text(&base.join("maps"), 2 * 1024 * 1024, uid)?;
         require(
             maps.lines().count() <= MAX_MAPS,

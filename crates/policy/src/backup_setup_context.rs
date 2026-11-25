@@ -174,7 +174,7 @@ impl<'p, 'a, 'r, 'd> Prepared<'p, 'a, 'r, 'd> {
     pub(crate) fn filesystem(&self) -> &str {
         self.plan.original()["destination"]["filesystem_uuid"]
             .as_str()
-            .unwrap()
+            .expect("setup plans are validated with a destination UUID string")
     }
     pub fn descriptor(&self) -> Result<&File> {
         self.recheck()?;

@@ -20,6 +20,10 @@ fn shape(file: &File, owner: u32) -> Result<Shape> {
     )?;
     Ok((m.dev(), m.ino(), m.mode(), m.uid(), m.gid()))
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is a distinct retained input of this step."
+)]
 fn original(
     parent: &File,
     folder: &File,
@@ -242,11 +246,19 @@ impl<'i> Temporary<'i> {
         closed.recheck()?;
         let identity = files::identity(&self.file.metadata()?);
         require(
-            [0, 1, 2, 3, 4, 7, 8, 9].iter().all(|index| {
-                let before = serde_json::to_value(self.identity).unwrap();
-                let after = serde_json::to_value(identity).unwrap();
-                before[*index] == after[*index]
-            }) && identity.10 == 0,
+            (
+                self.identity.0,
+                self.identity.1,
+                self.identity.2,
+                self.identity.3,
+                self.identity.4,
+                self.identity.7,
+                self.identity.8,
+                self.identity.9,
+            ) == (
+                identity.0, identity.1, identity.2, identity.3, identity.4, identity.7, identity.8,
+                identity.9,
+            ) && identity.10 == 0,
             "original temporary changed beyond known unlink transition",
         )?;
         let retired = Retired {

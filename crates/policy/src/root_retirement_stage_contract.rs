@@ -18,6 +18,10 @@ pub struct Stage {
     pub bios: String,
     pub defaults: String,
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each argument is one independently reviewed stage input."
+)]
 pub fn prepare(
     record: &Value,
     image: &Value,
@@ -61,7 +65,7 @@ pub fn prepare(
         matches!(exit, "reboot" | "poweroff"),
         "closed coordinator exit mode required",
     )?;
-    let short = &id[5..21];
+    let short = id.get(5..21).unwrap_or_default();
     let entry = format!("enzimos-root-retire-{short}.conf");
     let title = format!("enzimOS root retirement {short}");
     let fields = boot_entries::fields(loader, false)?;

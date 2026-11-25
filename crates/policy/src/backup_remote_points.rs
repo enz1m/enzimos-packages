@@ -53,14 +53,16 @@ fn equivalent(source: &Value, copied: &Value) -> Result<()> {
         "copied snapshot lineage differs",
     )?;
     let content = |row: &Value| {
-        let mut record = row.as_object().unwrap().clone();
-        for key in ["id", "short_id", "parent", "original"] {
-            record.remove(key);
-        }
-        record
+        row.as_object().map(|row| {
+            let mut record = row.clone();
+            for key in ["id", "short_id", "parent", "original"] {
+                record.remove(key);
+            }
+            record
+        })
     };
     require(
-        content(source) == content(copied),
+        content(source).is_some() && content(source) == content(copied),
         "copied snapshot content or metadata differs",
     )?;
     Ok(())

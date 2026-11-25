@@ -63,8 +63,9 @@ fn planned(
         })
         .collect::<Vec<_>>();
     descendants.sort_by(|a, b| {
-        let a = a["path"].as_str().unwrap();
-        let b = b["path"].as_str().unwrap();
+        // Descendants were selected above by their string path.
+        let a = a["path"].as_str().unwrap_or_default();
+        let b = b["path"].as_str().unwrap_or_default();
         b.matches('/')
             .count()
             .cmp(&a.matches('/').count())
@@ -466,7 +467,6 @@ impl<'a> Intent<'a> {
             self.references
                 .begin_root_receipt(targets, record, &mut original_barrier)?;
         original_barrier()?;
-        drop(original_barrier);
         protection
             .boot
             .bind_root_receipt(&registry, record, targets, authorize)?;
@@ -487,7 +487,6 @@ impl<'a> Intent<'a> {
         };
         registry.publish(&json::canonical(record)?, &mut barrier)?;
         barrier()?;
-        drop(barrier);
         self.references
             .verify_new_root_receipt(&registry, record, authorize)?;
         protection
