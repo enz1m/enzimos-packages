@@ -57,7 +57,7 @@ pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     identity::sha(text(v, "grant_sha256")?)?;
     let mut original = v.clone();
     original["phase"] = value!("granted");
-    original.as_object_mut().unwrap().remove("grant_sha256");
+    enzimos_platform::json::object_mut(&mut original)?.remove("grant_sha256");
     require(
         json::fingerprint(&original)? == v["grant_sha256"],
         "delivery grant material changed",

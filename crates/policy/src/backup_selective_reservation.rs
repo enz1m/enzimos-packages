@@ -86,7 +86,10 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
             "receiver_accepted":false,"export_complete":false,"live_home_written":false});
         let record = Retained::create(
             &registry,
-            Path::new(&format!("{}.json", request["id"].as_str().unwrap())),
+            Path::new(&format!(
+                "{}.json",
+                enzimos_platform::json::string(&request["id"])?
+            )),
             &value,
             wire::LIMIT,
             directory_shape.5,
@@ -206,7 +209,8 @@ impl<'r, 'a, 'g> Reserved<'r, 'a, 'g> {
         require(
             peer.uid == 0
                 && peer.gid == 0
-                && u64::from(peer.pid) == self.request["worker"]["worker"]["pid"].as_u64().unwrap(),
+                && u64::from(peer.pid)
+                    == enzimos_platform::json::unsigned(&self.request["worker"]["worker"]["pid"])?,
             "selective export request peer is not original reserved worker",
         )?;
         self.sent = true;

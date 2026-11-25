@@ -90,7 +90,8 @@ impl<'s> Disabled<'s> {
             protected(&file, mount)?;
             let before = files::identity(&file.metadata()?);
             let _original = contents(&file)?;
-            let literal = CString::new(name).unwrap();
+            let literal = CString::new(name)
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             let raw = unsafe {
                 libc::openat(
                     parent.as_raw_fd(),

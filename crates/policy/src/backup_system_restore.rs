@@ -411,8 +411,8 @@ fn validate_complete(v: &Value, id: &str) -> Result<()> {
     };
     json::fields(v, fields)?;
     let mut base = v.clone();
-    base.as_object_mut().unwrap().remove("replacement");
-    base.as_object_mut().unwrap().remove("boot_mount");
+    enzimos_platform::json::object_mut(&mut base)?.remove("replacement");
+    enzimos_platform::json::object_mut(&mut base)?.remove("boot_mount");
     base["phase"] = value!("staged");
     validate(&base, id)?;
     if let Some(replacement) = v.get("replacement") {

@@ -107,7 +107,7 @@ impl Owner {
                             matches!(m.mode() & 0o7777, 0o600 | 0o644)
                         }
                         && mount_identity::id(file.as_fd(), true)?
-                            == directory_shape["mount"].as_u64().unwrap(),
+                            == enzimos_platform::json::unsigned(&directory_shape["mount"])?,
                     "original installed owner credential protection, size or mount differs",
                 )?;
                 this.files.push((name, file, files::identity(&m)));
@@ -161,9 +161,9 @@ impl Owner {
                     files::identity(&file.metadata()?) == *identity
                         && files::identity(&named.metadata()?) == *identity
                         && mount_identity::id(file.as_fd(), true)?
-                            == expected["mount"].as_u64().unwrap()
+                            == enzimos_platform::json::unsigned(&expected["mount"])?
                         && mount_identity::id(named.as_fd(), true)?
-                            == expected["mount"].as_u64().unwrap(),
+                            == enzimos_platform::json::unsigned(&expected["mount"])?,
                     "original installed owner credential inode replaced or changed",
                 )?;
             }
@@ -176,7 +176,11 @@ impl Owner {
     ) -> Result<()> {
         if self.enabled {
             self.recheck()?;
-            let directory = &self.directory.as_ref().unwrap().0;
+            let directory = &self
+                .directory
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .0;
             created.require_destination(directory, Path::new("config.json"))?;
             let original = self
                 .files
@@ -200,7 +204,11 @@ impl Owner {
             database()? == self.database,
             "original firmware database changed during policy transition",
         )?;
-        let directory = &self.directory.as_ref().unwrap().0;
+        let directory = &self
+            .directory
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .0;
         created.require_destination(directory, Path::new("config.json"))?;
         let file = created.file()?.try_clone()?;
         require(

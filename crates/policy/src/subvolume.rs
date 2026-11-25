@@ -68,8 +68,16 @@ pub(crate) fn containing_identity(fd: BorrowedFd<'_>) -> Result<Value> {
 }
 pub(crate) fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
     require(bytes.len() == 504, "Btrfs containing info size")?;
-    let id = u64::from_ne_bytes(bytes[0..8].try_into().unwrap());
-    let flags = u64::from_ne_bytes(bytes[288..296].try_into().unwrap());
+    let id = u64::from_ne_bytes(
+        bytes[0..8]
+            .try_into()
+            .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+    );
+    let flags = u64::from_ne_bytes(
+        bytes[288..296]
+            .try_into()
+            .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+    );
     let present = bytes[296..312].iter().any(|byte| *byte != 0);
     require(
         (id == 5 || id >= 256) && (id == 5 || present) && flags & !1 == 0,
@@ -180,7 +188,7 @@ pub(crate) fn destroy_readonly_original(
             == crate::filesystem::observe(original)?["filesystem_uuid"],
         "snapshot deletion crossed filesystem",
     )?;
-    let mut arguments = destruction_arguments(actual["id"].as_u64().unwrap())?;
+    let mut arguments = destruction_arguments(enzimos_platform::json::unsigned(&actual["id"])?)?;
     require(
         unsafe {
             libc::ioctl(

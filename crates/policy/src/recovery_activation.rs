@@ -200,9 +200,7 @@ pub fn validate(v: &Value, identifier: &str) -> Result<()> {
         identity::uuid(text(observation, "boot_id")?)?;
         require(
             observation["boot_id"] != selection["created_boot"]
-                && job["plan"]["material"]["kernels"]
-                    .as_object()
-                    .unwrap()
+                && enzimos_platform::json::object(&job["plan"]["material"]["kernels"])?
                     .values()
                     .any(|k| *k == observation["kernel"])
                 && observation["root_uuid"] == job["root"]["uuid"]

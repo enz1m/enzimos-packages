@@ -199,8 +199,8 @@ impl<'a, 'g> Context<'a, 'g> {
         let image = File::from(descriptors["restic"].try_clone_to_owned()?);
         let repository = File::from(descriptors["repository"].try_clone_to_owned()?);
         let credential = File::from(descriptors["credential"].try_clone_to_owned()?);
-        let snapshot = self.selection["snapshot"].as_str().unwrap();
-        let path = self.selection["path"].as_str().unwrap();
+        let snapshot = enzimos_platform::json::string(&self.selection["snapshot"])?;
+        let path = enzimos_platform::json::string(&self.selection["path"])?;
         let selected = SelectedFile::new(snapshot, path)?;
         let mut boundary = || {
             self.recheck(authorize)?;

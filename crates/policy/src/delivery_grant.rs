@@ -188,7 +188,9 @@ impl Registry {
         authorize()?;
         self.recheck(guard)?;
         let receipt = Retained::create(
-            self.directory.as_ref().unwrap(),
+            self.directory
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             Path::new(&format!("{id}.json")),
             record,
             LIMIT,

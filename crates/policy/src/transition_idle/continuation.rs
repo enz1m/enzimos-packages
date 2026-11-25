@@ -24,7 +24,7 @@ impl Snapshot {
                 before["phase"] == "prepared" && record["phase"] == "complete",
                 "root rebind checkpoint cannot replay",
             )?;
-            for (key, old) in before.as_object().unwrap() {
+            for (key, old) in enzimos_platform::json::object(before)? {
                 if !matches!(key.as_str(), "phase" | "journal_sha256") {
                     require(record[key] == *old, "root rebind immutable intent changed")?;
                 }
@@ -216,7 +216,7 @@ impl Snapshot {
                 && terminal["request"]["boot_id"] == crate::operation::boot_id()?,
             "worker history caller or boot changed",
         )?;
-        let view = terminal["request"]["module_view"]["id"].as_str().unwrap();
+        let view = enzimos_platform::json::string(&terminal["request"]["module_view"]["id"])?;
         require(
             self.module_view.as_deref() == Some(view)
                 && self.records["module_views"][view] == terminal["request"]["module_view"],

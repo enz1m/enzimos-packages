@@ -149,7 +149,13 @@ impl<'a> Store<'a> {
         authorize()?;
         lock.recheck()?;
         files::atomic(&path, &json::canonical(&current)?, 0o600, Some(0), false)?;
-        let file = files::open_relative(&directory, Path::new(path.file_name().unwrap()))?;
+        let file = files::open_relative(
+            &directory,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let file_identity = files::identity(&file.metadata()?);
         let store = Self {
             guard,
@@ -204,14 +210,25 @@ impl<'a> Store<'a> {
         self.guard.recheck()?;
         self.caller.recheck()?;
         Self::verify_lock(self.lock, &self.lock_identity, self.lock_mount)?;
-        let named = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let named = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         require(
             directory_shape(&named)? == self.directory_shape
                 && directory_shape(&self.directory)? == self.directory_shape,
             "original apply registry replaced",
         )?;
-        let file =
-            files::open_relative(&self.directory, Path::new(self.path.file_name().unwrap()))?;
+        let file = files::open_relative(
+            &self.directory,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         for file in [&file, &self.file] {
             require(
                 files::identity(&file.metadata()?) == self.file_identity
@@ -243,8 +260,14 @@ impl<'a> Store<'a> {
             Some(0),
             true,
         )?;
-        self.file =
-            files::open_relative(&self.directory, Path::new(self.path.file_name().unwrap()))?;
+        self.file = files::open_relative(
+            &self.directory,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         self.file_identity = files::identity(&self.file.metadata()?);
         self.current = current;
         self.recheck()

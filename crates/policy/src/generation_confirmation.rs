@@ -150,7 +150,7 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
         let artifact = volume.artifact(
             Path::new(&format!(
                 "enzimos/generations/{generation}/{}",
-                row["name"].as_str().unwrap()
+                enzimos_platform::json::string(&row["name"])?
             )),
             128 * 1024 * 1024,
         )?;
@@ -161,9 +161,7 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
         held.push(artifact);
     }
     let root = files::directory(Path::new("/"), Some(0))?;
-    let name = snapshot.guard.configuration["root_subvol"]
-        .as_str()
-        .unwrap();
+    let name = enzimos_platform::json::string(&snapshot.guard.configuration["root_subvol"])?;
     let (object, readonly) = subvolume::observe(root.as_fd(), name)?;
     require(!readonly, "running generation root must be writable")?;
     let root_identity =
@@ -188,7 +186,7 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
     // Both installed kernel bytes must agree, not merely uname's version string.
     let mut kernels = Vec::new();
     for flavor in ["linux", "linux-lts"] {
-        let release = record["material"]["kernels"][flavor].as_str().unwrap();
+        let release = enzimos_platform::json::string(&record["material"]["kernels"][flavor])?;
         let path = format!("usr/lib/modules/{release}/vmlinuz");
         let file = files::open_relative(&root, Path::new(&path))?;
         let before = files::identity(&file.metadata()?);
@@ -196,12 +194,10 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
             mount_identity::id(file.as_fd(), true)? == root_mount,
             "kernel crosses root mount",
         )?;
-        let expected = record["material"]["files"]
-            .as_array()
-            .unwrap()
+        let expected = enzimos_platform::json::array(&record["material"]["files"])?
             .iter()
             .find(|row| row["name"] == format!("vmlinuz-{flavor}"))
-            .unwrap();
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         let (bytes, digest) = stream_copy::hash_borrowed(&file, 128 * 1024 * 1024, Some(0))?;
         require(
             digest == expected["sha256"] && Some(bytes) == expected["bytes"].as_u64(),
@@ -221,7 +217,7 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
     let boot = operation::boot_id()?;
     let confirmation = observation(
         &record,
-        transaction.config["filesystem_uuid"].as_str().unwrap(),
+        enzimos_platform::json::string(&transaction.config["filesystem_uuid"])?,
         &boot,
         command_line,
         &root_identity,

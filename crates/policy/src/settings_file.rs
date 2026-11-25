@@ -45,8 +45,18 @@ impl Config {
             "settings configuration outside registry",
         )?;
         let path = Path::new(path);
-        let parent = files::directory(path.parent().unwrap(), Some(0))?;
-        let file = files::open_relative(&parent, Path::new(path.file_name().unwrap()))?;
+        let parent = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let file = files::open_relative(
+            &parent,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         Self::from_file(path, &parent, file, limit)
     }
     pub(crate) fn optional_database_configuration(parent: &File) -> Result<Option<Self>> {
@@ -88,8 +98,20 @@ impl Config {
         Ok(this)
     }
     pub(crate) fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
-        let named = files::open_relative(&self.parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let named = files::open_relative(
+            &self.parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             shape(&parent)? == self.parent_shape
                 && shape(&self.parent)? == self.parent_shape
@@ -114,7 +136,11 @@ impl Config {
         self.recheck()?;
         let file = files::atomic_replace_original(
             &self.parent,
-            Path::new(self.path.file_name().unwrap()),
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
             bytes,
             self.identity.7 & 0o7777,
             Some(0),

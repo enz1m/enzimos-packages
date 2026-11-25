@@ -283,8 +283,8 @@ pub fn collect() -> Result<Value> {
         }
     };
     let processes = process_references()?;
-    for reason in processes["blockers"].as_array().unwrap() {
-        blockers.insert(reason.as_str().unwrap().to_owned());
+    for reason in enzimos_platform::json::array(&processes["blockers"])? {
+        blockers.insert(enzimos_platform::json::string(reason)?.to_owned());
     }
     let original = context
         .as_ref()

@@ -161,12 +161,23 @@ impl Runtime<'_, '_> {
             .artifacts
             .get(path)
             .ok_or_else(|| Error("actual original continuation artifact missing".into()))?;
-        let parent = self.admission.volume.directory(path.parent().unwrap())?;
+        let parent = self.admission.volume.directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        )?;
         let guard = self.admission.guard;
         let lock = self.admission.lock;
-        let references = self.admission.references.as_ref().unwrap();
+        let references = self
+            .admission
+            .references
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let journal = &self.journal;
-        let loaders = self.admission.loaders.as_ref().unwrap();
+        let loaders = self
+            .admission
+            .loaders
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let authorize = &mut self.authorize;
         let mut permission = || {
             guard.recheck()?;
@@ -186,23 +197,29 @@ impl Runtime<'_, '_> {
         let retired = artifact.into_retired(removed)?;
         self.admission
             .directories
-            .get_mut(path.parent().unwrap())
+            .get_mut(
+                path.parent()
+                    .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            )
             .ok_or_else(|| Error("original continuation artifact parent missing".into()))?
             .advance_removed(
                 &self.admission.volume,
                 retired.removal()?,
-                path.file_name().unwrap().to_str().unwrap(),
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             )?;
-        self.admission.loaders.as_mut().unwrap().retire_original(
-            &self.admission.volume,
-            path,
-            &retired,
-        )?;
+        self.admission
+            .loaders
+            .as_mut()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .retire_original(&self.admission.volume, path, &retired)?;
         if path.starts_with("enzimos/secure-boot") {
             self.admission
                 .signed
                 .as_mut()
-                .unwrap()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
                 .retire_original_image(&self.admission.volume, path, &retired)?;
         }
         let full = self.admission.volume.path(path)?;
@@ -225,16 +242,28 @@ impl Runtime<'_, '_> {
             .get(path)
             .ok_or_else(|| Error("actual original BIOS source missing".into()))?;
         let old = files::read_file(&artifact.file, crate::boot_entries::MAX_TEXT, Some(0), true)?;
-        let generation = self.journal.id().strip_prefix("boot-").unwrap();
+        let generation = self
+            .journal
+            .id()
+            .strip_prefix("boot-")
+            .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
         let text = crate::boot_retirement_plan::without_bios(
             std::str::from_utf8(&old).map_err(|_| Error("original BIOS text encoding".into()))?,
             generation,
         )?;
         let guard = self.admission.guard;
         let lock = self.admission.lock;
-        let references = self.admission.references.as_ref().unwrap();
+        let references = self
+            .admission
+            .references
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let journal = &self.journal;
-        let loaders = self.admission.loaders.as_ref().unwrap();
+        let loaders = self
+            .admission
+            .loaders
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let authorize = &mut self.authorize;
         let mut permission = || {
             guard.recheck()?;
@@ -259,11 +288,11 @@ impl Runtime<'_, '_> {
         let replaced = original.into_replaced(committed)?;
         // Another retained loader descriptor is joined to this actual owned
         // replacement before its old view is retired.
-        self.admission.loaders.as_mut().unwrap().replace_bios(
-            &self.admission.volume,
-            &replaced,
-            &text,
-        )?;
+        self.admission
+            .loaders
+            .as_mut()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .replace_bios(&self.admission.volume, &replaced, &text)?;
         self.admission
             .directories
             .get_mut(Path::new("limine"))
@@ -287,13 +316,24 @@ impl Runtime<'_, '_> {
             original.names.is_empty() && files::directory_is_empty(&original.file)?,
             "actual original generation directory still has members",
         )?;
-        let parent = self.admission.volume.directory(path.parent().unwrap())?;
+        let parent = self.admission.volume.directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        )?;
         let before = files::identity(&original.file.metadata()?);
         let guard = self.admission.guard;
         let lock = self.admission.lock;
-        let references = self.admission.references.as_ref().unwrap();
+        let references = self
+            .admission
+            .references
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let journal = &self.journal;
-        let loaders = self.admission.loaders.as_ref().unwrap();
+        let loaders = self
+            .admission
+            .loaders
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let authorize = &mut self.authorize;
         let mut permission = || {
             guard.recheck()?;
@@ -305,7 +345,10 @@ impl Runtime<'_, '_> {
         let removed = Quarantined::enter_original(
             &parent,
             &original.file,
-            Path::new(path.file_name().unwrap()),
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
             0,
             65536,
             before,
@@ -321,18 +364,24 @@ impl Runtime<'_, '_> {
         let original = self.admission.directories.remove(path).unwrap();
         self.admission
             .directories
-            .get_mut(path.parent().unwrap())
+            .get_mut(
+                path.parent()
+                    .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            )
             .ok_or_else(|| Error("actual original generations parent missing".into()))?
             .advance_removed(
                 &self.admission.volume,
                 &removed,
-                path.file_name().unwrap().to_str().unwrap(),
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             )?;
-        self.admission.loaders.as_mut().unwrap().retire_directory(
-            &self.admission.volume,
-            path,
-            &removed,
-        )?;
+        self.admission
+            .loaders
+            .as_mut()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .retire_directory(&self.admission.volume, path, &removed)?;
         self.directory = Some((original, removed));
         self.verify()
     }
@@ -355,11 +404,15 @@ impl Runtime<'_, '_> {
                     )?;
                 }
                 let before = self.journal.current()?.clone();
-                let generation = self.journal.id().strip_prefix("boot-").unwrap();
+                let generation = self
+                    .journal
+                    .id()
+                    .strip_prefix("boot-")
+                    .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
                 let after = crate::boot_retirement_plan::tombstone(
                     &self.admission.catalog.data,
                     generation,
-                    before["intent"]["created_boot"].as_str().unwrap(),
+                    enzimos_platform::json::string(&before["intent"]["created_boot"])?,
                 )?;
                 require(
                     json::fingerprint(&after)? == before["intent"]["steps"][index]["after"],
@@ -367,9 +420,17 @@ impl Runtime<'_, '_> {
                 )?;
                 let guard = self.admission.guard;
                 let lock = self.admission.lock;
-                let references = self.admission.references.as_ref().unwrap();
+                let references = self
+                    .admission
+                    .references
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
                 let journal = &self.journal;
-                let loaders = self.admission.loaders.as_ref().unwrap();
+                let loaders = self
+                    .admission
+                    .loaders
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
                 let authorize = &mut self.authorize;
                 self.admission.catalog.data = after;
                 self.admission.catalog.commit_owned_authorized(&mut || {
@@ -397,7 +458,7 @@ impl Runtime<'_, '_> {
             self.persist(record.clone())?;
         }
         let count = self.admission.roles.len();
-        for index in record["next_step"].as_u64().unwrap() as usize..count {
+        for index in enzimos_platform::json::unsigned(&record["next_step"])? as usize..count {
             self.verify()?;
             for prior in 0..index {
                 require(
@@ -444,7 +505,7 @@ impl Runtime<'_, '_> {
         record["phase"] = value!("complete");
         self.persist(record)?;
         Ok(
-            value!({"status":"retirement-complete","id":self.journal.id(),"generation":self.journal.id().strip_prefix("boot-").unwrap(),"root_subvolume_retained":true,"automatic_replay":false}),
+            value!({"status":"retirement-complete","id":self.journal.id(),"generation":self.journal.id().strip_prefix("boot-").ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?,"root_subvolume_retained":true,"automatic_replay":false}),
         )
     }
 }

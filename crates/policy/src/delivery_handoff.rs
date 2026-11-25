@@ -142,7 +142,13 @@ pub(crate) fn copy<F: FnMut() -> Result<()>>(
         &complete.body,
         &value!({"schema":1,"status":"delivery-copy-complete","id":request.id,"request_sha256":digest,"bytes":request.bytes,"sha256":request.sha256}),
     )?;
-    let file = File::from(complete.files.into_iter().next().unwrap());
+    let file = File::from(
+        complete
+            .files
+            .into_iter()
+            .next()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+    );
     child.success(DEADLINE)?;
     approved.recheck()?;
     require(

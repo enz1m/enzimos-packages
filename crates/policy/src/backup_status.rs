@@ -41,8 +41,14 @@ impl PublicFile {
             "backup status protected configuration parent required",
         )?;
         let mount = mount_identity::id(parent.as_fd(), true)?;
-        let file =
-            files::optional_relative(&parent, Path::new(Path::new(path).file_name().unwrap()))?;
+        let file = files::optional_relative(
+            &parent,
+            Path::new(
+                Path::new(path)
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let (identity, body) = if let Some(file) = &file {
             let m = file.metadata()?;
             require(
@@ -87,7 +93,11 @@ impl PublicFile {
         )?;
         let named = files::optional_relative(
             &self.parent,
-            Path::new(Path::new(self.path).file_name().unwrap()),
+            Path::new(
+                Path::new(self.path)
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
         )?;
         match (&self.file, named, self.identity, &self.body) {
             (None, None, None, None) => Ok(()),
@@ -313,7 +323,7 @@ impl<'a> Status<'a> {
                 Ok(status)
             });
             if let Ok(status) = observed {
-                for (key, value) in status.as_object().unwrap() {
+                for (key, value) in enzimos_platform::json::object(&status)? {
                     result[key] = value.clone();
                 }
             }

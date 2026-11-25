@@ -96,7 +96,10 @@ pub(crate) fn context(v: &Value) -> Result<()> {
         &v["restic"]["inode"],
     ] {
         require(
-            original_files.insert((inode[0].as_u64().unwrap(), inode[1].as_u64().unwrap())),
+            original_files.insert((
+                enzimos_platform::json::unsigned(&inode[0])?,
+                enzimos_platform::json::unsigned(&inode[1])?,
+            )),
             "transfer original file roles alias an inode",
         )?;
     }

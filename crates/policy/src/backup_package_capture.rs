@@ -280,7 +280,11 @@ impl Library {
         require(
             head.len() >= 64
                 && head.starts_with(b"\x7fELF\x02\x01\x01")
-                && u16::from_le_bytes(head[18..20].try_into().unwrap()) == 62,
+                && u16::from_le_bytes(
+                    head[18..20]
+                        .try_into()
+                        .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+                ) == 62,
             "native x86-64 ALPM image required",
         )?;
         let (_, sha) = stream_copy::hash_borrowed(&file, 32 * 1024 * 1024, Some(0))?;
@@ -535,7 +539,10 @@ impl<'a, 'g> Capture<'a, 'g> {
         namespaces::initial()?;
         self.attempt.evidence()?;
         self.operation.recheck()?;
-        self.library.as_ref().unwrap().recheck()?;
+        self.library
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .recheck()?;
         let named = files::directory(Path::new("/var/lib/pacman"), Some(0))?;
         let lock = files::open_relative(&self.directory, Path::new("db.lck"))?;
         require(
@@ -608,7 +615,10 @@ impl<'a, 'g> Capture<'a, 'g> {
     }
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
-        let l = self.library.as_ref().unwrap();
+        let l = self
+            .library
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         Ok(
             value!({"kind":"libalpm-empty-native-transaction","abi":l.version,"image":l.epoch,"image_sha256":l.sha,"database":self.directory_shape,"lock":self.lock_epoch,"lock_bytes_sha256":json::sha256(&self.lock_bytes),"package_changes":false}),
         )
@@ -633,7 +643,10 @@ impl<'a, 'g> Capture<'a, 'g> {
                 && self.lock.metadata()?.nlink() == 0,
             "native package lock was not normally released",
         )?;
-        self.library.as_ref().unwrap().recheck()?;
+        self.library
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .recheck()?;
         self.attempt.evidence()?;
         self.operation.recheck()
     }

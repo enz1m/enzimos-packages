@@ -107,7 +107,7 @@ impl<'a> Observation<'a> {
             "efi_observable":boot["firmware"]["observable"],"boot_uuid":boot["boot_uuid"],"command_line":boot["command_line"]});
         let graph = crate::recovery_reference_diagnostic::join(&input)?;
         let mut measured = BTreeMap::new();
-        for (relative, row) in boot["artifacts"].as_object().unwrap() {
+        for (relative, row) in enzimos_platform::json::object(&boot["artifacts"])? {
             measured.insert(
                 format!("/{relative}"),
                 value!({"bytes":row["bytes"],"sha256":row["sha256"]}),
@@ -148,7 +148,7 @@ impl<'a> Observation<'a> {
         let source = guard.backup_root_binding()?;
         let (control_identity, control_readonly) = crate::subvolume::observe(
             guard.control().as_fd(),
-            guard.configuration["control_subvol"].as_str().unwrap(),
+            enzimos_platform::json::string(&guard.configuration["control_subvol"])?,
         )?;
         require(
             !control_readonly,
@@ -204,20 +204,20 @@ impl<'a> Observation<'a> {
         let jobs = &journals
             .iter()
             .find(|(k, _)| *k == Kind::Jobs)
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
             .1
             .records;
         let recovery_staging = staged(jobs, &inventory);
         let image_records = &journals
             .iter()
             .find(|(k, _)| *k == Kind::Images)
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
             .1
             .records;
         let publications = &journals
             .iter()
             .find(|(k, _)| *k == Kind::Publications)
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
             .1
             .records;
         let mut blockers = BTreeSet::new();
@@ -254,7 +254,9 @@ impl<'a> Observation<'a> {
             } else {
                 blockers.insert(format!("pending-recovery-publication:{id}"));
             }
-            let modes: Vec<_> = row["observations"].as_object().unwrap().keys().collect();
+            let modes: Vec<_> = enzimos_platform::json::object(&row["observations"])?
+                .keys()
+                .collect();
             image_rows.insert(
                 id.clone(),
                 value!({"phase":row["phase"],"live_bindings_match":valid,
@@ -288,8 +290,8 @@ impl<'a> Observation<'a> {
             .filter(|(_, r)| r["phase"] != "complete")
             .map(|(id, _)| id)
             .collect();
-        let publisher_registry = value!({"generations":catalog.data["generations"].as_object().unwrap().len(),
-            "software_confirmed":catalog.data["generations"].as_object().unwrap().values().filter(|r|!r["first_confirmation"].is_null()).count(),
+        let publisher_registry = value!({"generations":enzimos_platform::json::object(&catalog.data["generations"])?.len(),
+            "software_confirmed":enzimos_platform::json::object(&catalog.data["generations"])?.values().filter(|r|!r["first_confirmation"].is_null()).count(),
             "pending_rebinds":pending_rebinds,"pending_births":pending_births});
         let records: BTreeMap<_, _> = journals
             .iter()
@@ -331,7 +333,7 @@ impl<'a> Observation<'a> {
         )?;
         let current = crate::subvolume::observe(
             self.guard.control().as_fd(),
-            self.guard.configuration["control_subvol"].as_str().unwrap(),
+            enzimos_platform::json::string(&self.guard.configuration["control_subvol"])?,
         )?;
         require(
             current.0 == self.control_identity && !current.1,
@@ -379,7 +381,7 @@ impl<'a> Observation<'a> {
             "inventory",
             "readonly",
         ] {
-            data.as_object_mut().unwrap().remove(key);
+            enzimos_platform::json::object_mut(&mut data)?.remove(key);
         }
         self.recheck()?;
         Ok(data)

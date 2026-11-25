@@ -21,10 +21,7 @@ pub(crate) fn exit(code: Option<i32>) -> Exit {
     }
 }
 pub(crate) fn backup(code: Option<i32>, bytes: &[u8]) -> Result<String> {
-    Ok(backup_summary(code, bytes)?["snapshot_id"]
-        .as_str()
-        .unwrap()
-        .to_owned())
+    Ok(enzimos_platform::json::string(&backup_summary(code, bytes)?["snapshot_id"])?.to_owned())
 }
 /// Preserve the exact terminal vendor summary, including compatible future fields.
 pub(crate) fn backup_summary(code: Option<i32>, bytes: &[u8]) -> Result<serde_json::Value> {

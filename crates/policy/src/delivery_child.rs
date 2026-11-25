@@ -193,9 +193,11 @@ impl Child {
         let exec = image.as_raw_fd();
         let null_fd = null_alias.as_raw_fd();
         let args = [
-            CString::new(IMAGE).unwrap(),
-            CString::new("delivery-copy-worker").unwrap(),
-            CString::new("--fd3").unwrap(),
+            CString::new(IMAGE).map_err(|_| enzimos_platform::Error("invalid C string".into()))?,
+            CString::new("delivery-copy-worker")
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?,
+            CString::new("--fd3")
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?,
         ];
         let argv = [
             args[0].as_ptr(),

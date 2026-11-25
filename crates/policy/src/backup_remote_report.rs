@@ -86,7 +86,7 @@ pub fn receive<'g>(
     reserved.recheck(authorize)?;
     let request = reserved.request(authorize)?.clone();
     let scope = reserved.kernel_scope(authorize)?;
-    let pid = scope.binding()?["worker"]["pid"].as_u64().unwrap() as u32;
+    let pid = enzimos_platform::json::unsigned(&scope.binding()?["worker"]["pid"])? as u32;
     let peer = channel.peer_credentials()?;
     require(
         peer.pid == pid && peer.uid == 0 && peer.gid == 0,
@@ -112,26 +112,36 @@ pub fn receive<'g>(
         "exact remote observation/receipt descriptor count",
     )?;
     let receipt = if retrieve {
-        let file = File::from(message.files.pop().unwrap());
+        let file = File::from(
+            message
+                .files
+                .pop()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+        );
         scope.require_description(
             file.as_fd(),
-            body["receipt_descriptor_number"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&body["receipt_descriptor_number"])? as u32,
         )?;
         Some(file)
     } else {
         None
     };
-    let output = File::from(message.files.pop().unwrap());
+    let output = File::from(
+        message
+            .files
+            .pop()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+    );
     scope.require_description(
         output.as_fd(),
-        body["stdout_descriptor_number"].as_u64().unwrap() as u32,
+        enzimos_platform::json::unsigned(&body["stdout_descriptor_number"])? as u32,
     )?;
     let guard = reserved.guard(authorize)?;
     let intent = receipt
         .map(|file| {
             Intent::admit(
                 guard,
-                request["context"]["receipt_id"].as_str().unwrap(),
+                enzimos_platform::json::string(&request["context"]["receipt_id"])?,
                 file,
             )
         })
@@ -253,7 +263,7 @@ impl Closed<'_> {
         check()?;
         let receipt = intent.finish(
             self.original.guard,
-            result["copied_snapshot"].as_str().unwrap(),
+            enzimos_platform::json::string(&result["copied_snapshot"])?,
             &mut check,
         )?;
         check()?;

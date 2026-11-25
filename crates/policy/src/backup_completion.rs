@@ -297,10 +297,10 @@ impl<'p, 's, 'g> Prepared<'p, 's, 'g> {
     }
     pub(crate) fn snapshot_id(&self) -> Result<String> {
         self.retained()?;
-        Ok(self.closed.original_summary()?["snapshot_id"]
-            .as_str()
-            .unwrap()
-            .to_owned())
+        Ok(
+            enzimos_platform::json::string(&self.closed.original_summary()?["snapshot_id"])?
+                .to_owned(),
+        )
     }
     pub fn publish(
         mut self,

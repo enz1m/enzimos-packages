@@ -57,7 +57,12 @@ impl Caller {
             "original native backend Root IDs required",
         )?;
         crate::namespaces::initial()?;
-        let parent = files::directory(Path::new(IMAGE).parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            Path::new(IMAGE)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let parent_shape = shape(&parent)?;
         let image = files::open_relative(&parent, Path::new("enzimos-system-backend"))?;
         let m = image.metadata()?;
@@ -103,7 +108,12 @@ impl Caller {
     pub fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.process.recheck()?;
-        let named_parent = files::directory(Path::new(IMAGE).parent().unwrap(), Some(0))?;
+        let named_parent = files::directory(
+            Path::new(IMAGE)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let named = files::open_relative(&self.parent, Path::new("enzimos-system-backend"))?;
         require(
             self.process.stat.pid == std::process::id()

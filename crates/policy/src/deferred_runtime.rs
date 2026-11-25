@@ -117,7 +117,11 @@ pub(crate) fn contended(action: &str) -> Result<Value> {
         "original deferred directory replaced",
     )?;
     require(
-        original.as_ref().unwrap().value()? == &record,
+        original
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .value()?
+            == &record,
         "deferred original publication changed",
     )?;
     _lock.recheck()?;

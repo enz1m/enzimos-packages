@@ -126,7 +126,7 @@ pub fn caller_image(value: &Value) -> Result<&'static str> {
     if value["schema"] == 2 {
         Ok(crate::update_actor::POLICY)
     } else {
-        crate::update_actor::image_path(value["caller_image"].as_str().unwrap())
+        crate::update_actor::image_path(enzimos_platform::json::string(&value["caller_image"])?)
     }
 }
 pub fn unit(id: &str) -> Result<String> {
@@ -243,8 +243,8 @@ pub fn transition(before: Option<&Value>, after: &Value, id: &str) -> Result<()>
         );
     };
     validate(before, id)?;
-    let old = before["phase"].as_str().unwrap();
-    let new = after["phase"].as_str().unwrap();
+    let old = enzimos_platform::json::string(&before["phase"])?;
+    let new = enzimos_platform::json::string(&after["phase"])?;
     let order = [
         "intent",
         "starting",

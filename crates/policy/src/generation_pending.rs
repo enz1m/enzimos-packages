@@ -9,7 +9,7 @@ use std::{
 };
 pub(crate) fn document(data: &Value, active: Option<&Value>) -> Result<()> {
     catalog::validate(data, data["filesystem_uuid"].as_str().unwrap_or(""))?;
-    for (name, row) in data["generations"].as_object().unwrap() {
+    for (name, row) in enzimos_platform::json::object(&data["generations"])? {
         if row["state"] == "ready" {
             continue;
         }

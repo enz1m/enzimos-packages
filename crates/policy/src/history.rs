@@ -40,11 +40,14 @@ pub fn home_arguments(v: &Value) -> Result<Vec<String>> {
         "set-config".into(),
     ];
     for (label, key) in HOME_KEYS {
-        args.push(format!("{key}={}", v[label].as_u64().unwrap()));
+        args.push(format!(
+            "{key}={}",
+            enzimos_platform::json::unsigned(&v[label])?
+        ));
     }
     args.push(format!(
         "NUMBER_LIMIT_IMPORTANT={}",
-        v["manual"].as_u64().unwrap()
+        enzimos_platform::json::unsigned(&v["manual"])?
     ));
     Ok(args)
 }

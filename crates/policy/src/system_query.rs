@@ -252,9 +252,7 @@ pub(crate) fn package_rows(bytes: &[u8]) -> Result<Value> {
 }
 pub fn generations(data: &Value) -> Result<Value> {
     catalog::validate(data, data["filesystem_uuid"].as_str().unwrap_or(""))?;
-    let mut rows = data["generations"]
-        .as_object()
-        .unwrap()
+    let mut rows = enzimos_platform::json::object(&data["generations"])?
         .iter()
         .collect::<Vec<_>>();
     rows.sort_by_key(|(_, row)| row["ordinal"].as_u64().unwrap());
@@ -282,16 +280,22 @@ pub fn system() -> Result<Value> {
     let recovery = Folder::open(&guard, "recovery-images")?;
     let data = match catalog_folder.records.get("catalog.json") {
         Some(record) => json::decode(&record.bytes, catalog::MAX_CATALOG)?,
-        None => catalog::empty(guard.configuration["filesystem_uuid"].as_str().unwrap())?,
+        None => catalog::empty(enzimos_platform::json::string(
+            &guard.configuration["filesystem_uuid"],
+        )?)?,
     };
     catalog::validate(
         &data,
-        guard.configuration["filesystem_uuid"].as_str().unwrap(),
+        enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
     )?;
     let mut ready = 0;
     for (name, record) in &recovery.records {
         let body = json::decode(&record.bytes, catalog::MAX_CATALOG)?;
-        recovery_image::validate(&body, name.strip_suffix(".json").unwrap())?;
+        recovery_image::validate(
+            &body,
+            name.strip_suffix(".json")
+                .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?,
+        )?;
         ready += usize::from(body["phase"] == "ready");
     }
     let etc = files::directory(Path::new("/etc"), Some(0))?;

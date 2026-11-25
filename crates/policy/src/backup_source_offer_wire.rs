@@ -89,7 +89,7 @@ pub(crate) fn request(v: &Value) -> Result<()> {
                 && source["source_mount"].as_u64().is_some_and(|n| n > 0)
                 && source["detached_mount"].as_u64().is_some_and(|n| n > 0)
                 && source["source_mount"] != source["detached_mount"]
-                && mounts.insert(source["detached_mount"].as_u64().unwrap())
+                && mounts.insert(enzimos_platform::json::unsigned(&source["detached_mount"])?)
                 && ["readonly", "nodev", "nosuid", "noexec"]
                     .iter()
                     .all(|key| source[*key] == true),
@@ -137,7 +137,8 @@ pub(crate) fn frame(
             && v["index"].as_u64() == Some(expected_index as u64)
             && v["start"].as_u64() == Some(start as u64)
             && v["targets"] == serde_json::json!(&all[start..end])
-            && u64::from(sender.pid) == original["caller"]["pid"].as_u64().unwrap()
+            && u64::from(sender.pid)
+                == enzimos_platform::json::unsigned(&original["caller"]["pid"])?
             && sender.uid == 0
             && sender.gid == 0,
         "source offer chunk sender, order or binding mismatch",

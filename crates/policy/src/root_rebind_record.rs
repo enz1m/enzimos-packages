@@ -44,7 +44,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
         &v["authority"],
         "pubring.gpg gpg.conf approved.trust ownertrust",
     )?;
-    for hash in v["authority"].as_object().unwrap().values() {
+    for hash in enzimos_platform::json::object(&v["authority"])?.values() {
         identity::sha(
             hash.as_str()
                 .ok_or_else(|| Error("rebind authority digest type".into()))?,

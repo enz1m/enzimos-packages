@@ -29,7 +29,7 @@ pub(crate) fn measured(body: &Value, request: &Value) -> Result<Value> {
         "schema kind request_sha256 source_first source_last destination_before destination_after remote_first remote_last metadata_checked worker_scope_closed receipt_complete retrieval_intent",
     )?;
     let ctx = &request["context"];
-    let source = ctx["snapshot"].as_str().unwrap();
+    let source = enzimos_platform::json::string(&ctx["snapshot"])?;
     require(
         body["schema"].as_u64() == Some(1)
             && body["kind"] == "remote-copy-observed"

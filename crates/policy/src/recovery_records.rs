@@ -106,7 +106,8 @@ pub fn plan(v: &Value) -> Result<()> {
         let parent = obj["parent_uuid"].as_str();
         birth::object(obj, text(config, &format!("{role}_subvol"))?, parent)?;
         require(
-            uuids.insert(text(obj, "uuid")?) && ids.insert(obj["id"].as_u64().unwrap()),
+            uuids.insert(text(obj, "uuid")?)
+                && ids.insert(enzimos_platform::json::unsigned(&obj["id"])?),
             "recovery protected identities overlap",
         )?;
     }
@@ -123,7 +124,8 @@ pub fn plan(v: &Value) -> Result<()> {
         &source["history"],
     ] {
         require(
-            uuids.insert(text(obj, "uuid")?) && ids.insert(obj["id"].as_u64().unwrap()),
+            uuids.insert(text(obj, "uuid")?)
+                && ids.insert(enzimos_platform::json::unsigned(&obj["id"])?),
             "recovery protected and source identities overlap",
         )?;
     }

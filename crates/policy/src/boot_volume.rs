@@ -176,12 +176,22 @@ impl Artifact {
         removed: &enzimos_platform::named_retirement::Removed,
     ) -> Result<()> {
         removed.recheck()?;
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let a = parent.metadata()?;
         let b = removed.parent()?.metadata()?;
         require(
             removed.before_epoch()? == self.metadata
-                && removed.original_name()? == Path::new(self.path.file_name().unwrap())
+                && removed.original_name()?
+                    == Path::new(
+                        self.path
+                            .file_name()
+                            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+                    )
                 && files::identity(&self.file.metadata()?)
                     == files::identity(&removed.descriptor()?.metadata()?)
                 && mount_identity::id(self.file.as_fd(), true)? == self.unique
@@ -201,7 +211,12 @@ impl Artifact {
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<enzimos_platform::named_retirement::Quarantined> {
         self.recheck()?;
-        let named_parent = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let named_parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let a = named_parent.metadata()?;
         let b = parent.metadata()?;
         require(
@@ -213,7 +228,11 @@ impl Artifact {
         enzimos_platform::named_retirement::Quarantined::enter_original(
             parent,
             &self.file,
-            Path::new(self.path.file_name().unwrap()),
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
             0,
             maximum,
             self.metadata,
@@ -232,8 +251,20 @@ impl Artifact {
         &self,
         committed: &enzimos_platform::publication::Committed,
     ) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
-        committed.require_destination(&parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        committed.require_destination(
+            &parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let (old, before) = committed.replaced_original()?;
         require(
             before == self.metadata
@@ -251,8 +282,20 @@ impl Artifact {
         self,
         committed: enzimos_platform::publication::Committed,
     ) -> Result<ReplacedArtifact> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
-        committed.require_destination(&parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        committed.require_destination(
+            &parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let (old, before) = committed.replaced_original()?;
         require(
             before == self.metadata
@@ -284,8 +327,20 @@ impl Artifact {
         Ok(retired)
     }
     pub fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
-        let current = files::open_relative(&parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let current = files::open_relative(
+            &parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             files::identity(&self.file.metadata()?) == self.metadata
                 && files::identity(&current.metadata()?) == self.metadata
@@ -313,7 +368,12 @@ impl RetiredArtifact {
         require(
             self.removed.before_epoch()? == self.original.metadata
                 && self.removed.original_name()?
-                    == Path::new(self.original.path.file_name().unwrap())
+                    == Path::new(
+                        self.original
+                            .path
+                            .file_name()
+                            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+                    )
                 && files::identity(&self.original.file.metadata()?)
                     == files::identity(&self.removed.descriptor()?.metadata()?)
                 && mount_identity::id(self.original.file.as_fd(), true)? == self.original.unique
@@ -384,9 +444,22 @@ impl ReplacedArtifact {
 
     pub fn recheck(&self) -> Result<()> {
         self.committed.recheck()?;
-        let parent = files::directory(self.original.path.parent().unwrap(), Some(0))?;
-        self.committed
-            .require_destination(&parent, Path::new(self.original.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.original
+                .path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        self.committed.require_destination(
+            &parent,
+            Path::new(
+                self.original
+                    .path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let (old, before) = self.committed.replaced_original()?;
         require(
             before == self.original.metadata

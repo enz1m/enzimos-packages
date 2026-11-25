@@ -104,7 +104,7 @@ pub(crate) fn roots(journal: &Value, guard: &Guard) -> Result<()> {
             if role == "source" {
                 let relative = format!(
                     ".snapshots/{}/snapshot",
-                    journal["snapshot"]["number"].as_u64().unwrap()
+                    enzimos_platform::json::unsigned(&journal["snapshot"]["number"])?
                 );
                 let snapshot = retained(&file, Path::new(&relative), mount, fs)?;
                 let (identity, readonly) =

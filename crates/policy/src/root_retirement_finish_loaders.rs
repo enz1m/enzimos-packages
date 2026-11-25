@@ -338,7 +338,12 @@ impl<'a, 'g: 'a> Cleanup<'a, 'g> {
             if directory.relative == "loader/entries" && self.entry.is_some() {
                 let named = self.context.volume.directory(Path::new("loader/entries"))?;
                 let mut expected = directory.names.clone();
-                expected.remove(self.entry_name.rsplit('/').next().unwrap());
+                expected.remove(
+                    self.entry_name
+                        .rsplit('/')
+                        .next()
+                        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+                );
                 require(shape(&directory.file)? == directory.shape && shape(&named)? == directory.shape
                     && Some(files::identity(&directory.file.metadata()?)) == self.retired_directory_epoch
                     && Some(files::identity(&named.metadata()?)) == self.retired_directory_epoch

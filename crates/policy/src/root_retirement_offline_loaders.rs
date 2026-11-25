@@ -256,7 +256,9 @@ pub(crate) fn unmentioned(roots: &BTreeSet<String>, targets: &Value) -> Result<(
         .as_array()
         .filter(|v| (1..=64).contains(&v.len()))
         .ok_or_else(|| Error("original loader target bound".into()))?;
-    let root = targets.last().unwrap()["path"]
+    let root = targets
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| Error("original final root target path".into()))?;
     for path in roots {
@@ -471,30 +473,33 @@ impl<'a, 's> Loaders<'a, 's> {
                 "original signed loader verification deadline exhausted",
             )?;
             control.original_scope()?.recheck()?;
-            let result = verifier.as_ref().unwrap().run_fds_authorized(
-                &["--cert", "@fd:0", "@fd:1"],
-                remaining.min(Duration::from_secs(60)),
-                16384,
-                &[certificate_file.as_fd(), output.file.as_fd()],
-                &mut || {
-                    certificate.recheck_public_descriptions()?;
-                    for (artifact, original_flags) in assets.values() {
-                        artifact.recheck()?;
-                        require(
-                            flags(&artifact.file)? == *original_flags,
-                            "original signed loader artifact description changed",
-                        )?;
-                    }
-                    for (artifact, original_flags) in members.values() {
-                        artifact.recheck()?;
-                        require(
-                            flags(&artifact.file)? == *original_flags,
-                            "original signed loader entry description changed",
-                        )?;
-                    }
-                    Ok(())
-                },
-            )?;
+            let result = verifier
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .run_fds_authorized(
+                    &["--cert", "@fd:0", "@fd:1"],
+                    remaining.min(Duration::from_secs(60)),
+                    16384,
+                    &[certificate_file.as_fd(), output.file.as_fd()],
+                    &mut || {
+                        certificate.recheck_public_descriptions()?;
+                        for (artifact, original_flags) in assets.values() {
+                            artifact.recheck()?;
+                            require(
+                                flags(&artifact.file)? == *original_flags,
+                                "original signed loader artifact description changed",
+                            )?;
+                        }
+                        for (artifact, original_flags) in members.values() {
+                            artifact.recheck()?;
+                            require(
+                                flags(&artifact.file)? == *original_flags,
+                                "original signed loader entry description changed",
+                            )?;
+                        }
+                        Ok(())
+                    },
+                )?;
             // Fully reaped verifier; only now require the sole-userspace census.
             control.original_scope()?.recheck()?;
             certificate.require_original_control(control)?;

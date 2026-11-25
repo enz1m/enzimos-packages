@@ -41,7 +41,7 @@ pub(crate) fn validate_inventory(rows: &Records) -> Result<()> {
             identity::uuid(text(row, "parent_uuid")?)?;
         }
         require(
-            ids.insert(row["id"].as_u64().unwrap()) && uuids.insert(uuid),
+            ids.insert(enzimos_platform::json::unsigned(&row["id"])?) && uuids.insert(uuid),
             "ambiguous root reference identity",
         )?;
     }
@@ -104,10 +104,10 @@ pub(crate) fn join(
     .into_iter()
     .map(str::to_owned)
     .collect();
-    if !births["pending"].as_array().unwrap().is_empty() {
+    if !enzimos_platform::json::array(&births["pending"])?.is_empty() {
         blockers.insert("pending-root-creation".into());
     }
-    if !births["drift"].as_array().unwrap().is_empty() {
+    if !enzimos_platform::json::array(&births["drift"])?.is_empty() {
         blockers.insert("root-birth-identity-drift".into());
     }
     let mut resources: BTreeMap<String, Value> = BTreeMap::new();
@@ -133,11 +133,14 @@ pub(crate) fn join(
         let parts: Vec<_> = path.split('/').collect();
         for n in (1..parts.len()).rev() {
             if let Some(parent) = by_path.get(&parts[..n].join("/")) {
-                resources.get_mut(uuid).unwrap()["container"] = value!(parent);
-                resources.get_mut(parent).unwrap()["children"]
-                    .as_array_mut()
-                    .unwrap()
-                    .push(value!(uuid));
+                resources
+                    .get_mut(uuid)
+                    .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["container"] =
+                    value!(parent);
+                enzimos_platform::json::array_mut(
+                    &mut resources.get_mut(parent).ok_or_else(|| enzimos_platform::Error("missing element".into()))?["children"],
+                )?
+                .push(value!(uuid));
                 edge(&mut edges, parent, uuid, &mut references)?;
                 edge(&mut edges, uuid, parent, &mut references)?;
                 if resources[uuid]["publisher_origin_observed"] != true {
@@ -161,13 +164,16 @@ pub(crate) fn join(
             text(&row["snapshot"]["object"], "uuid")?.to_owned(),
             text(&row["history"], "uuid")?.to_owned(),
         ]);
-        resources.get_mut(root).unwrap()["birth_dependencies"] = value!(dependencies);
+        resources
+            .get_mut(root)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["birth_dependencies"] =
+            value!(dependencies);
         for target in dependencies {
             edge(&mut edges, root, &target, &mut references)?;
         }
     }
     let mut generations = BTreeMap::new();
-    for (name, row) in catalog["generations"].as_object().unwrap() {
+    for (name, row) in enzimos_platform::json::object(&catalog["generations"])? {
         let bound = &row["material"]["root_identity"];
         let observed = inventory.get(text(bound, "path")?);
         let valid = observed.is_some_and(|actual| {
@@ -191,10 +197,10 @@ pub(crate) fn join(
             if resources[key]["publisher_origin_observed"] != true {
                 blockers.insert(format!("generation-root-origin-not-established:{name}"));
             }
-            resources.get_mut(key).unwrap()["generation_roots"]
-                .as_array_mut()
-                .unwrap()
-                .push(value!(name));
+            enzimos_platform::json::array_mut(
+                &mut resources.get_mut(key).ok_or_else(|| enzimos_platform::Error("missing element".into()))?["generation_roots"],
+            )?
+            .push(value!(name));
             linked.insert(key.clone());
             let mut pending = vec![key.clone()];
             while let Some(source) = pending.pop() {
@@ -206,10 +212,10 @@ pub(crate) fn join(
             }
             charge(&mut references, linked.len())?;
             for target in &linked {
-                resources.get_mut(target).unwrap()["required_by_generations"]
-                    .as_array_mut()
-                    .unwrap()
-                    .push(value!(name));
+                enzimos_platform::json::array_mut(
+                    &mut resources.get_mut(target).ok_or_else(|| enzimos_platform::Error("missing element".into()))?["required_by_generations"],
+                )?
+                .push(value!(name));
             }
         }
         generations.insert(name.clone(),value!({"root_uuid":key,"identity_matches":valid,"state":row["state"],"resources":linked,"deletion_authorized":false}));
@@ -227,11 +233,7 @@ pub(crate) fn join(
         views.len() <= 4096 && namespaces["departed_processes"].is_array(),
         "namespace reference bound",
     )?;
-    if !namespaces["departed_processes"]
-        .as_array()
-        .unwrap()
-        .is_empty()
-    {
+    if !enzimos_platform::json::array(&namespaces["departed_processes"])?.is_empty() {
         blockers.insert("process-set-changed-during-observation".into());
     }
     let mut seen = BTreeSet::new();
@@ -274,7 +276,7 @@ pub(crate) fn join(
                             .ok_or_else(|| Error("actual mount minor required".into()))?;
                         value!(format!("{major}:{minor}"))
                     };
-                    resources.get_mut(uuid).unwrap()["mount_references"].as_array_mut().unwrap().push(value!({"namespace":label,"root":mount["root"],"target":mount["target"],"device":device}));
+                    enzimos_platform::json::array_mut(&mut resources.get_mut(uuid).ok_or_else(|| enzimos_platform::Error("missing element".into()))?["mount_references"])?.push(value!({"namespace":label,"root":mount["root"],"target":mount["target"],"device":device}));
                 }
             }
         }

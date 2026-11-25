@@ -107,7 +107,7 @@ impl Plan {
         let transaction = catalog::Transaction::begin()?;
         let registry = transaction.data.clone();
         require(
-            registry["generations"].as_object().unwrap().len() + 2
+            enzimos_platform::json::object(&registry["generations"])?.len() + 2
                 <= crate::update_resources::BOOT_GENERATIONS,
             "two fresh update generations require explicit retention review",
         )?;
@@ -125,16 +125,16 @@ impl Plan {
             )?;
             boot_files.push(artifact);
         }
-        for (name, row) in registry["generations"].as_object().unwrap() {
+        for (name, row) in enzimos_platform::json::object(&registry["generations"])? {
             boot_files.push(volume.artifact(
                 Path::new(&format!("enzimos/generations/{name}/READY.json")),
                 catalog::MAX_CATALOG as u64,
             )?);
-            for file in row["material"]["files"].as_array().unwrap() {
+            for file in enzimos_platform::json::array(&row["material"]["files"])? {
                 boot_files.push(volume.artifact(
                     Path::new(&format!(
                         "enzimos/generations/{name}/{}",
-                        file["name"].as_str().unwrap()
+                        enzimos_platform::json::string(&file["name"])?
                     )),
                     128 * 1024 * 1024,
                 )?);
@@ -147,7 +147,7 @@ impl Plan {
                     .map(|key| (key.to_owned(), body.clone()))
             })
             .collect::<BTreeMap<_, _>>();
-        for row in registry["generations"].as_object().unwrap().values() {
+        for row in enzimos_platform::json::object(&registry["generations"])?.values() {
             require(
                 boot_entries::fingerprint_entries(row, &entries, &texts["limine/limine.conf"])?
                     == row["entry_fingerprints"],
@@ -170,7 +170,7 @@ impl Plan {
             "storage":snapshot.guard.configuration,"inventory_sha256":json::sha256(generation_stage::inventory(&root)?.as_bytes()),
             "current_kernels":installed_kernels()?,"target_kernels":admitted.source().kernels(),
             "options":options(std::str::from_utf8(&cmdline).map_err(|_| Error("kernel options encoding".into()))?,
-                snapshot.guard.configuration["root_subvol"].as_str().unwrap())?,
+                enzimos_platform::json::string(&snapshot.guard.configuration["root_subvol"])?)?,
             "authority":authority_identity::observe(&snapshot.guard)?,"cohort_sha256":admitted.source().raw_sha256(),
             "implementation_sha256":json::sha256(&bytes)});
         let plan = Self {
@@ -213,13 +213,22 @@ impl Plan {
             "planned generation registry or boot text changed",
         )?;
         root_rebind_boot::generations(&self.volume, &transaction.data)?;
-        let parent = files::directory(Path::new(self.actor.path()).parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            Path::new(self.actor.path())
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         require(
             files::identity(&self.image.metadata()?) == self.image_identity
                 && files::identity(
                     &files::open_relative(
                         &parent,
-                        Path::new(Path::new(self.actor.path()).file_name().unwrap()),
+                        Path::new(
+                            Path::new(self.actor.path()).file_name().ok_or_else(|| {
+                                enzimos_platform::Error("missing filename".into())
+                            })?,
+                        ),
                     )?
                     .metadata()?,
                 ) == self.image_identity

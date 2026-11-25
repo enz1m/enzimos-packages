@@ -109,7 +109,7 @@ impl<'r, 'a, 'g> Staging<'r, 'a, 'g> {
         context.recheck(authorize)?;
         let original = context.evidence(authorize)?.clone();
         let guard = context.guard();
-        let id = original["selection"]["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&original["selection"]["id"])?;
         preflight(guard, id)?;
         context.recheck(authorize)?;
         let parent =
@@ -163,7 +163,9 @@ impl<'r, 'a, 'g> Staging<'r, 'a, 'g> {
             files::directory_relative(self.context.guard().control(), Path::new(FOLDER), Some(0))?;
         let directory = files::directory_relative(
             &parent,
-            Path::new(self.original["selection"]["id"].as_str().unwrap()),
+            Path::new(enzimos_platform::json::string(
+                &self.original["selection"]["id"],
+            )?),
             Some(0),
         )?;
         require(
@@ -210,7 +212,7 @@ impl<'r, 'a, 'g> Staging<'r, 'a, 'g> {
         let content = crate::backup_selective_copy::write(
             &self.directory,
             &data,
-            header["content_sha256"].as_str().unwrap(),
+            enzimos_platform::json::string(&header["content_sha256"])?,
             0,
             &mut || {
                 self.recheck(authorize)?;
@@ -296,8 +298,10 @@ impl Completed<'_, '_, '_> {
             std::ptr::eq(self.stage.context.guard(), guard),
             "delivery requires original export storage actor",
         )?;
-        let export =
-            crate::delivery_export::Export::open(guard, self.stage.value["id"].as_str().unwrap())?;
+        let export = crate::delivery_export::Export::open(
+            guard,
+            enzimos_platform::json::string(&self.stage.value["id"])?,
+        )?;
         let evidence = export.evidence(guard)?;
         require(
             evidence["file"] == serde_json::to_value(self.epoch)?

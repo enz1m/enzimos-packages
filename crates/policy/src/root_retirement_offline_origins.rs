@@ -176,10 +176,10 @@ pub struct Origins<'a, 's> {
 impl<'a, 's> Origins<'a, 's> {
     pub fn observe(control: &'a Control<'a, 's>) -> Result<Self> {
         control.recheck()?;
-        let fs = crate::filesystem::observe(control.descriptor()?.as_fd())?["filesystem_uuid"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+        let fs = enzimos_platform::json::string(
+            &crate::filesystem::observe(control.descriptor()?.as_fd())?["filesystem_uuid"],
+        )?
+        .to_owned();
         let this = Self {
             control,
             births: Registry::observe(control, Role::Births, &fs)?,
@@ -231,7 +231,7 @@ impl<'a, 's> Origins<'a, 's> {
             owners.len() <= 1,
             "ambiguous original superseded Root ownership",
         )?;
-        let birth = record["birth"].as_str().unwrap();
+        let birth = enzimos_platform::json::string(&record["birth"])?;
         if let Some(id) = birth.strip_prefix("superseded-") {
             let (owner, row) = owners
                 .first()

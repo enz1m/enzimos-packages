@@ -243,11 +243,11 @@ pub fn reserve_document(data: &Value, name: &str, input: &Value, boot: &str) -> 
         return Ok(data.clone());
     }
     require(
-        data["generations"].as_object().unwrap().len() < 64,
+        enzimos_platform::json::object(&data["generations"])?.len() < 64,
         "registry full; no automatic retirement",
     )?;
     let mut next = data.clone();
-    let ordinal = data["next_ordinal"].as_u64().unwrap();
+    let ordinal = enzimos_platform::json::unsigned(&data["next_ordinal"])?;
     next["next_ordinal"] = value!(
         ordinal
             .checked_add(1)
@@ -430,7 +430,7 @@ impl Transaction {
         pending.require_original(&original)?;
         self.original
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
             .require_original_publication(&pending)?;
         let committed = pending.commit_retained_authorized(true, authorize)?;
         committed.require_destination(&self.held, Path::new("catalog.json"))?;

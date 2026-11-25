@@ -13,15 +13,15 @@ pub(crate) fn protection(records: &Value, generation: &str) -> Result<BTreeSet<S
         records,
         "boot_publications update_workers module_views authority_refresh births rebinds retirement boot_retirement root_retirement jobs workflows runs images publications activations media",
     )?;
-    for map in records.as_object().unwrap().values() {
+    for map in enzimos_platform::json::object(records)?.values() {
         require(
             map.as_object().is_some_and(|v| v.len() <= 256),
             "complete bounded reference registries required",
         )?;
     }
     let mut protected = BTreeSet::new();
-    let jobs = records["jobs"].as_object().unwrap();
-    let activations = records["activations"].as_object().unwrap();
+    let jobs = enzimos_platform::json::object(&records["jobs"])?;
+    let activations = enzimos_platform::json::object(&records["activations"])?;
     let mut concluded = BTreeSet::new();
     for (id, activation) in activations {
         identity::safe_id(id)?;
@@ -56,7 +56,7 @@ pub(crate) fn protection(records: &Value, generation: &str) -> Result<BTreeSet<S
         ("rebinds", "complete"),
         ("boot_retirement", "complete"),
     ] {
-        for (id, row) in records[key].as_object().unwrap() {
+        for (id, row) in enzimos_platform::json::object(&records[key])? {
             require(
                 row["phase"] == terminal,
                 "nonterminal original context prevents boot retirement",
@@ -65,40 +65,40 @@ pub(crate) fn protection(records: &Value, generation: &str) -> Result<BTreeSet<S
         }
     }
     require(
-        records["retirement"].as_object().unwrap().is_empty(),
+        enzimos_platform::json::object(&records["retirement"])?.is_empty(),
         "independent retirement journal prevents boot retirement",
     )?;
-    for row in records["root_retirement"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&records["root_retirement"])?.values() {
         require(
             matches!(row["phase"].as_str(), Some("complete" | "abandoned")),
             "root retirement prevents boot retirement",
         )?;
     }
-    for row in records["births"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&records["births"])?.values() {
         require(
             matches!(row["phase"].as_str(), Some("ready" | "retired")),
             "unfinished root birth prevents boot retirement",
         )?;
     }
-    for row in records["workflows"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&records["workflows"])?.values() {
         require(
             row["state"] == "complete",
             "uncertain recovery workflow prevents boot retirement",
         )?;
     }
-    for row in records["runs"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&records["runs"])?.values() {
         require(
             matches!(row["phase"].as_str(), Some("complete" | "abandoned")),
             "unfinished recovery run prevents boot retirement",
         )?;
     }
-    for row in records["media"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&records["media"])?.values() {
         require(
             row["phase"] == "complete",
             "unfinished media adoption prevents boot retirement",
         )?;
     }
-    for row in records["images"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&records["images"])?.values() {
         require(
             row["phase"] == "ready",
             "unready independent recovery image prevents boot retirement",
@@ -108,7 +108,7 @@ pub(crate) fn protection(records: &Value, generation: &str) -> Result<BTreeSet<S
     // are checked against actual retained ESP entries by loader_references.
     // Completed image publication's old menu/default and completed rebind's
     // old catalogs cannot replay and are historical, not current use edges.
-    for (id, publication) in records["publications"].as_object().unwrap() {
+    for (id, publication) in enzimos_platform::json::object(&records["publications"])? {
         let image = records["images"]
             .get(id)
             .ok_or_else(|| Error("orphan recovery publication prevents boot retirement".into()))?;

@@ -82,7 +82,8 @@ fn remove_contents(
                     && files::directory_names(&directory, 1)?.is_empty(),
                 "original restored metadata directory replaced/not empty",
             )?;
-            let name = CString::new(leaf.as_bytes()).unwrap();
+            let name = CString::new(leaf.as_bytes())
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             authorize()?;
             require(
                 unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
@@ -100,7 +101,8 @@ fn remove_contents(
                     && files::identity(&named.metadata()?) == before,
                 "original restored metadata member replaced/changed",
             )?;
-            let name = CString::new(leaf.as_bytes()).unwrap();
+            let name = CString::new(leaf.as_bytes())
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             authorize()?;
             require(
                 unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), 0) } == 0,
@@ -260,15 +262,13 @@ pub fn prepare_locked(
     let ram = backup_ram_source::Source::observe()?;
     let guard = Source::Ram(&ram);
     let fresh = crate::backup_restore_layout::layout(
-        ram.configuration()["filesystem_uuid"].as_str().unwrap(),
+        enzimos_platform::json::string(&ram.configuration()["filesystem_uuid"])?,
         boot_uuid,
         luks_uuid,
         false,
     )?;
     require(
-        fresh["storage"]
-            .as_object()
-            .unwrap()
+        enzimos_platform::json::object(&fresh["storage"])?
             .iter()
             .all(|(key, v)| ram.configuration()[key] == *v),
         "fixed fresh replacement storage layout required",
@@ -533,13 +533,13 @@ pub fn prepare_locked(
         publish(
             &etc,
             "fstab",
-            fresh["fstab"].as_str().unwrap().as_bytes(),
+            enzimos_platform::json::string(&fresh["fstab"])?.as_bytes(),
             root.mount,
         )?,
         publish(
             &etc,
             "crypttab",
-            fresh["crypttab"].as_str().unwrap().as_bytes(),
+            enzimos_platform::json::string(&fresh["crypttab"])?.as_bytes(),
             root.mount,
         )?,
         publish(

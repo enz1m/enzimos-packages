@@ -85,8 +85,9 @@ impl Original {
             filesystem["filesystem_uuid"] == guard.configuration["filesystem_uuid"],
             "backup area source filesystem differs",
         )?;
-        let members =
-            crate::topology::btrfs_roots(filesystem["filesystem_uuid"].as_str().unwrap())?;
+        let members = crate::topology::btrfs_roots(enzimos_platform::json::string(
+            &filesystem["filesystem_uuid"],
+        )?)?;
         require(
             filesystem["members"].as_u64() == Some(members.len() as u64),
             "private backup area source member count differs",
@@ -128,9 +129,9 @@ impl Original {
                     .collect::<Vec<_>>()
                     == vec![&self.parent_row]
                 && filesystem::observe(self.parent.as_fd())? == self.filesystem
-                && crate::topology::btrfs_roots(
-                    self.filesystem["filesystem_uuid"].as_str().unwrap(),
-                )? == self.members
+                && crate::topology::btrfs_roots(enzimos_platform::json::string(
+                    &self.filesystem["filesystem_uuid"],
+                )?)? == self.members
                 && files::directory_is_empty(&self.file)?,
             "original backup area parent, namespace, filesystem or stub changed",
         )

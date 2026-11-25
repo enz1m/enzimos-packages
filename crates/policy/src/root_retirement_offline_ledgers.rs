@@ -22,7 +22,9 @@ pub(crate) fn backend_unmentioned(row: &Value, targets: &Value) -> Result<()> {
         .as_array()
         .filter(|rows| (1..=64).contains(&rows.len()))
         .ok_or_else(|| Error("original backend target bound".into()))?;
-    let root = rows.last().unwrap()["path"]
+    let root = rows
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| Error("original backend target root".into()))?;
     crate::identity::safe_id(root)?;
@@ -117,7 +119,9 @@ pub(crate) fn identity_unmentioned(identity: &Value, targets: &Value) -> Result<
         .as_array()
         .filter(|rows| (1..=64).contains(&rows.len()))
         .ok_or_else(|| Error("original protected root target bound".into()))?;
-    let root = rows.last().unwrap()["path"]
+    let root = rows
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| Error("original protected target root missing".into()))?;
     crate::identity::safe_id(root)?;
@@ -478,9 +482,11 @@ impl<'a, 's> Ledgers<'a, 's> {
                 let roots = crate::root_retirement_offline_publications::historical_roots(
                     &activation["intent"],
                 )?;
-                let root = rows.as_array().unwrap().last().unwrap()["path"]
+                let root = enzimos_platform::json::array(rows)?
+                    .last()
+                    .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
                     .as_str()
-                    .unwrap();
+                    .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?;
                 require(
                     roots
                         .iter()
@@ -505,8 +511,7 @@ impl<'a, 's> Ledgers<'a, 's> {
                         identity_unmentioned(&row["source"], rows)?;
                         let uuid = crate::recovery_records::text(&row["snapshot"], "uuid")?;
                         require(
-                            rows.as_array()
-                                .unwrap()
+                            enzimos_platform::json::array(rows)?
                                 .iter()
                                 .all(|target| target["uuid"] != uuid),
                             "original rebind source snapshot protects retirement target",

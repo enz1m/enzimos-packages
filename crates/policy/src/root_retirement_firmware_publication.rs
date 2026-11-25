@@ -75,7 +75,9 @@ fn loader_namespace(members: &BTreeSet<String>, one_shot: bool) -> Result<()> {
         .filter(|name| name.starts_with("LoaderEntry") && name.ends_with(&suffix))
     {
         count += 1;
-        let key = name.strip_suffix(&suffix).unwrap();
+        let key = name
+            .strip_suffix(&suffix)
+            .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
         require(
             count <= 64
                 && (matches!(key, "LoaderEntrySelected" | "LoaderEntryLastBooted")
@@ -408,7 +410,8 @@ impl Created {
         let parent = parent.try_clone()?;
         let parent_flags = flags(&parent)?;
         let mount = mount_identity::id(parent.as_fd(), true)?;
-        let name = std::ffi::CString::new(leaf).unwrap();
+        let name = std::ffi::CString::new(leaf)
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let fd = unsafe {
             libc::openat(
                 parent.as_raw_fd(),

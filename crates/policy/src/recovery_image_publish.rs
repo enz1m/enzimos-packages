@@ -117,7 +117,8 @@ impl Input {
         let parent = files::directory(Path::new("/run/enzimos"), Some(0))?;
         let old = c"recovery-image-input";
         let name = format!("recovery-image-input-published-{id}");
-        let new = CString::new(name.as_str()).unwrap();
+        let new = CString::new(name.as_str())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe {
                 libc::renameat2(
@@ -247,7 +248,7 @@ pub fn publish_locked(options: &str, lock: &files::Lock) -> Result<Value> {
     )?;
     let needed = input.manifest["files"]
         .as_object()
-        .unwrap()
+        .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .values()
         .map(|r| r["bytes"].as_u64().unwrap())
         .sum::<u64>()
@@ -280,7 +281,7 @@ pub fn publish_locked(options: &str, lock: &files::Lock) -> Result<Value> {
             &mut file,
             &target,
             name,
-            row["bytes"].as_u64().unwrap(),
+            enzimos_platform::json::unsigned(&row["bytes"])?,
             records::text(row, "sha256")?,
             0,
         )?;

@@ -45,7 +45,8 @@ pub(super) fn write(
         unsafe { libc::fstatfs(parent.as_raw_fd(), &mut fs) } == 0 && fs.f_type == 0x4d44,
         "actual FAT publication filesystem required",
     )?;
-    let destination = CString::new(name).unwrap();
+    let destination =
+        CString::new(name).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let epoch = original
         .map(|f| f.metadata().map(|m| files::identity(&m)))
         .transpose()?;
@@ -63,7 +64,8 @@ pub(super) fn write(
         )?;
     }
     let temporary = format!(".enzimos-boot-{}", files::random_hex(16)?);
-    let tmp = CString::new(temporary.as_str()).unwrap();
+    let tmp = CString::new(temporary.as_str())
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),

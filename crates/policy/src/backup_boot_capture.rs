@@ -40,7 +40,11 @@ fn boot_uuid(body: &[u8]) -> Result<String> {
     let text = std::str::from_utf8(body).map_err(|_| Error("captured fstab encoding".into()))?;
     let mut found = None;
     for line in text.lines() {
-        let line = line.split('#').next().unwrap().trim();
+        let line = line
+            .split('#')
+            .next()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+            .trim();
         if line.is_empty() {
             continue;
         }
@@ -172,7 +176,10 @@ impl Tree {
                 )?;
             }
             if !node.relative.as_os_str().is_empty() {
-                let relative = node.relative.parent().unwrap();
+                let relative = node
+                    .relative
+                    .parent()
+                    .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?;
                 let parent = if relative.as_os_str().is_empty() {
                     self.nodes[0].file.try_clone()?
                 } else {
@@ -180,7 +187,11 @@ impl Tree {
                 };
                 let named = crate::boot_capture_member::open(
                     &parent,
-                    node.relative.file_name().unwrap().to_str().unwrap(),
+                    node.relative
+                        .file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                        .to_str()
+                        .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
                     self.owner,
                 )?;
                 require(
@@ -263,7 +274,11 @@ impl Tree {
                     .ok_or_else(|| Error("boot retirement original parent missing".into()))?;
                 (
                     &self.nodes[pi].file,
-                    node.relative.file_name().unwrap().to_str().unwrap(),
+                    node.relative
+                        .file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                        .to_str()
+                        .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
                     Some(pi),
                 )
             };
@@ -320,7 +335,10 @@ impl Tree {
             retired.recheck()?;
             if let Some(pi) = parent_index {
                 require(
-                    remaining[pi].as_mut().unwrap().remove(member),
+                    remaining[pi]
+                        .as_mut()
+                        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                        .remove(member),
                     "retired boot member was not in original parent",
                 )?;
             }
@@ -499,18 +517,32 @@ fn copy_tree(
                 && mount_identity::id(node.file.as_fd(), true)? == source.mount,
             "original boot member changed before copying",
         )?;
-        let relative = node.relative.parent().unwrap();
+        let relative = node
+            .relative
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?;
         let parent = if relative.as_os_str().is_empty() {
             target.try_clone()?
         } else {
             files::directory_relative(target, relative, Some(source.owner))?
         };
-        let name = node.relative.file_name().unwrap().to_str().unwrap();
+        let name = node
+            .relative
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?;
         if node.names.is_some() {
             create_directory(&parent, name)?;
         } else {
             let (_, sha) = copy_file(&node.file, &parent, name, source.owner, checkpoint)?;
-            hashes.insert(node.relative.to_str().unwrap().into(), value!(sha));
+            hashes.insert(
+                node.relative
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
+                    .into(),
+                value!(sha),
+            );
         }
     }
     for node in source
@@ -663,9 +695,12 @@ impl<'s, 'g> Captured<'s, 'g> {
         self.output.recheck()?;
         for node in self.output.nodes.iter().filter(|node| node.names.is_none()) {
             require(
-                self.hashes[node.relative.to_str().unwrap()]
-                    .as_str()
-                    .is_some(),
+                self.hashes[node
+                    .relative
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?]
+                .as_str()
+                .is_some(),
                 "boot copy manifest missing member",
             )?;
         }
@@ -812,7 +847,11 @@ pub(crate) fn capture<'s, 'g>(
     )?;
     for node in output.nodes.iter().filter(|node| node.names.is_none()) {
         require(
-            hashes[node.relative.to_str().unwrap()].as_str()
+            hashes[node
+                .relative
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?]
+            .as_str()
                 == Some(
                     stream_copy::hash_borrowed(&node.file, MAX_FILE, Some(0))?
                         .1

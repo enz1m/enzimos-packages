@@ -134,7 +134,8 @@ fn sys_device(file: &File) -> Result<u64> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn link_description(parent: &File) -> Result<File> {
-    let name = std::ffi::CString::new(MAPPER).unwrap();
+    let name = std::ffi::CString::new(MAPPER)
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -147,7 +148,8 @@ fn link_description(parent: &File) -> Result<File> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
 fn link_absent(parent: &File) -> Result<()> {
-    let name = std::ffi::CString::new(MAPPER).unwrap();
+    let name = std::ffi::CString::new(MAPPER)
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -277,7 +279,8 @@ impl OriginalName {
             !self.retired,
             "original mapper name already retired; no replay",
         )?;
-        let name = std::ffi::CString::new(MAPPER).unwrap();
+        let name = std::ffi::CString::new(MAPPER)
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), 0) } == 0,
             "actual original mapper symlink retirement uncertain; no retry",
@@ -469,7 +472,12 @@ impl<'s> Original<'s> {
         self.scope.recheck()?;
         let parent = files::directory(Path::new("/dev/mapper"), Some(0))?;
         let named = files::open_relative(&parent, Path::new("control"))?;
-        let sys_parent = files::directory(self.sys_path.parent().unwrap(), Some(0))?;
+        let sys_parent = files::directory(
+            self.sys_path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let sys = files::open_relative(&sys_parent, Path::new("dev"))?;
         require(
             files::identity(&self.file.metadata()?) == self.epoch

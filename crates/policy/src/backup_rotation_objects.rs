@@ -120,7 +120,8 @@ impl Repository {
             names.remove(std::ffi::OsStr::new(self.name.name())),
             "original repository removal name missing",
         )?;
-        let name = CString::new(self.name.name()).unwrap();
+        let name = CString::new(self.name.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         authorize()?;
         entry.recheck()?;
         layout.require_root(&self.file)?;
@@ -178,8 +179,10 @@ impl Repository {
                 && names.insert(std::ffi::OsString::from(target.name())),
             "original rename membership differs",
         )?;
-        let old = CString::new(self.name.name()).unwrap();
-        let new = CString::new(target.name()).unwrap();
+        let old = CString::new(self.name.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        let new = CString::new(target.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         authorize()?;
         self.recheck(mount)?;
         require(
@@ -389,7 +392,8 @@ impl Credential {
             names.remove(std::ffi::OsStr::new(self.name.name())),
             "original credential removal name missing",
         )?;
-        let name = CString::new(self.name.name()).unwrap();
+        let name = CString::new(self.name.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         authorize()?;
         entry.recheck()?;
         self.recheck(guard)?;
@@ -443,8 +447,10 @@ impl Credential {
                 && names.insert(std::ffi::OsString::from(target.name())),
             "original credential rename membership differs",
         )?;
-        let old = CString::new(self.name.name()).unwrap();
-        let new = CString::new(target.name()).unwrap();
+        let old = CString::new(self.name.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        let new = CString::new(target.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         authorize()?;
         self.recheck(guard)?;
         require(

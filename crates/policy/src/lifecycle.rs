@@ -222,7 +222,10 @@ pub fn plan(inventory: &Value, keep_good: usize) -> Result<Value> {
         .collect();
     for (reason, set) in &reference_sets {
         for n in set {
-            reasons.get_mut(n).unwrap().insert((*reason).into());
+            reasons
+                .get_mut(n)
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+                .insert((*reason).into());
         }
     }
     let mut good: Vec<_> = generations
@@ -252,11 +255,13 @@ pub fn plan(inventory: &Value, keep_good: usize) -> Result<Value> {
     for n in retained {
         reasons
             .get_mut(n)
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
             .insert("recent-known-good-distinct-root".into());
     }
     for (n, row) in &generations {
-        let r = reasons.get_mut(n).unwrap();
+        let r = reasons
+            .get_mut(n)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         if row["owned"] != true {
             r.insert("unowned-generation".into());
         }

@@ -144,7 +144,7 @@ impl Stage {
                 let before = files::identity(&input.metadata()?);
                 require(
                     mount_identity::id(input.as_fd(), true)?
-                        == directory_identity["mount"].as_u64().unwrap(),
+                        == enzimos_platform::json::unsigned(&directory_identity["mount"])?,
                     "generation stage member crosses another mount",
                 )?;
                 let (bytes, sha) = stream_copy::hash_borrowed(&input, 128 * 1024 * 1024, Some(0))?;
@@ -240,15 +240,15 @@ impl Stage {
     ) -> Result<()> {
         authorize()?;
         self.recheck()?;
-        for row in self.material["files"].as_array().unwrap() {
-            let name = row["name"].as_str().unwrap();
+        for row in enzimos_platform::json::array(&self.material["files"])? {
+            let name = enzimos_platform::json::string(&row["name"])?;
             let mut file = self.inputs[name].0.try_clone()?;
             stream_copy::verified_with_checkpoint(
                 &mut file,
                 destination,
                 name,
-                row["bytes"].as_u64().unwrap(),
-                row["sha256"].as_str().unwrap(),
+                enzimos_platform::json::unsigned(&row["bytes"])?,
+                enzimos_platform::json::string(&row["sha256"])?,
                 0,
                 &mut || {
                     authorize()?;

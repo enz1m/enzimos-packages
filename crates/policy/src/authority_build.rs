@@ -49,8 +49,20 @@ impl Input {
         Ok(this)
     }
     fn recheck(&self, owner: u32) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(owner))?;
-        let named = files::open_relative(&parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(owner),
+        )?;
+        let named = files::open_relative(
+            &parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             files::identity(&named.metadata()?) == self.identity
                 && files::identity(&self.file.metadata()?) == self.identity
@@ -134,7 +146,8 @@ fn import(home: &Path, body: &[u8]) -> Result<()> {
         "/usr/bin/gpg",
         &[
             "--homedir",
-            home.to_str().unwrap(),
+            home.to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             "--batch",
             "--no-tty",
             "--no-autostart",
@@ -355,7 +368,7 @@ pub fn build(current: &Path, keyring: &Path, work: &Path, owner: u32) -> Result<
             &inputs
                 .iter()
                 .find(|(i, _)| i.path.file_name().is_some_and(|n| n == "approved.trust"))
-                .unwrap()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
                 .0
                 .bytes,
         )?

@@ -125,7 +125,10 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
         )?;
     }
     require(
-        targets.last().unwrap()["role"] == "root-subvolume"
+        targets
+            .last()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["role"]
+            == "root-subvolume"
             && targets
                 .iter()
                 .filter(|v| v["role"] == "root-subvolume")
@@ -134,7 +137,12 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
         "root must be the only last target",
     )?;
     if superseded {
-        let root = records::text(targets.last().unwrap(), "path")?;
+        let root = records::text(
+            targets
+                .last()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+            "path",
+        )?;
         let actual = targets[..targets.len() - 1]
             .iter()
             .map(|v| records::text(v, "path"))

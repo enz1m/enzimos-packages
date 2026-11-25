@@ -160,8 +160,18 @@ impl Command {
     }
     fn open_image(program: &str) -> Result<Self> {
         let path = Path::new(program);
-        let directory = files::directory(path.parent().unwrap(), Some(0))?;
-        let file = files::open_relative(&directory, Path::new(path.file_name().unwrap()))?;
+        let directory = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let file = files::open_relative(
+            &directory,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let m = file.metadata()?;
         require(
             m.is_file()
@@ -176,7 +186,11 @@ impl Command {
         require(
             file.read_at(&mut head, 0)? == 64
                 && head[..7] == *b"\x7fELF\x02\x01\x01"
-                && u16::from_le_bytes(head[18..20].try_into().unwrap()) == 62,
+                && u16::from_le_bytes(
+                    head[18..20]
+                        .try_into()
+                        .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+                ) == 62,
             "x86-64 native settings provider required",
         )?;
         let (_, sha) =
@@ -192,8 +206,20 @@ impl Command {
         Ok(this)
     }
     pub(crate) fn recheck(&self) -> Result<()> {
-        let directory = files::directory(self.path.parent().unwrap(), Some(0))?;
-        let named = files::open_relative(&directory, Path::new(self.path.file_name().unwrap()))?;
+        let directory = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let named = files::open_relative(
+            &directory,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             files::identity(&self.file.metadata()?) == self.identity
                 && files::identity(&named.metadata()?) == self.identity

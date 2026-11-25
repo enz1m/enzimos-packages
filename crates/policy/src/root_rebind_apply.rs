@@ -22,7 +22,7 @@ pub trait Adapter {
 }
 fn observed(adapter: &mut impl Adapter, journal: &Value) -> Result<Texts> {
     let actual = adapter.files()?;
-    let before = journal["before_files"].as_object().unwrap();
+    let before = enzimos_platform::json::object(&journal["before_files"])?;
     require(
         actual.len() == before.len() && before.keys().all(|key| actual.contains_key(key)),
         "rebind boot metadata membership changed",
@@ -46,9 +46,7 @@ pub fn apply(journal: &Value, adapter: &mut impl Adapter) -> Result<Value> {
     }
     adapter.verify(journal)?;
     observed(adapter, journal)?;
-    let mut names = journal["replacements"]
-        .as_object()
-        .unwrap()
+    let mut names = enzimos_platform::json::object(&journal["replacements"])?
         .keys()
         .filter(|name| name.as_str() != "limine/limine.conf")
         .cloned()
@@ -59,7 +57,7 @@ pub fn apply(journal: &Value, adapter: &mut impl Adapter) -> Result<Value> {
     }
     for name in names {
         let actual = observed(adapter, journal)?;
-        let replacement = journal["replacements"][&name].as_str().unwrap();
+        let replacement = enzimos_platform::json::string(&journal["replacements"][&name])?;
         if actual[&name] != replacement {
             adapter.write_file(&name, replacement)?;
         }
@@ -68,14 +66,14 @@ pub fn apply(journal: &Value, adapter: &mut impl Adapter) -> Result<Value> {
     adapter.verify(journal)?;
     let mut expected = journal["before_files"]
         .as_object()
-        .unwrap()
+        .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .iter()
         .map(|(name, body)| (name.clone(), body.as_str().unwrap().to_owned()))
         .collect::<Texts>();
     expected.extend(
         journal["replacements"]
             .as_object()
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
             .iter()
             .map(|(name, body)| (name.clone(), body.as_str().unwrap().to_owned())),
     );

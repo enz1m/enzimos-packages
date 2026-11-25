@@ -40,7 +40,9 @@ pub fn prepare(
             && record.get("coordinator").is_none(),
         "one original prepared Root receipt without a coordinator required",
     )?;
-    let root = record["targets"].as_array().unwrap().last().unwrap();
+    let root = enzimos_platform::json::array(&record["targets"])?
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
     require(
         id == format!("root-{}", records::text(root, "uuid")?.replace('-', "")),
         "coordinator receipt must identify exact original Root",

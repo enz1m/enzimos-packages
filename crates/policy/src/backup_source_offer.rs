@@ -92,7 +92,8 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
         require(
             peer.uid == 0
                 && peer.gid == 0
-                && u64::from(peer.pid) == self.request["worker"]["worker"]["pid"].as_u64().unwrap(),
+                && u64::from(peer.pid)
+                    == enzimos_platform::json::unsigned(&self.request["worker"]["worker"]["pid"])?,
             "source channel does not belong to original reserved worker",
         )
     }
@@ -125,8 +126,10 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
         )?;
         if !self.sent {
             self.sent = true;
-            self.reserved
-                .enter_send(self.request["nonce"].as_str().unwrap(), &self.sha256)?;
+            self.reserved.enter_send(
+                enzimos_platform::json::string(&self.request["nonce"])?,
+                &self.sha256,
+            )?;
         }
         let index = self.next;
         let chunk = chunks[index];
@@ -144,7 +147,11 @@ impl<'o, 'a, 'b, 'c, 's, 'cfg, 'g> Offer<'o, 'a, 'b, 'c, 's, 'cfg, 'g> {
             self.caller.image()?.as_fd(),
         ];
         for target in chunk {
-            descriptions.push(*trees.get(target.as_str()).unwrap());
+            descriptions.push(
+                *trees
+                    .get(target.as_str())
+                    .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+            );
         }
         let numbers = descriptions
             .iter()

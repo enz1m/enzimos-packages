@@ -345,9 +345,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
                 result["retirable"] = value!(true);
                 result["plan_sha256"] = intent["intent_sha256"].clone();
                 result["steps"] = value!(
-                    intent["steps"]
-                        .as_array()
-                        .unwrap()
+                    enzimos_platform::json::array(&intent["steps"])?
                         .iter()
                         .map(|s| s["id"].clone())
                         .collect::<Vec<_>>()
@@ -439,7 +437,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
             a.recheck()?;
             file_hashes.insert(name.into(), a.sha.clone());
         }
-        let protection = value!({"retained_generations":self.transaction.data["generations"].as_object().unwrap().keys().filter(|n|*n!=&self.generation).collect::<Vec<_>>(),"selected":selected,"pins":self.pins.evidence()?});
+        let protection = value!({"retained_generations":enzimos_platform::json::object(&self.transaction.data["generations"])?.keys().filter(|n|*n!=&self.generation).collect::<Vec<_>>(),"selected":selected,"pins":self.pins.evidence()?});
         let result = plan::intent(
             &self.transaction.data,
             &self.generation,

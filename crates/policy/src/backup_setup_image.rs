@@ -34,7 +34,12 @@ impl Image {
     pub(crate) fn open() -> Result<Self> {
         crate::namespaces::initial()?;
         crate::operation::root_only()?;
-        let parent = files::directory(Path::new(IMAGE).parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            Path::new(IMAGE)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let file = files::open_relative(&parent, Path::new("enzimos-system-backend"))?;
         let m = file.metadata()?;
         require(
@@ -65,7 +70,12 @@ impl Image {
     }
     pub(crate) fn recheck(&self) -> Result<()> {
         self.process.recheck()?;
-        let parent = files::directory(Path::new(IMAGE).parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            Path::new(IMAGE)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let named = files::open_relative(&self.parent, Path::new("enzimos-system-backend"))?;
         require(
             shape(&parent)? == self.parent_shape

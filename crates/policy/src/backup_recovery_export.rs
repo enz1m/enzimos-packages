@@ -229,7 +229,11 @@ fn current_key(guard: &Guard, authorize: &mut dyn FnMut() -> Result<()>) -> Resu
     source()?;
     runtime.empty()?;
     let keys = crate::backup_restic_result::keys(output.status.code(), &output.stdout)?;
-    Ok(keys.into_iter().find(|(_, current)| *current).unwrap().0)
+    Ok(keys
+        .into_iter()
+        .find(|(_, current)| *current)
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+        .0)
 }
 /// Runs its body with the configured destination mounted at its fixed path.
 pub type Mounted<'a> = dyn FnMut(&mut dyn FnMut() -> Result<String>) -> Result<String> + 'a;

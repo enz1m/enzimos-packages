@@ -122,7 +122,10 @@ pub fn cups(body: &str) -> Result<String> {
                 .ok_or_else(|| Error("unbalanced CUPS section".into()))?;
         }
         if depth == 0 && !s.is_empty() && !s.starts_with(['#', '<']) {
-            let key = s.split_whitespace().next().unwrap();
+            let key = s
+                .split_whitespace()
+                .next()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
             if CUPS.iter().any(|(name, _)| name.eq_ignore_ascii_case(key)) {
                 continue;
             }
@@ -380,8 +383,18 @@ fn configure_mode(root: &Path, everyday: bool, keyring_only: bool) -> Result<Val
     };
     for relative in paths {
         let path = Path::new(relative);
-        let parent = files::directory_relative(&target.file, path.parent().unwrap(), None)?;
-        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+        let parent = files::directory_relative(
+            &target.file,
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            None,
+        )?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
+            .to_owned();
         let original = files::optional_relative(&parent, Path::new(&name))?;
         if keyring_only && original.is_none() {
             continue;
@@ -480,7 +493,10 @@ fn configure_mode(root: &Path, everyday: bool, keyring_only: bool) -> Result<Val
         };
         edits.push(Edit {
             target: std::sync::Arc::clone(&target),
-            relative_parent: path.parent().unwrap().into(),
+            relative_parent: path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?
+                .into(),
             parent,
             name: name.clone(),
             original,

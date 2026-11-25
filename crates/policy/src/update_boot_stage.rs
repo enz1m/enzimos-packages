@@ -51,7 +51,7 @@ impl Stage {
         let root = files::directory(Path::new("/"), Some(0))?;
         let (root_object, readonly) = subvolume::observe(
             root.as_fd(),
-            document["storage"]["root_subvol"].as_str().unwrap(),
+            enzimos_platform::json::string(&document["storage"]["root_subvol"])?,
         )?;
         require(!readonly, "update live root is read-only")?;
         let state = files::directory(Path::new(operation::STATE), Some(0))?;
@@ -118,7 +118,7 @@ impl Stage {
         }
         let transaction = catalog::Transaction::begin()?;
         update_resources::check(
-            transaction.data["generations"].as_object().unwrap().len(),
+            enzimos_platform::json::object(&transaction.data["generations"])?.len(),
             update_resources::transient("module-views", &document["storage"]["filesystem_uuid"])?,
             update_resources::transient("boot-stage", &document["storage"]["filesystem_uuid"])?,
             update_resources::available(&root)?,
@@ -203,7 +203,7 @@ impl Stage {
             &stage.path,
             id,
             &document["current_kernels"],
-            document["options"].as_str().unwrap(),
+            enzimos_platform::json::string(&document["options"])?,
             &root,
             Path::new("/"),
             &expected_root,
@@ -251,9 +251,9 @@ impl Stage {
                 files::identity(&file.metadata()?) == *identity
                     && files::identity(&named.metadata()?) == *identity
                     && mount_identity::id(file.as_fd(), true)?
-                        == self.identity["mount"].as_u64().unwrap()
+                        == enzimos_platform::json::unsigned(&self.identity["mount"])?
                     && mount_identity::id(named.as_fd(), true)?
-                        == self.identity["mount"].as_u64().unwrap(),
+                        == enzimos_platform::json::unsigned(&self.identity["mount"])?,
                 "original update stage file replaced",
             )?;
         }

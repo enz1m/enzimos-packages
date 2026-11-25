@@ -168,7 +168,7 @@ fn create_kind<F: FnMut() -> Result<()>>(
         let bytes = files::read_file(&file, 16384, Some(0), true)?;
         let mut body = json::decode(&bytes, 16384)?;
         validate(&body)?;
-        let id = body["id"].as_str().unwrap().to_owned();
+        let id = enzimos_platform::json::string(&body["id"])?.to_owned();
         require(
             name.to_str() == Some(&format!("{id}.json")),
             "home history receipt name differs; review required",

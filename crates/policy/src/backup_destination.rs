@@ -136,9 +136,9 @@ pub(crate) fn legacy_binding(
 ) -> Result<Value> {
     source.recheck()?;
     let mount = &destination["mount"];
-    let uuid = source.configuration["filesystem_uuid"].as_str().unwrap();
+    let uuid = enzimos_platform::json::string(&source.configuration["filesystem_uuid"])?;
     let result = value!({"filesystem_uuid":destination["filesystem"]["filesystem_uuid"],
-        "mount":{"mount_id":mount["id"],"unique_mount_id":destination["unique_mount"],"device":format!("{}:{}",mount["major"].as_u64().unwrap(),mount["minor"].as_u64().unwrap()),"root":mount["root"],"target":mount["target"],"fstype":mount["filesystem"]},
+        "mount":{"mount_id":mount["id"],"unique_mount_id":destination["unique_mount"],"device":format!("{}:{}",enzimos_platform::json::unsigned(&mount["major"])?,enzimos_platform::json::unsigned(&mount["minor"])?),"root":mount["root"],"target":mount["target"],"fstype":mount["filesystem"]},
         "repository_sha256":destination["pin"]["repository_sha256"],"storage_topology":{"destination":destination["topology"],"sources":{uuid:source.backup_topology()?}}});
     source.recheck()?;
     Ok(result)
@@ -189,7 +189,7 @@ impl<'a> Destination<'a> {
     pub fn open(config: &'a Configuration, source: &'a storage_runtime::Guard) -> Result<Self> {
         config.recheck()?;
         source.recheck()?;
-        let uuid = config.value()["destination_uuid"].as_str().unwrap();
+        let uuid = enzimos_platform::json::string(&config.value()["destination_uuid"])?;
         require(
             source.configuration["filesystem_uuid"] != uuid,
             "backup destination must be independent of source/control filesystem",
@@ -213,8 +213,10 @@ impl<'a> Destination<'a> {
         let topology = topology::mounted_btrfs(uuid)?;
         independent(
             &topology.json(),
-            &topology::mounted_btrfs(source.configuration["filesystem_uuid"].as_str().unwrap())?
-                .json(),
+            &topology::mounted_btrfs(enzimos_platform::json::string(
+                &source.configuration["filesystem_uuid"],
+            )?)?
+            .json(),
         )?;
         let repository = files::directory_relative(&root, Path::new("restic"), Some(0))?;
         require(
@@ -263,9 +265,9 @@ impl<'a> Destination<'a> {
                 && mount_identity::id(self.root.as_fd(), false)? == self.normal
                 && filesystem::observe(self.root.as_fd())? == self.filesystem
                 && mount(&storage_runtime::rows()?, self.normal)? == self.mount
-                && topology::mounted_btrfs(
-                    self.config.value()["destination_uuid"].as_str().unwrap(),
-                )? == self.topology
+                && topology::mounted_btrfs(enzimos_platform::json::string(
+                    &self.config.value()["destination_uuid"],
+                )?)? == self.topology
                 && shape(&repo)? == self.repository_shape
                 && shape(&self.repository)? == self.repository_shape
                 && mount_identity::id(repo.as_fd(), true)? == self.unique
@@ -289,7 +291,7 @@ impl<'a> Destination<'a> {
     pub(crate) fn stable_evidence(&self) -> Result<Value> {
         let pin = self.expected_pin()?;
         Ok(stable(
-            self.filesystem["filesystem_uuid"].as_str().unwrap(),
+            enzimos_platform::json::string(&self.filesystem["filesystem_uuid"])?,
             &pin["repository_sha256"],
             &self.topology.json(),
         ))

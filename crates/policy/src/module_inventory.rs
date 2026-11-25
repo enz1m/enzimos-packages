@@ -119,7 +119,8 @@ impl Scan {
             )?;
             let row = if metadata.file_type().is_symlink() {
                 require(metadata.uid() == self.owner, "module symlink owner refused")?;
-                let cname = CString::new(name.as_str()).unwrap();
+                let cname = CString::new(name.as_str())
+                    .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
                 let mut body = [0u8; 4097];
                 let length = unsafe {
                     libc::readlinkat(
@@ -222,9 +223,7 @@ pub fn running(inventory: &Value, kernel: &str) -> Result<()> {
 pub fn generation(inventory: &Value, kernel: &str) -> Result<Value> {
     running(inventory, kernel)?;
     let prefix = format!("{kernel}/");
-    let rows = inventory["members"]
-        .as_object()
-        .unwrap()
+    let rows = enzimos_platform::json::object(&inventory["members"])?
         .iter()
         .filter(|(name, _)| name.starts_with(&prefix))
         .map(|(name, row)| (name.clone(), row.clone()))

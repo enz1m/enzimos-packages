@@ -42,9 +42,7 @@ fn check_base(
     builtin: &[u8],
     marker: &[u8],
 ) -> Result<usize> {
-    let wanted = policy
-        .as_object()
-        .unwrap()
+    let wanted = enzimos_platform::json::object(policy)?
         .keys()
         .map(|name| format!("usr/lib/enzimos-native/{name}"))
         .chain(["init", "etc/initrd-release"].map(str::to_owned))
@@ -54,7 +52,7 @@ fn check_base(
         !seen.contains_key(DESCRIPTOR),
         "base image already contains descriptor; no adoption",
     )?;
-    for (name, sha) in policy.as_object().unwrap() {
+    for (name, sha) in enzimos_platform::json::object(policy)? {
         let member = seen
             .get(&format!("usr/lib/enzimos-native/{name}"))
             .ok_or_else(|| Error("image policy member missing".into()))?;
@@ -280,9 +278,12 @@ pub fn build_locked(release: &str, options: &str, lock: &files::Lock) -> Result<
             "-k",
             release,
             "-t",
-            work.to_str().unwrap(),
+            work.to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             "-g",
-            destination.to_str().unwrap(),
+            destination
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
         ],
         &[],
         Duration::from_secs(900),
@@ -391,7 +392,7 @@ pub fn build_locked(release: &str, options: &str, lock: &files::Lock) -> Result<
     // persistent build artifacts remain for explicit guarded inspection/cleanup.
     Ok(
         value!({"status":"recovery-image-built-and-published","id":id,"kernel_release":release,"phase":published["phase"],
-        "members":members,"policy_files_checked":policy.as_object().unwrap().len(),"default_init":"refuse-and-power-off",
+        "members":members,"policy_files_checked":enzimos_platform::json::object(&policy)?.len(),"default_init":"refuse-and-power-off",
         "base_initrd_sha256":descriptor["base_initrd_sha256"],"initrd_bytes":initrd.len(),
         "general_recovery_environment":false,"byte_reproducible":false,"firmware_trust":false,"selection_changed":false}),
     )

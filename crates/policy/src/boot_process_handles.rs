@@ -89,7 +89,9 @@ fn mapped_ranges(maps: &str) -> Result<BTreeSet<String>> {
                 && f[4].bytes().all(|b| b.is_ascii_digit()),
             "kernel mapping device/inode required",
         )?;
-        let (start, end) = f[0].split_once('-').unwrap();
+        let (start, end) = f[0]
+            .split_once('-')
+            .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
         let start = u64::from_str_radix(start, 16)
             .map_err(|_| Error("kernel mapping address range".into()))?;
         let end = u64::from_str_radix(end, 16)
@@ -152,7 +154,7 @@ pub(super) fn inspect(process: &Process) -> Result<Measurement> {
             .insert("file-mapping-handles-missing".into());
     }
     let mut paths: Vec<(String, PathBuf, Option<&Value>)> = Vec::new();
-    for row in process.record["handles"].as_array().unwrap() {
+    for row in enzimos_platform::json::array(&process.record["handles"])? {
         let fd = row["fd"]
             .as_u64()
             .ok_or_else(|| Error("original kernel descriptor number required".into()))?;
@@ -256,7 +258,7 @@ pub(super) fn inspect(process: &Process) -> Result<Measurement> {
         .collect::<Result<_>>()?;
     let before: BTreeSet<_> = process.record["handles"]
         .as_array()
-        .unwrap()
+        .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .iter()
         .map(|r| r["fd"].as_u64().unwrap().to_string())
         .collect();

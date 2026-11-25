@@ -216,7 +216,7 @@ impl<'a, 'd, 'g> Confirmation<'a, 'd, 'g> {
             exported,
             confirmed,
             expected,
-            key: export_value["repository_key_id"].as_str().unwrap().into(),
+            key: enzimos_platform::json::string(&export_value["repository_key_id"])?.into(),
         };
         this.recheck()?;
         Ok(this)

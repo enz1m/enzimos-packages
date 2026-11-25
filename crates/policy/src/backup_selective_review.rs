@@ -54,11 +54,11 @@ pub fn measure(
     let mut original = context.evidence(authorize)?.clone();
     crate::backup_selective_export::preflight(
         context.guard(),
-        original["selection"]["id"].as_str().unwrap(),
+        enzimos_platform::json::string(&original["selection"]["id"])?,
     )?;
     // Server-generated job IDs differ between plan observation and execution;
     // selection and all actual original input observations remain bound.
-    original.as_object_mut().unwrap().remove("id");
+    enzimos_platform::json::object_mut(&mut original)?.remove("id");
     // The plan and the job may each own a separate temporary mount of the same
     // destination; bind the repository, not one mount epoch.
     crate::backup_destination::stable_context(&mut original)?;

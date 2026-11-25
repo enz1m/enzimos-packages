@@ -69,7 +69,10 @@ fn topology(v: &Value, root: crate::topology::Device) -> Result<()> {
                 && a[1].as_u64().is_some_and(|n| n < 1 << 20),
             "setup topology device bounds",
         )?;
-        Ok((a[0].as_u64().unwrap() as u32, a[1].as_u64().unwrap() as u32))
+        Ok((
+            enzimos_platform::json::unsigned(&a[0])? as u32,
+            enzimos_platform::json::unsigned(&a[1])? as u32,
+        ))
     };
     let mut observed = BTreeMap::new();
     let mut paths = BTreeSet::new();
@@ -185,7 +188,10 @@ pub fn validate(v: &Value) -> Result<()> {
         "mount_scope":"detached-file-descriptor","mount_options":"ro,rescue=nologreplay,nodev,nosuid,noexec,subvolid=5","descriptor_scope_closed":true,
         "result":{"schema":1,"readonly_mount_reviewed":true,"filesystem_uuid":d["filesystem_uuid"],"filesystem_verified":false,
             "credential_enrolled":false,"automatic_backup_enabled":false,"repository":d["repository"]}});
-    crate::backup_mount_review::validate_receipt(&synthetic, v["review_id"].as_str().unwrap())?;
+    crate::backup_mount_review::validate_receipt(
+        &synthetic,
+        enzimos_platform::json::string(&v["review_id"])?,
+    )?;
     require(
         d["filesystem_uuid"] != v["source"]["configuration"]["filesystem_uuid"],
         "setup destination aliases protected source filesystem",
@@ -193,8 +199,8 @@ pub fn validate(v: &Value) -> Result<()> {
     topology(
         &d["topology"],
         (
-            d["device"]["major"].as_u64().unwrap() as u32,
-            d["device"]["minor"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&d["device"]["major"])? as u32,
+            enzimos_platform::json::unsigned(&d["device"]["minor"])? as u32,
         ),
     )?;
     require(
@@ -328,7 +334,7 @@ impl<'a, 'r, 'd> Plan<'a, 'r, 'd> {
     }
     pub fn mode(&self) -> Result<Mode> {
         self.recheck_identity()?;
-        Mode::parse(self.original["mode"].as_str().unwrap())
+        Mode::parse(enzimos_platform::json::string(&self.original["mode"])?)
     }
     pub fn review(&self) -> Result<&'a Review<'r, 'd>> {
         self.recheck_identity()?;

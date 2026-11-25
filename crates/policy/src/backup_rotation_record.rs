@@ -82,7 +82,8 @@ pub(crate) fn credential_identity(v: &Value) -> Result<()> {
         )?;
     }
     require(
-        v["size"].as_u64().unwrap() <= 4096 && v["root_id"].as_u64().unwrap() >= 256,
+        enzimos_platform::json::unsigned(&v["size"])? <= 4096
+            && enzimos_platform::json::unsigned(&v["root_id"])? >= 256,
         "rotation credential size/root bound",
     )?;
     identity::uuid(records::text(v, "filesystem_uuid")?)?;
@@ -171,7 +172,7 @@ pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
         let mut targets = BTreeSet::new();
         for point in points {
             let target = copies
-                .get(point.as_str().unwrap())
+                .get(enzimos_platform::json::string(point)?)
                 .and_then(Value::as_str)
                 .ok_or_else(|| Error("rotation copy mapping missing source".into()))?;
             identity::sha(target)?;

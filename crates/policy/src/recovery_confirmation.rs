@@ -28,7 +28,13 @@ fn observed_object(
     if mounted {
         let mount = mount_identity::id(file.as_fd(), false)?;
         let rows = crate::storage_runtime::rows()?;
-        persistent_mount(&rows, path.to_str().unwrap(), relative, mount)?;
+        persistent_mount(
+            &rows,
+            path.to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+            relative,
+            mount,
+        )?;
     }
     Ok(file)
 }

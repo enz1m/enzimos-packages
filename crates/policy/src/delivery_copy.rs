@@ -79,7 +79,8 @@ pub fn copy_named(
         length == bytes && sha == digest,
         "delivery source differs before creation",
     )?;
-    let c = CString::new(name.as_bytes()).unwrap();
+    let c = CString::new(name.as_bytes())
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
         shape(home)? == parent
             && mount_identity::id(home.as_fd(), true)? == mount
@@ -99,7 +100,8 @@ pub fn copy_named(
     }
     let output = unsafe { File::from_raw_fd(fd) };
     // The final name remains on every failure. Never unlink a partial or replay.
-    let acl = CString::new("system.posix_acl_access").unwrap();
+    let acl = CString::new("system.posix_acl_access")
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     if unsafe { libc::fremovexattr(output.as_raw_fd(), acl.as_ptr()) } != 0 {
         let error = std::io::Error::last_os_error();
         require(

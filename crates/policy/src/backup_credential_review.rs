@@ -43,7 +43,7 @@ pub fn measure(
     context.recheck(authorize)?;
     let original = context.evidence(authorize)?;
     let mut metadata = original.clone();
-    metadata.as_object_mut().unwrap().remove("id");
+    enzimos_platform::json::object_mut(&mut metadata)?.remove("id");
     let review = value!({"schema":1,"operation":operation,"enrollment":original["enrollment"]["id"],
         "boot_id":original["boot_id"],"context_sha256":json::fingerprint(&metadata)?});
     context.recheck(authorize)?;

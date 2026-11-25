@@ -92,8 +92,11 @@ impl<'g> Store<'g> {
         )?;
         let bytes = files::read_file(&file, LIMIT, Some(self.owner), true)?;
         let value = json::decode(&bytes, LIMIT)?;
-        self.kind
-            .validate(&value, name.strip_suffix(".json").unwrap())?;
+        self.kind.validate(
+            &value,
+            name.strip_suffix(".json")
+                .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?,
+        )?;
         let identity = files::identity(&m);
         require(
             files::identity(&file.metadata()?) == identity,

@@ -31,10 +31,7 @@ impl<'a, 's> Targets<'a, 's> {
     /// Only this actual target/origin actor can identify its superseded owner.
     pub(crate) fn superseded_owner(&self) -> Result<Option<&str>> {
         self.recheck()?;
-        Ok(self.record["birth"]
-            .as_str()
-            .unwrap()
-            .strip_prefix("superseded-"))
+        Ok(enzimos_platform::json::string(&self.record["birth"])?.strip_prefix("superseded-"))
     }
     pub(crate) fn require_original_catalog(
         &self,
@@ -109,7 +106,7 @@ impl<'a, 's> Targets<'a, 's> {
         let mut objects = Vec::new();
         let mut ids = BTreeSet::new();
         let mut uuids = BTreeSet::new();
-        for row in record["targets"].as_array().unwrap() {
+        for row in enzimos_platform::json::array(&record["targets"])? {
             control.require_original_mounts(mounts)?;
             journal.recheck()?;
             origins.recheck()?;
@@ -121,8 +118,10 @@ impl<'a, 's> Targets<'a, 's> {
                 "actual original control subvolume cannot be a retirement target",
             )?;
             require(
-                ids.insert(object.identity()["id"].as_u64().unwrap())
-                    && uuids.insert(object.identity()["uuid"].as_str().unwrap().to_owned()),
+                ids.insert(enzimos_platform::json::unsigned(&object.identity()["id"])?)
+                    && uuids.insert(
+                        enzimos_platform::json::string(&object.identity()["uuid"])?.to_owned(),
+                    ),
                 "original actual offline target identities must be distinct",
             )?;
             objects.push(object);
@@ -163,8 +162,13 @@ impl<'a, 's> Targets<'a, 's> {
             object.recheck(self.mounts.original_top()?, &fs["filesystem_uuid"])?;
             self.journal.recheck()?;
         }
-        self.origins
-            .require_owner(&self.record, self.objects.last().unwrap().identity())?;
+        self.origins.require_owner(
+            &self.record,
+            self.objects
+                .last()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+                .identity(),
+        )?;
         self.control.require_original_mounts(self.mounts)
     }
     pub fn evidence(&self) -> Result<Value> {

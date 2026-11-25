@@ -13,7 +13,7 @@ use serde_json::{Value, json as value};
 
 fn role(identity: &Value, role: &str) -> Result<Value> {
     json::fields(identity, "path id uuid parent_uuid")?;
-    let mut target = identity.as_object().unwrap().clone();
+    let mut target = enzimos_platform::json::object(identity)?.clone();
     target.insert("role".into(), value!(role));
     Ok(Value::Object(target))
 }
@@ -158,7 +158,9 @@ pub(crate) fn planned_for_receipt(
         .as_object_mut()
         .ok_or_else(|| Error("original Root receipt registry missing".into()))?
         .remove(id);
-    let root = receipt["targets"].as_array().unwrap().last().unwrap();
+    let root = enzimos_platform::json::array(&receipt["targets"])?
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
     let expected = planned(
         &comparison,
         inventory,
@@ -375,9 +377,11 @@ impl<'a> Intent<'a> {
         self.references.recheck(authorize)?;
         self.inventory.recheck(authorize)?;
         self.targets.recheck(authorize)?;
-        let root = self.record["targets"].as_array().unwrap().last().unwrap()["uuid"]
+        let root = enzimos_platform::json::array(&self.record["targets"])?
+            .last()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["uuid"]
             .as_str()
-            .unwrap();
+            .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?;
         require(
             planned(
                 self.references.original(authorize)?,
@@ -411,7 +415,10 @@ impl<'a> Intent<'a> {
             .as_ref()
             .ok_or_else(|| Error("complete original Root protection required".into()))?;
         let original = self.references.original(authorize)?;
-        let root = self.record["targets"].as_array().unwrap().last().unwrap()["uuid"].clone();
+        let root = enzimos_platform::json::array(&self.record["targets"])?
+            .last()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["uuid"]
+            .clone();
         let result = value!({"filesystem_uuid":self.record["filesystem_uuid"],"plan_sha256":self.record["plan_sha256"],
             "root_uuid":root,"birth":self.record["birth"],"targets":self.record["targets"],
             "source_sha256":json::fingerprint(&original["source"])?,

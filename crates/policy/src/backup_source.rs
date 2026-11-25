@@ -84,7 +84,11 @@ impl<'a> Source<'a> {
             };
             require(
                 mount_row.target == dataset.path
-                    && mount_row.root == format!("/{}", guard.configuration[key].as_str().unwrap()),
+                    && mount_row.root
+                        == format!(
+                            "/{}",
+                            enzimos_platform::json::string(&guard.configuration[key])?
+                        ),
                 "configured backup source mount differs",
             )?;
         }
@@ -99,7 +103,12 @@ impl<'a> Source<'a> {
             "backup source must be the writable configured dataset",
         )?;
         let config_path = Path::new("/etc/snapper/configs").join(&dataset.name);
-        let config_parent = files::directory(config_path.parent().unwrap(), Some(0))?;
+        let config_parent = files::directory(
+            config_path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let config = files::open_relative(&config_parent, Path::new(&dataset.name))?;
         let m = config.metadata()?;
         require(
@@ -151,7 +160,12 @@ impl<'a> Source<'a> {
                     == self.guard.configuration["filesystem_uuid"],
             "original backup source subvolume changed",
         )?;
-        let parent = files::directory(self.config_path.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            self.config_path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         same(
             &self.config_parent,
             &parent,
@@ -367,8 +381,10 @@ impl<'a, 'g> Snapshot<'a, 'g> {
         )?;
         let file = files::directory_relative(&self.number_parent, Path::new("snapshot"), Some(0))?;
         same(&self.file, &file, self.shape, self.mount)?;
-        let (object, readonly) =
-            subvolume::observe(self.file.as_fd(), self.object["path"].as_str().unwrap())?;
+        let (object, readonly) = subvolume::observe(
+            self.file.as_fd(),
+            enzimos_platform::json::string(&self.object["path"])?,
+        )?;
         lineage(&self.source.object, &object, readonly)?;
         require(
             object == self.object

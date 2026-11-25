@@ -24,7 +24,7 @@ pub enum Event<'g> {
 fn challenge(message: &Message, request: &Value, sequence: u64) -> Result<Value> {
     backup_remote_report::sender(
         message,
-        request["worker"]["worker"]["pid"].as_u64().unwrap() as u32,
+        enzimos_platform::json::unsigned(&request["worker"]["worker"]["pid"])? as u32,
     )?;
     let body = json::decode(&message.body, 4096)?;
     json::fields(&body, "schema kind id request_sha256 sequence nonce")?;
@@ -73,7 +73,7 @@ impl State {
                 let challenge = challenge(&message, &request, next)?;
                 require(
                     self.nonces
-                        .insert(challenge["nonce"].as_str().unwrap().to_owned()),
+                        .insert(enzimos_platform::json::string(&challenge["nonce"])?.to_owned()),
                     "remote copy nonce reused",
                 )?;
                 // Fresh caller permission and all original actors precede every
@@ -91,7 +91,7 @@ impl State {
                 let report = observed.report()?;
                 require(
                     self.nonces
-                        .insert(report["nonce"].as_str().unwrap().to_owned()),
+                        .insert(enzimos_platform::json::string(&report["nonce"])?.to_owned()),
                     "remote copy report nonce reused",
                 )?;
                 reserved.recheck(authorize)?;

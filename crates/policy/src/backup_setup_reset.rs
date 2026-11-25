@@ -174,7 +174,7 @@ fn remove(parent: &File, name: &str, removed: &mut Vec<String>, label: &str) -> 
         "setup publication is not a Root-owned regular file; not removed",
     )?;
     drop(file);
-    let c = CString::new(name).unwrap();
+    let c = CString::new(name).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
         unsafe { libc::unlinkat(parent.as_raw_fd(), c.as_ptr(), 0) } == 0,
         "setup publication removal refused",

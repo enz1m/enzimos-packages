@@ -134,9 +134,7 @@ fn no_pending_rebind(store: &Store) -> Result<()> {
                 && record["phase"] == "complete",
             "root rebinding incomplete; explicit review required",
         )?;
-        let digest = record
-            .as_object_mut()
-            .unwrap()
+        let digest = enzimos_platform::json::object_mut(&mut record)?
             .remove("journal_sha256")
             .unwrap();
         require(

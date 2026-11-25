@@ -62,9 +62,11 @@ fn validate_transition(kind: Transition, before: &Value, next: &Value, id: &str)
 }
 fn validate_observed(row: &Value, id: &str, filesystem: &Value, phase: Phase) -> Result<()> {
     crate::root_retirement_record::validate(row, id)?;
-    let root_uuid = row["targets"].as_array().unwrap().last().unwrap()["uuid"]
+    let root_uuid = enzimos_platform::json::array(&row["targets"])?
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["uuid"]
         .as_str()
-        .unwrap();
+        .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?;
     require(
         row["phase"] == phase.text()
             && row["filesystem_uuid"] == *filesystem
@@ -469,7 +471,9 @@ pub(crate) fn validate_staging_transition(before: &Value, next: &Value, id: &str
         *next == expected,
         "staging changed original retirement identity/progress",
     )?;
-    let root = before["targets"].as_array().unwrap().last().unwrap();
+    let root = enzimos_platform::json::array(&before["targets"])?
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
     require(
         id == format!(
             "root-{}",
@@ -550,8 +554,8 @@ pub(crate) fn next_progress(before: &Value) -> Result<Value> {
         before["schema"] == 1 && before.get("coordinator").is_none(),
         "only an unstaged Root receipt progresses online",
     )?;
-    let count = before["targets"].as_array().unwrap().len() as u64;
-    let next_step = before["next_step"].as_u64().unwrap();
+    let count = enzimos_platform::json::array(&before["targets"])?.len() as u64;
+    let next_step = enzimos_platform::json::unsigned(&before["next_step"])?;
     let mut next = before.clone();
     match (before["phase"].as_str(), before["inflight"].as_u64()) {
         (Some("prepared"), None) => next["phase"] = serde_json::json!("executing"),

@@ -125,8 +125,13 @@ pub(crate) fn masters_usable(body: &str, now: u64) -> Result<()> {
         } else if row[0] == "fpr" && pending.is_some() {
             require(row.len() > 9, "master fingerprint missing")?;
             require(
-                keys.insert(fingerprint(row[9])?.to_owned(), pending.take().unwrap())
-                    .is_none(),
+                keys.insert(
+                    fingerprint(row[9])?.to_owned(),
+                    pending
+                        .take()
+                        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+                )
+                .is_none(),
                 "duplicate master fingerprint",
             )?;
         }

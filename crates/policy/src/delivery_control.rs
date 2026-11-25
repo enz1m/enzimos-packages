@@ -91,7 +91,7 @@ impl Scope<'_> {
         let recipient = Recipient::open(uid, &guard)?;
         let export = Export::open(&guard, text(&record.value()?["export"], "export")?)?;
         let image = crate::delivery_child::Image::open()?;
-        let filename = record.value()?["filename"].as_str().unwrap().to_owned();
+        let filename = enzimos_platform::json::string(&record.value()?["filename"])?.to_owned();
         let this = Self {
             guard: Storage::Original(guard),
             own: false,

@@ -280,7 +280,9 @@ impl Store {
         let name = format!("{identifier}.json");
         if new {
             let original = crate::control_record::Retained::create(
-                self.directory.as_ref().unwrap(),
+                self.directory
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 Path::new(&name),
                 &record,
                 catalog::MAX_CATALOG,
@@ -288,7 +290,10 @@ impl Store {
             )?;
             self.original_records.insert(identifier.into(), original);
         } else {
-            let expected = self.records.get(identifier).unwrap();
+            let expected = self
+                .records
+                .get(identifier)
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
             birth::advance(expected, &record)?;
             let original = self
                 .original_records

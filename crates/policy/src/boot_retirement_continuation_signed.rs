@@ -60,18 +60,15 @@ impl Signed {
         let inventory =
             SignedInventory::observe(&admission.volume, loaders.texts(), &mut permission)?;
         let evidence = inventory.evidence(&admission.volume, &mut permission)?;
-        let referenced: BTreeSet<_> = evidence["entries"]
-            .as_object()
-            .unwrap()
+        let referenced: BTreeSet<_> = enzimos_platform::json::object(&evidence["entries"])?
             .values()
             .filter_map(Value::as_str)
             .map(str::to_owned)
             .collect();
-        let generation = admission.record.value()?["intent"]["id"]
-            .as_str()
-            .unwrap()
-            .strip_prefix("boot-")
-            .unwrap();
+        let generation =
+            enzimos_platform::json::string(&admission.record.value()?["intent"]["id"])?
+                .strip_prefix("boot-")
+                .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
         let mut orphans = Vec::new();
         let mut owner = None;
         for (path, artifact) in &admission.artifacts {
@@ -85,7 +82,9 @@ impl Signed {
             if owner.is_none() {
                 owner = Some(Owner::credentials()?);
             }
-            let authority = owner.as_ref().unwrap();
+            let authority = owner
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
             authority.recheck()?;
             let cert = authority
                 .certificate_hash()

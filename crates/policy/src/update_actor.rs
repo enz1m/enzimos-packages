@@ -40,8 +40,20 @@ impl Actor {
                 .to_str()
                 .ok_or_else(|| Error("actual update executable encoding".into()))?,
         )?;
-        let parent = files::directory(Path::new(path).parent().unwrap(), Some(0))?;
-        let image = files::open_relative(&parent, Path::new(Path::new(path).file_name().unwrap()))?;
+        let parent = files::directory(
+            Path::new(path)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let image = files::open_relative(
+            &parent,
+            Path::new(
+                Path::new(path)
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let m = image.metadata()?;
         require(
             m.is_file()
@@ -81,10 +93,19 @@ impl Actor {
     pub(crate) fn recheck(&self) -> Result<()> {
         crate::namespaces::initial()?;
         self.process.recheck()?;
-        let parent = files::directory(Path::new(self.path).parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            Path::new(self.path)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let named = files::open_relative(
             &parent,
-            Path::new(Path::new(self.path).file_name().unwrap()),
+            Path::new(
+                Path::new(self.path)
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
         )?;
         require(
             self.process.stat.pid == std::process::id()

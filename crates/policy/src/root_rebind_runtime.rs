@@ -76,11 +76,20 @@ struct Runtime<'a> {
 }
 impl Runtime<'_> {
     fn durable(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         require(
             control_record::read(
                 &parent,
-                Path::new(self.path.file_name().unwrap()),
+                Path::new(
+                    self.path
+                        .file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+                ),
                 catalog::MAX_CATALOG,
                 self.snapshot.guard.control_mount_id(),
             )? == self.journal,
@@ -88,7 +97,7 @@ impl Runtime<'_> {
         )
     }
     fn lineage(&self) -> Result<()> {
-        let id = self.journal["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&self.journal["id"])?;
         let birth = self.snapshot.records["births"]
             .get(id)
             .ok_or_else(|| Error("rebind has no retained publisher birth".into()))?;
@@ -211,7 +220,7 @@ impl Adapter for Runtime<'_> {
         let mut complete = journal.clone();
         complete["phase"] = value!("complete");
         let complete = seal(complete)?;
-        root_rebind_record::validate(&complete, complete["id"].as_str().unwrap())?;
+        root_rebind_record::validate(&complete, enzimos_platform::json::string(&complete["id"])?)?;
         (self.authorize)()?;
         files::atomic_bounded(
             &self.path,
@@ -280,7 +289,7 @@ pub(crate) fn prepare_authorized(
         "retained fallback is not selected in both loaders",
     )?;
     let kernels = kernels()?;
-    for record in registry.data["generations"].as_object().unwrap().values() {
+    for record in enzimos_platform::json::object(&registry.data["generations"])?.values() {
         if record["material"]["root_identity"]["uuid"] == source["uuid"] {
             require(
                 record["material"]["inventory_sha256"] == birth["inventory_sha256"]
@@ -306,7 +315,7 @@ pub(crate) fn prepare_authorized(
     )?;
     let mut hashes = value!({});
     for flavor in ["linux", "linux-lts"] {
-        let version = kernels[flavor].as_str().unwrap();
+        let version = enzimos_platform::json::string(&kernels[flavor])?;
         hashes[flavor] = value!(json::sha256(&files::read(
             Path::new(&format!("/usr/lib/modules/{version}/vmlinuz")),
             128 * 1024 * 1024,

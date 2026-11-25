@@ -223,15 +223,28 @@ pub struct Source<'a, 'g> {
 impl<'a, 'g> Source<'a, 'g> {
     fn open(configuration: &'a Configuration<'g>, row: &'a Row) -> Result<Self> {
         configuration.recheck()?;
-        let parent = files::directory(row.path.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            row.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let parent_shape = shape(&parent)?;
-        let name = Path::new(row.path.file_name().unwrap());
+        let name = Path::new(
+            row.path
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        );
         let main = Member::open(&parent, name, 0)?
             .ok_or_else(|| Error("explicit database source missing".into()))?;
         require(main.epoch.2 > 0, "empty database source refused")?;
         let mut sidecars = Vec::new();
         for suffix in ["-wal", "-shm", "-journal"] {
-            let name = PathBuf::from(format!("{}{suffix}", name.to_str().unwrap()));
+            let name = PathBuf::from(format!(
+                "{}{suffix}",
+                name.to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
+            ));
             let original = Member::open(&parent, &name, 0)?;
             sidecars.push((name, original));
         }
@@ -248,7 +261,13 @@ impl<'a, 'g> Source<'a, 'g> {
     }
     pub fn recheck(&self) -> Result<()> {
         self.configuration.recheck()?;
-        let named = files::directory(self.row.path.parent().unwrap(), Some(0))?;
+        let named = files::directory(
+            self.row
+                .path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         require(
             shape(&self.parent)? == self.parent_shape && shape(&named)? == self.parent_shape,
             "original database parent changed or covered",

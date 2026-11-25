@@ -196,7 +196,8 @@ fn create(parent: &File, name: &str, owner: u32) -> Result<File> {
         "fixed safe SQLite output leaf required",
     )?;
     shape(parent, owner)?;
-    let name = std::ffi::CString::new(name).unwrap();
+    let name = std::ffi::CString::new(name)
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),

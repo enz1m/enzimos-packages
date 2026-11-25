@@ -84,7 +84,7 @@ pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
         )?;
     }
     require(
-        input["size"].as_u64().unwrap() <= 4096,
+        enzimos_platform::json::unsigned(&input["size"])? <= 4096,
         "credential input size bound",
     )?;
     if schema == Some(2) {
@@ -92,7 +92,7 @@ pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
         identity::uuid(text(input, "root_uuid")?)?;
         identity::safe_id(text(input, "root_path")?)?;
         require(
-            input["root_id"].as_u64().unwrap() >= 256,
+            enzimos_platform::json::unsigned(&input["root_id"])? >= 256,
             "credential input subvolume bound",
         )?;
     }
@@ -142,7 +142,7 @@ pub(crate) fn sole_added_key(
     keys(candidate)?;
     let before = enrollment["before_keys"]
         .as_array()
-        .unwrap()
+        .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
         .iter()
         .map(|key| key.as_str().unwrap())
         .collect::<BTreeSet<_>>();

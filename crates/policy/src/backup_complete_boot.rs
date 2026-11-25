@@ -267,7 +267,7 @@ impl Authority {
     fn mount(path: PathBuf, ram: &backup_ram_source::Source) -> Result<Self> {
         ram.recheck()?;
         let device = Block::by_uuid(
-            ram.configuration()["filesystem_uuid"].as_str().unwrap(),
+            enzimos_platform::json::string(&ram.configuration()["filesystem_uuid"])?,
             false,
         )?;
         let directory = files::create_directory(&path, 0o700, 0)?;
@@ -279,7 +279,8 @@ impl Authority {
             "fresh complete authority mount target required",
         )?;
         let source = CString::new(format!("/proc/self/fd/{}", device.file.as_raw_fd())).unwrap();
-        let target = CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+        let target = CString::new(path.as_os_str().as_encoded_bytes())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe {
                 libc::mount(
@@ -298,7 +299,8 @@ impl Authority {
         let normal = mount_identity::id(file.as_fd(), false)?;
         let row = storage_runtime::mount_row(
             &storage_runtime::rows()?,
-            path.to_str().unwrap(),
+            path.to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             Some("/enzimos-authority"),
             normal,
         )?
@@ -318,8 +320,20 @@ impl Authority {
             this.filesystem["filesystem_uuid"] == ram.configuration()["filesystem_uuid"]
                 && !readonly
                 && this.object["parent_uuid"].is_null()
-                && this.file.as_ref().unwrap().metadata()?.ino() == 256
-                && files::directory_names(this.file.as_ref().unwrap(), 1)?.is_empty(),
+                && this
+                    .file
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                    .metadata()?
+                    .ino()
+                    == 256
+                && files::directory_names(
+                    this.file
+                        .as_ref()
+                        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+                    1,
+                )?
+                .is_empty(),
             "explicit empty fresh authority subvolume required",
         )?;
         this.recheck()?;
@@ -364,7 +378,8 @@ impl Authority {
     #[allow(unsafe_code, reason = "Linux syscall ABI (umount2).")]
     fn close(&mut self) -> Result<()> {
         self.recheck()?;
-        let target = CString::new(self.path.as_os_str().as_encoded_bytes()).unwrap();
+        let target = CString::new(self.path.as_os_str().as_encoded_bytes())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         drop(self.file.take());
         let code = unsafe { libc::umount2(target.as_ptr(), 0) };
         if code != 0 {

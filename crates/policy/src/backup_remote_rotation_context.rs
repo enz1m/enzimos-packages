@@ -244,7 +244,7 @@ impl<'a> Context<'a> {
     pub fn review(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<Value> {
         let state = self.state(authorize)?;
         let record = self.record.value()?;
-        let (step, action) = next(record["phase"].as_str().unwrap(), &state)?;
+        let (step, action) = next(enzimos_platform::json::string(&record["phase"])?, &state)?;
         let mut result = value!({"phase":record["phase"],"boundary":step,"next_action":action,"journal_sha256":json::fingerprint(record)?});
         result["review_sha256"] = value!(json::fingerprint(&result)?);
         self.recheck(authorize)?;
@@ -268,7 +268,7 @@ impl<'a> Context<'a> {
         use std::os::{fd::AsFd, unix::fs::MetadataExt};
         self.recheck(authorize)?;
         let state = self.state_record(record, authorize)?;
-        next(record["phase"].as_str().unwrap(), &state)?;
+        next(enzimos_platform::json::string(&record["phase"])?, &state)?;
         let early = matches!(record["phase"].as_str(), Some("initializing" | "copying"));
         if !early {
             require(
@@ -436,7 +436,7 @@ impl<'a> Context<'a> {
         )?;
         let new_points = json::decode(&points.stdout, crate::backup_remote_points::LIMIT)?;
         let new_rows = crate::backup_remote_points::inventory(&new_points)?;
-        let copies = record["points"].as_object().unwrap();
+        let copies = enzimos_platform::json::object(&record["points"])?;
         require(
             new_rows.len() == copies.len()
                 && copies
@@ -586,7 +586,7 @@ impl<'a> Context<'a> {
         self.record
             .require_scope(self.guard, self.lock, JournalRole::Rotation)?;
         let mut record = self.record.value()?.clone();
-        let before = record["phase"].as_str().unwrap();
+        let before = enzimos_platform::json::string(&record["phase"])?;
         require(
             matches!(
                 (before, next),

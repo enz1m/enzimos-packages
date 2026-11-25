@@ -38,7 +38,9 @@ fn absent(records: &Records, targets: &Value) -> Result<()> {
         .as_array()
         .filter(|rows| (1..=64).contains(&rows.len()))
         .ok_or_else(|| enzimos_platform::Error("completed Root targets bound".into()))?;
-    let root = rows.last().unwrap()["path"]
+    let root = rows
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| enzimos_platform::Error("completed Root target path".into()))?;
     crate::identity::safe_id(root)?;

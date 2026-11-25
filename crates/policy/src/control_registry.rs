@@ -436,7 +436,7 @@ impl<'g> Snapshot<'g> {
             }
         }
         require(
-            this.records.len() == expected.as_object().unwrap().len(),
+            this.records.len() == enzimos_platform::json::object(expected)?.len(),
             "missing original idle reference record",
         )?;
         this.recheck()?;

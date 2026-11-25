@@ -34,7 +34,9 @@ fn select(original: &Value, deleted: &Value) -> Result<Selection> {
         "finish requires the exact originally observed deleted receipt",
     )?;
     let records = &original["records"];
-    let root = deleted["targets"].as_array().unwrap().last().unwrap();
+    let root = enzimos_platform::json::array(&deleted["targets"])?
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
     let identity = object(root);
     let births = records["births"]
         .as_object()

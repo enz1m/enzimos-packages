@@ -162,9 +162,9 @@ impl Original {
         )?;
         let parent_path = Path::new(relative)
             .parent()
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?
             .to_str()
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
             .to_owned();
         let parent = if parent_path.is_empty() {
             top.try_clone()?
@@ -187,7 +187,7 @@ impl Original {
             "retirement target crossed original top-level filesystem/mount",
         )?;
         let (actual, readonly) = subvolume::observe(file.as_fd(), relative)?;
-        let mut expected = row.as_object().unwrap().clone();
+        let mut expected = enzimos_platform::json::object(row)?.clone();
         expected.remove("role");
         require(
             actual == Value::Object(expected),
@@ -288,7 +288,9 @@ impl<'a> Targets<'a> {
             .ok_or_else(|| Error("retirement targets array".into()))?;
         require((1..=64).contains(&rows.len()), "retirement target count")?;
         require(
-            rows.last().unwrap()["role"] == "root-subvolume"
+            rows.last()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["role"]
+                == "root-subvolume"
                 && rows
                     .iter()
                     .filter(|row| row["role"] == "root-subvolume")
@@ -296,7 +298,9 @@ impl<'a> Targets<'a> {
                     == 1,
             "one last original root target required",
         )?;
-        let root = rows.last().unwrap()["path"]
+        let root = rows
+            .last()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
             .as_str()
             .ok_or_else(|| Error("retirement root target path".into()))?;
         identity::safe_id(root)?;
@@ -364,8 +368,10 @@ impl<'a> Targets<'a> {
                 "original retirement Root must remain writable",
             )?;
             require(
-                ids.insert(object.identity["id"].as_u64().unwrap())
-                    && uuids.insert(object.identity["uuid"].as_str().unwrap().to_owned())
+                ids.insert(enzimos_platform::json::unsigned(&object.identity["id"])?)
+                    && uuids.insert(
+                        enzimos_platform::json::string(&object.identity["uuid"])?.to_owned(),
+                    )
                     && paths.insert(object.path.clone()),
                 "distinct original retirement targets required",
             )?;

@@ -50,7 +50,7 @@ impl<'g, 'i> Authenticated<'g, 'i> {
     }
     pub fn key_id(&self) -> Result<&str> {
         self.recheck()?;
-        Ok(self.original["result"]["key_id"].as_str().unwrap())
+        enzimos_platform::json::string(&self.original["result"]["key_id"])
     }
     pub fn input(&self) -> Result<&Validated> {
         self.recheck()?;

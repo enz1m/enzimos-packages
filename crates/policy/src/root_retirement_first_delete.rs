@@ -151,7 +151,9 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
             &self.identity,
         )?;
         let top_epoch = files::identity(&top.metadata()?);
-        if Path::new(self.identity["path"].as_str().unwrap()).parent() == Some(Path::new("")) {
+        if Path::new(enzimos_platform::json::string(&self.identity["path"])?).parent()
+            == Some(Path::new(""))
+        {
             require(
                 top_before == self.parent_epoch && top_epoch == parent_epoch,
                 "owned top-parent removal differs from original parent descriptions",
@@ -256,10 +258,10 @@ impl<'j, 'a, 's> First<'j, 'a, 's> {
         }
         require(
             crate::subvolume::containing_identity(originals.parent.as_fd())? == self.parent_root
-                && self.args == selector(self.identity["id"].as_u64().unwrap())?,
+                && self.args == selector(enzimos_platform::json::unsigned(&self.identity["id"])?)?,
             "original first parent root or exact ID selector changed",
         )?;
-        let path = self.identity["path"].as_str().unwrap();
+        let path = enzimos_platform::json::string(&self.identity["path"])?;
         require(
             Path::new(path).file_name().and_then(|v| v.to_str()) == Some(self.name.as_str()),
             "original first literal target name changed",
@@ -282,11 +284,13 @@ impl<'j, 'a, 's> After<'j, 'a, 's> {
         before: files::FileIdentity,
     ) -> Result<files::FileIdentity> {
         parent_epoch_transition(
-            Path::new(self.original.identity["path"].as_str().unwrap())
-                .parent()
-                .unwrap()
-                .to_str()
-                .unwrap(),
+            Path::new(enzimos_platform::json::string(
+                &self.original.identity["path"],
+            )?)
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             &self.original.parent_root,
             self.original.parent_epoch,
             self.parent_epoch,
@@ -429,7 +433,9 @@ impl<'j, 'a, 's> Advanced<'j, 'a, 's> {
                 .ok_or_else(|| Error("original remaining target ID".into()))?,
         )?;
         let mut expected = self.original.after.clone();
-        expected.remove(remaining[0].identity()["path"].as_str().unwrap());
+        expected.remove(enzimos_platform::json::string(
+            &remaining[0].identity()["path"],
+        )?);
         crate::root_retirement_delete_observation::inventory_delta(
             &self.original.after,
             &expected,
@@ -533,7 +539,10 @@ impl<'j, 'a, 's> Next<'j, 'a, 's> {
             )?;
         }
         require(
-            self.args == selector(self.remaining[0].identity()["id"].as_u64().unwrap())?,
+            self.args
+                == selector(enzimos_platform::json::unsigned(
+                    &self.remaining[0].identity()["id"],
+                )?)?,
             "next exact original ID selector changed",
         )?;
         self.original

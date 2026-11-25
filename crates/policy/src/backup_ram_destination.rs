@@ -32,7 +32,7 @@ impl<'a> Destination<'a> {
     ) -> Result<Self> {
         config.recheck()?;
         source.recheck()?;
-        let uuid = config.value()["destination_uuid"].as_str().unwrap();
+        let uuid = enzimos_platform::json::string(&config.value()["destination_uuid"])?;
         require(
             source.configuration()["filesystem_uuid"] != uuid,
             "backup destination must be independent of source/control filesystem",
@@ -49,8 +49,10 @@ impl<'a> Destination<'a> {
         let topology = topology::mounted_btrfs(uuid)?;
         independent(
             &topology.json(),
-            &topology::mounted_btrfs(source.configuration()["filesystem_uuid"].as_str().unwrap())?
-                .json(),
+            &topology::mounted_btrfs(enzimos_platform::json::string(
+                &source.configuration()["filesystem_uuid"],
+            )?)?
+            .json(),
         )?;
         let repository = files::directory_relative(&root, Path::new("restic"), Some(0))?;
         require(
@@ -99,9 +101,9 @@ impl<'a> Destination<'a> {
                 && mount_identity::id(self.root.as_fd(), false)? == self.normal
                 && filesystem::observe(self.root.as_fd())? == self.filesystem
                 && mount(&storage_runtime::rows()?, self.normal)? == self.mount
-                && topology::mounted_btrfs(
-                    self.config.value()["destination_uuid"].as_str().unwrap(),
-                )? == self.topology
+                && topology::mounted_btrfs(enzimos_platform::json::string(
+                    &self.config.value()["destination_uuid"],
+                )?)? == self.topology
                 && shape(&repo)? == self.repository_shape
                 && shape(&self.repository)? == self.repository_shape
                 && mount_identity::id(repo.as_fd(), true)? == self.unique

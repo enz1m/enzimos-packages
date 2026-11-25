@@ -34,7 +34,7 @@ pub fn stage_locked(
     authorize()?;
     let journal = Journal::observe(guard, lock, id, Phase::Prepared)?;
     let original_row = journal.record()?;
-    let plan = original_row["plan_sha256"].as_str().unwrap().to_owned();
+    let plan = enzimos_platform::json::string(&original_row["plan_sha256"])?.to_owned();
     let mut permission = || {
         authorize()?;
         guard.recheck()?;

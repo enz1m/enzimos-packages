@@ -29,8 +29,18 @@ pub(crate) fn identity(file: &File, expected: &Value) -> Result<()> {
     )
 }
 fn named(path: &Path) -> Result<File> {
-    let parent = files::directory(path.parent().unwrap(), Some(0))?;
-    files::open_relative(&parent, Path::new(path.file_name().unwrap()))
+    let parent = files::directory(
+        path.parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
+    files::open_relative(
+        &parent,
+        Path::new(
+            path.file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
+    )
 }
 pub(crate) fn readonly(file: &File) -> Result<()> {
     let flags = enzimos_platform::files::status_flags(&file);
@@ -47,15 +57,28 @@ pub(crate) fn command(file: &File, evidence: &Value) -> Result<()> {
         mount_identity::id(file.as_fd(), true)? == evidence["mount"],
         "worker vendor mount changed",
     )?;
-    let path = Path::new(evidence["path"].as_str().unwrap());
-    let parent = files::directory(path.parent().unwrap(), Some(0))?;
-    let named = files::open_relative(&parent, Path::new(path.file_name().unwrap()))?;
+    let path = Path::new(enzimos_platform::json::string(&evidence["path"])?);
+    let parent = files::directory(
+        path.parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
+    let named = files::open_relative(
+        &parent,
+        Path::new(
+            path.file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
+    )?;
     identity(&named, &evidence["inode"])?;
     require(
         mount_identity::id(named.as_fd(), true)? == evidence["mount"]
             && stream_copy::hash_borrowed(
                 file,
-                enzimos_platform::process::executable_limit(path.to_str().unwrap()),
+                enzimos_platform::process::executable_limit(
+                    path.to_str()
+                        .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+                ),
                 Some(0),
             )?
             .1 == evidence["sha256"],
@@ -98,8 +121,8 @@ impl Handoff {
         )?;
         let actor = &request["caller"];
         let caller = process_identity::Retained::open(
-            actor["pid"].as_u64().unwrap() as u32,
-            actor["start_ticks"].as_u64().unwrap(),
+            enzimos_platform::json::unsigned(&actor["pid"])? as u32,
+            enzimos_platform::json::unsigned(&actor["start_ticks"])?,
             0,
             &[PathBuf::from(IMAGE)],
         )?
@@ -170,7 +193,9 @@ impl Handoff {
         Ok(if self.request["consumer_input"].is_null() {
             &self.files[7]
         } else {
-            self.files.last().unwrap()
+            self.files
+                .last()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
         })
     }
     pub fn repository_descriptor(&self) -> Result<&File> {
@@ -203,7 +228,7 @@ impl Handoff {
             )? == self.request,
             "worker immutable request changed",
         )?;
-        let id = self.request["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&self.request["id"])?;
         let intent = json::decode(
             &files::read_file(&self.files[1], 128 * 1024, Some(0), true)?,
             128 * 1024,
@@ -276,7 +301,7 @@ impl Handoff {
         if self.request["credential"]["kind"] == "sealed-caller-input" {
             secret::retain(
                 self.files[7].as_fd(),
-                self.request["plan"]["owner_uid"].as_u64().unwrap() as u32,
+                enzimos_platform::json::unsigned(&self.request["plan"]["owner_uid"])? as u32,
             )?
             .recheck()?;
             let reader = crate::settings_command::Command::open(
@@ -300,8 +325,10 @@ impl Handoff {
             crate::backup_auth_input::borrowed(
                 &self.request["consumer_input"],
                 id,
-                self.request["credential"]["identity"][2].as_u64().unwrap(),
-                self.files.last().unwrap(),
+                enzimos_platform::json::unsigned(&self.request["credential"]["identity"][2])?,
+                self.files
+                    .last()
+                    .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
             )?;
         }
         for (index, key, path) in [

@@ -28,18 +28,18 @@ impl<'g> Prepared<'g> {
         let recipient = Recipient::open(uid, guard)?;
         let account = recipient.account(guard)?;
         require(
-            selection["path"].as_str().unwrap().starts_with(&format!(
+            enzimos_platform::json::string(&selection["path"])?.starts_with(&format!(
                 "/backup-source{}/",
-                account["home"].as_str().unwrap()
+                enzimos_platform::json::string(&account["home"])?
             )),
             "job-plan-invalid",
         )?;
         let filename = destination_name(
-            selection["path"].as_str().unwrap(),
-            selection["id"].as_str().unwrap(),
+            enzimos_platform::json::string(&selection["path"])?,
+            enzimos_platform::json::string(&selection["id"])?,
         )?;
         let registry = Registry::open(guard)?;
-        registry.vacant(guard, selection["id"].as_str().unwrap())?;
+        registry.vacant(guard, enzimos_platform::json::string(&selection["id"])?)?;
         let this = Self {
             guard,
             recipient,
@@ -59,8 +59,10 @@ impl<'g> Prepared<'g> {
             self.recipient.account(self.guard)? == self.account && self.account["uid"] == self.uid,
             "original caller account/home changed",
         )?;
-        self.registry
-            .vacant(self.guard, self.selection["id"].as_str().unwrap())
+        self.registry.vacant(
+            self.guard,
+            enzimos_platform::json::string(&self.selection["id"])?,
+        )
     }
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
@@ -86,7 +88,7 @@ impl<'g> Prepared<'g> {
         )?;
         self.recheck()?;
         completed.recheck(authorize)?;
-        let id = self.selection["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&self.selection["id"])?;
         let mut record = value!({"schema":2,"id":id,"phase":"granted","boot_id":crate::operation::boot_id()?,
             "account":self.account,"export":binding,"filename":self.filename,"metadata_restored":false});
         record["grant_sha256"] = value!(json::fingerprint(&record)?);

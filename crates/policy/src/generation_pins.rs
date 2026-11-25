@@ -85,7 +85,9 @@ impl<'g> Snapshot<'g> {
             )?;
             this.names = names(parent)?;
             for name in &this.names {
-                let id = name.strip_suffix(".json").unwrap();
+                let id = name
+                    .strip_suffix(".json")
+                    .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
                 let record = Retained::open(
                     parent,
                     Path::new(name),
@@ -95,7 +97,7 @@ impl<'g> Snapshot<'g> {
                 validate(
                     record.value()?,
                     id,
-                    guard.configuration["filesystem_uuid"].as_str().unwrap(),
+                    enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
                 )?;
                 this.values[id] = record.value()?.clone();
                 this.records.insert(id.into(), record);
@@ -142,9 +144,7 @@ impl<'g> Snapshot<'g> {
         validate(
             record,
             id,
-            self.guard.configuration["filesystem_uuid"]
-                .as_str()
-                .unwrap(),
+            enzimos_platform::json::string(&self.guard.configuration["filesystem_uuid"])?,
         )?;
         self.recheck()?;
         require(
@@ -169,7 +169,10 @@ impl<'g> Snapshot<'g> {
         }
         self.recheck()?;
         authorize()?;
-        let parent = self.parent.as_ref().unwrap();
+        let parent = self
+            .parent
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let name = format!("{id}.json");
         let produced = Retained::create(
             parent,

@@ -77,7 +77,7 @@ pub(crate) fn metadata(volume: &Volume, entries: &Entries) -> Result<Metadata> {
         let path = volume.path(Path::new(&name))?;
         for suffix in [".partial", ".new"] {
             require(
-                matches!(std::fs::symlink_metadata(path.with_file_name(format!("{}{suffix}",path.file_name().unwrap().to_str().unwrap()))),Err(e) if e.kind() == std::io::ErrorKind::NotFound),
+                matches!(std::fs::symlink_metadata(path.with_file_name(format!("{}{suffix}",path.file_name().ok_or_else(|| enzimos_platform::Error("missing filename".into()))?.to_str().ok_or_else(|| enzimos_platform::Error("path encoding".into()))?))),Err(e) if e.kind() == std::io::ErrorKind::NotFound),
                 "interrupted activation metadata",
             )?;
         }
@@ -181,7 +181,12 @@ pub fn prepare_locked(id: &str, job_sha: &str, lock: &files::Lock) -> Result<Val
             .all(|(_, body)| body.is_none()),
         "existing staged entry cannot be adopted",
     )?;
-    let default = boot::default_guard(actual["loader/loader.conf"].as_deref().unwrap(), &entries)?;
+    let default = boot::default_guard(
+        actual["loader/loader.conf"]
+            .as_deref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+        &entries,
+    )?;
     context
         .volume
         .artifact(
@@ -299,7 +304,9 @@ pub fn publish_locked<F: FnMut(&str) -> Result<()>>(
             write(
                 &context,
                 name,
-                expected[name].as_deref().unwrap(),
+                expected[name]
+                    .as_deref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 &entries,
                 &record,
                 &states,
@@ -362,7 +369,9 @@ pub fn select_locked<F: FnMut(&str) -> Result<()>>(
             write(
                 &context,
                 name,
-                expected[name].as_deref().unwrap(),
+                expected[name]
+                    .as_deref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 &entries,
                 &record,
                 &states,

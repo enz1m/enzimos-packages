@@ -61,8 +61,10 @@ fn mount(
         directory.metadata()?.uid() == 0,
         "independent mountpoint owner refused",
     )?;
-    let source = CString::new(source).unwrap();
-    let target = CString::new(target).unwrap();
+    let source =
+        CString::new(source).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+    let target =
+        CString::new(target).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     let kind_c = CString::new(kind).unwrap();
     let data = data.map(|s| CString::new(s).unwrap());
     require(

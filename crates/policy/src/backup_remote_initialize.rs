@@ -197,7 +197,11 @@ impl<'a> Entered<'a> {
         self.recheck(authorize)?;
         require(
             files::read_file(
-                self.pin.borrow().as_ref().unwrap().file()?,
+                self.pin
+                    .borrow()
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                    .file()?,
                 32768,
                 Some(0),
                 true,
@@ -217,7 +221,11 @@ impl<'a> Entered<'a> {
             self.lock.recheck()?;
             self.inputs.recheck(self.guard)?;
             self.init.recheck()?;
-            self.pin.borrow().as_ref().unwrap().recheck()
+            self.pin
+                .borrow()
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .recheck()
         })?;
         self.recheck(authorize)?;
         Ok(

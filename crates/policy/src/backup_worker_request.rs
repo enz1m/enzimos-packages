@@ -201,7 +201,7 @@ pub fn request(v: &Value) -> Result<()> {
         consumer(
             &v["consumer_input"],
             text(v, "id")?,
-            credential[2].as_u64().unwrap(),
+            enzimos_platform::json::unsigned(&credential[2])?,
         )?;
     }
     crate::settings_command::validate(&v["restic"])?;
@@ -236,7 +236,10 @@ pub fn request(v: &Value) -> Result<()> {
     .flatten()
     {
         require(
-            original_files.insert((metadata[0].as_u64().unwrap(), metadata[1].as_u64().unwrap())),
+            original_files.insert((
+                enzimos_platform::json::unsigned(&metadata[0])?,
+                enzimos_platform::json::unsigned(&metadata[1])?,
+            )),
             "native backup input/document/image roles alias an inode",
         )?;
     }
@@ -265,8 +268,8 @@ pub fn consumer(v: &Value, id: &str, length: u64) -> Result<()> {
         require(
             a.len() == 5
                 && a.iter().all(Value::is_u64)
-                && a[0].as_u64().unwrap() > 0
-                && a[1].as_u64().unwrap() > 0
+                && enzimos_platform::json::unsigned(&a[0])? > 0
+                && enzimos_platform::json::unsigned(&a[1])? > 0
                 && a[2] == (libc::S_IFDIR | 0o700)
                 && a[3] == 0
                 && a[4] == 0,

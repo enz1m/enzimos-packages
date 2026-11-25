@@ -29,7 +29,8 @@ fn mounted(path: &str) -> Result<bool> {
 fn bind(source: &File, path: &str) -> Result<()> {
     storage_runtime::initial_namespace()?;
     let source = CString::new(format!("/proc/self/fd/{}", source.as_raw_fd())).unwrap();
-    let target = CString::new(path).unwrap();
+    let target =
+        CString::new(path).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
         unsafe {
             libc::mount(
@@ -45,7 +46,8 @@ fn bind(source: &File, path: &str) -> Result<()> {
 }
 #[allow(unsafe_code, reason = "Linux syscall ABI (mount).")]
 fn flags(path: &str, flags: libc::c_ulong) -> Result<()> {
-    let target = CString::new(path).unwrap();
+    let target =
+        CString::new(path).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     require(
         unsafe {
             libc::mount(
@@ -116,7 +118,8 @@ impl Mounted {
     fn close(&mut self, readonly: bool) -> Result<()> {
         self.recheck(readonly)?;
         self.file.take();
-        let name = CString::new(self.path).unwrap();
+        let name = CString::new(self.path)
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         if unsafe { libc::umount2(name.as_ptr(), 0) } != 0 {
             self.file = Some(files::directory(Path::new(self.path), Some(0))?);
             return Err(Error(
@@ -147,11 +150,20 @@ impl ModuleView {
     ) -> Result<()> {
         authorize()?;
         self.snapshot.recheck()?;
-        let parent = files::directory(self.journal.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            self.journal
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         require(
             control_record::read(
                 &parent,
-                Path::new(self.journal.file_name().unwrap()),
+                Path::new(
+                    self.journal
+                        .file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+                ),
                 65536,
                 self.snapshot.guard.control_mount_id(),
             )? == self.record,
@@ -335,14 +347,21 @@ impl ModuleView {
             "original module path changed before live overmount",
         )?;
         authorize()?;
-        bind(self.runtime.as_ref().unwrap(), LIVE)?;
+        bind(
+            self.runtime
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+            LIVE,
+        )?;
         authorize()?;
         flags(LIVE, libc::MS_PRIVATE | libc::MS_REC)?;
         authorize()?;
         flags(LIVE, libc::MS_BIND | libc::MS_REMOUNT | libc::MS_RDONLY)?;
         self.live = Some(Mounted::observe(
             LIVE,
-            self.runtime.as_ref().unwrap(),
+            self.runtime
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             true,
         )?);
         self.checkpoint_authorized("active", authorize)?;
@@ -364,14 +383,24 @@ impl ModuleView {
             .recheck(true)?;
         require(
             identity(&self.source)? == self.record["source"]
-                && identity(self.runtime.as_ref().unwrap())? == self.record["runtime"],
+                && identity(
+                    self.runtime
+                        .as_ref()
+                        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+                )? == self.record["runtime"],
             "module source or runtime directory changed",
         )?;
         Ok(())
     }
     pub fn transaction_directory(&self) -> Result<&File> {
         self.recheck()?;
-        Ok(self.alias.as_ref().unwrap().file.as_ref().unwrap())
+        Ok(self
+            .alias
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .file
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?)
     }
     pub fn kernel(&self) -> &str {
         &self.kernel
@@ -422,8 +451,14 @@ impl ModuleView {
         authorize()?;
         let old = files::directory(&self.base.join("modules").join(&self.kernel), Some(0))?;
         let destination = files::ensure_directory(&Path::new(ALIAS).join(&self.kernel), 0o755, 0)?;
-        self.alias.as_ref().unwrap().recheck(false)?;
-        self.live.as_ref().unwrap().recheck(true)?;
+        self.alias
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .recheck(false)?;
+        self.live
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .recheck(true)?;
         self.snapshot.recheck()?;
         let restore = crate::settings_command::Command::open_boot(
             crate::settings_command::BootTool::RestoreModules,
@@ -450,7 +485,12 @@ impl ModuleView {
         )?;
         require(
             inventory::generation(
-                &inventory::observe(self.runtime.as_ref().unwrap(), 0)?,
+                &inventory::observe(
+                    self.runtime
+                        .as_ref()
+                        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+                    0,
+                )?,
                 &self.kernel,
             )? == inventory::generation(&self.baseline, &self.kernel)?
                 && inventory::generation(&inventory::observe(&self.source, 0)?, &self.kernel)?
@@ -461,13 +501,19 @@ impl ModuleView {
         drop((old, destination));
         self.checkpoint_authorized("detaching-live", authorize)?;
         authorize()?;
-        self.live.as_mut().unwrap().close(true)?;
+        self.live
+            .as_mut()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .close(true)?;
         require(
             identity(&files::directory(Path::new(LIVE), Some(0))?)? == self.record["source"],
             "original live module path did not return",
         )?;
         authorize()?;
-        self.alias.as_mut().unwrap().close(false)?;
+        self.alias
+            .as_mut()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .close(false)?;
         self.checkpoint_authorized("complete", authorize)
     }
 }

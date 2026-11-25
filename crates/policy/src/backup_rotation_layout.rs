@@ -202,9 +202,14 @@ impl Layout {
         });
         for path in paths {
             authorize()?;
-            let expected = *self.objects.get(&path).unwrap();
+            let expected = *self
+                .objects
+                .get(&path)
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
             let directory = expected.7 & libc::S_IFMT == libc::S_IFDIR;
-            let parent_path = path.parent().unwrap();
+            let parent_path = path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?;
             require(
                 files::identity(&self.root.metadata()?) == self.epoch
                     && mount_identity::id(self.root.as_fd(), true)? == self.mount,
@@ -243,7 +248,10 @@ impl Layout {
                     "original removal directory contains unknown members",
                 )?;
             }
-            let name = Path::new(path.file_name().unwrap());
+            let name = Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            );
             let entry = enzimos_platform::directory_entry::Entry::observe(&parent, name)?;
             entry.matches(&object)?;
             let mut names = files::directory_names(&parent, 131072)?
@@ -253,7 +261,8 @@ impl Layout {
                 names.remove(name.as_os_str()),
                 "original removal name unavailable",
             )?;
-            let name = CString::new(name.as_os_str().as_bytes()).unwrap();
+            let name = CString::new(name.as_os_str().as_bytes())
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             authorize()?;
             entry.recheck()?;
             require(

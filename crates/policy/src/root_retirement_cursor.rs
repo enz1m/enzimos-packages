@@ -221,13 +221,22 @@ impl<'j, 'a, 's> Executing<'j, 'a, 's> {
         let target_flags = flags(&target)?;
         let parent_flags = flags(&parent)?;
         let parent_root = crate::subvolume::containing_identity(parent.as_fd())?;
-        let path = Path::new(identity["path"].as_str().unwrap());
-        let parent_path = path.parent().unwrap().to_str().unwrap().to_owned();
-        let name = path.file_name().unwrap().to_str().unwrap();
+        let path = Path::new(enzimos_platform::json::string(&identity["path"])?);
+        let parent_path = path
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
+            .to_owned();
+        let name = path
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?;
         let literal = CString::new(name).map_err(|_| Error("remaining literal name".into()))?;
-        let mut args = selector(identity["id"].as_u64().unwrap())?;
+        let mut args = selector(enzimos_platform::json::unsigned(&identity["id"])?)?;
         let mut expected = self.original.expected.clone();
-        expected.remove(identity["path"].as_str().unwrap());
+        expected.remove(enzimos_platform::json::string(&identity["path"])?);
         crate::root_retirement_delete_observation::inventory_delta(
             &self.original.expected,
             &expected,

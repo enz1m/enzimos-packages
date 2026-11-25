@@ -33,7 +33,8 @@ fn generate(home: &Path) -> Result<()> {
         &[
             "--no-options",
             "--homedir",
-            home.to_str().unwrap(),
+            home.to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             "--batch",
             "--no-tty",
             "--no-autostart",
@@ -68,7 +69,8 @@ fn handshake(
         "/usr/bin/gpgconf",
         &[
             "--homedir",
-            home.to_str().unwrap(),
+            home.to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             "--list-dirs",
             "agent-socket",
         ],
@@ -111,7 +113,12 @@ fn handshake(
         original.recheck()?;
         std::thread::sleep(Duration::from_millis(10));
     }
-    let parent = files::directory(socket.parent().unwrap(), Some(owner))?;
+    let parent = files::directory(
+        socket
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(owner),
+    )?;
     require(
         parent.metadata()?.mode() & 0o7777 == 0o700,
         "ephemeral socket parent protection",
@@ -154,7 +161,10 @@ impl Signer {
             fingerprints.len() == 1,
             "ephemeral signer must contain exactly one public key",
         )?;
-        let fingerprint = fingerprints.into_iter().next().unwrap();
+        let fingerprint = fingerprints
+            .into_iter()
+            .next()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         let result = Self {
             home: home.into(),
             inode: directory_identity(&directory)?,
@@ -235,7 +245,9 @@ impl Signer {
             &[
                 "--no-options",
                 "--homedir",
-                self.home.to_str().unwrap(),
+                self.home
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
                 "--batch",
                 "--no-tty",
                 "--no-autostart",

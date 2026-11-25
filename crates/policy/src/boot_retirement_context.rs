@@ -144,8 +144,8 @@ fn selected(texts: &BTreeMap<String, String>, firmware: &Value) -> Result<BTreeS
         default.clone(),
         menu.entries[menu.selected - 1].title.clone(),
     ]);
-    for v in firmware["variables"].as_object().unwrap().values() {
-        result.insert(v.as_str().unwrap().into());
+    for v in enzimos_platform::json::object(&firmware["variables"])?.values() {
+        result.insert(enzimos_platform::json::string(v)?.into());
     }
     Ok(result)
 }
@@ -287,7 +287,11 @@ impl SignedInventory {
             .get(relative)
             .ok_or_else(|| Error("original signed continuation image missing".into()))?;
         retired.require_original(original)?;
-        let leaf = Path::new(relative).file_name().unwrap().to_str().unwrap();
+        let leaf = Path::new(relative)
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?;
         let directory = self
             .directory
             .as_mut()
@@ -531,11 +535,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
                     .map(|name| (name.to_owned(), body.clone()))
             })
             .collect::<BTreeMap<_, _>>();
-        for row in transaction.data["generations"]
-            .as_object()
-            .unwrap()
-            .values()
-        {
+        for row in enzimos_platform::json::object(&transaction.data["generations"])?.values() {
             authorize()?;
             require(
                 boot_entries::fingerprint_entries(row, &uefi, &texts["limine/limine.conf"])?
@@ -563,7 +563,7 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
             )?;
             artifacts.insert(name.clone(), artifact);
         }
-        for (id, row) in transaction.data["generations"].as_object().unwrap() {
+        for (id, row) in enzimos_platform::json::object(&transaction.data["generations"])? {
             authorize()?;
             let path = format!("enzimos/generations/{id}");
             let directory = Directory::observe(&volume, &path, 6)?;
@@ -580,14 +580,12 @@ impl<'a, 'g: 'a> Context<'a, 'g> {
                     128 * 1024 * 1024
                 };
                 let artifact = volume.artifact(Path::new(&relative), limit)?;
-                if let Some(expected) = row["material"]["files"]
-                    .as_array()
-                    .unwrap()
+                if let Some(expected) = enzimos_platform::json::array(&row["material"]["files"])?
                     .iter()
                     .find(|r| r["name"] == name)
                 {
                     require(
-                        artifact.bytes == expected["bytes"].as_u64().unwrap()
+                        artifact.bytes == enzimos_platform::json::unsigned(&expected["bytes"])?
                             && artifact.sha == expected["sha256"],
                         "original registered ESP artifact differs",
                     )?;

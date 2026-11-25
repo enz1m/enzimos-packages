@@ -82,9 +82,7 @@ fn legacy(v: Option<&Value>) -> Result<Vec<(String, String)>> {
         *v == installer || *v == lab,
         "unreviewed legacy ownership declaration",
     )?;
-    Ok(v["uefi"]
-        .as_array()
-        .unwrap()
+    Ok(enzimos_platform::json::array(&v["uefi"])?
         .iter()
         .zip(v["bios"].as_array().unwrap())
         .map(|(u, b)| (u.as_str().unwrap().into(), b.as_str().unwrap().into()))
@@ -239,7 +237,7 @@ pub fn redirect<F: FnMut(&str) -> Result<String>>(
     let mut patches = Texts::new();
     let mut affected = Vec::new();
     let mut redirects = BTreeMap::<String, String>::new();
-    for (id, record) in before["generations"].as_object().unwrap() {
+    for (id, record) in enzimos_platform::json::object(&before["generations"])? {
         require(
             record["state"] == "ready",
             "pending generation prevents root rebind",

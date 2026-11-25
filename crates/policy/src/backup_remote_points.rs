@@ -76,7 +76,7 @@ pub(crate) fn replicated(source: &Value, id: &str, destination: &Value) -> Resul
         .collect::<Vec<_>>();
     require(matches.len() == 1, "remote copy lineage is not unique")?;
     equivalent(source, matches[0])?;
-    Ok(matches[0]["id"].as_str().unwrap().into())
+    Ok(enzimos_platform::json::string(&matches[0]["id"])?.into())
 }
 /// All original rotation points map bijectively to an exact new inventory.
 /// Index lineage once so the closed10,000-point bound remains linear-logarithmic.

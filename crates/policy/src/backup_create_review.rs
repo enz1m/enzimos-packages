@@ -180,7 +180,7 @@ fn document(
     let mut hashes = value!({});
     let mut held = Vec::new();
     for flavor in ["linux", "linux-lts"] {
-        let version = kernels[flavor].as_str().unwrap();
+        let version = enzimos_platform::json::string(&kernels[flavor])?;
         crate::identity::safe_id(version)?;
         let file = files::open_relative(&modules, Path::new(&format!("{version}/vmlinuz")))?;
         let (_, hash) = stream_copy::hash_borrowed(&file, 128 * 1024 * 1024, Some(0))?;

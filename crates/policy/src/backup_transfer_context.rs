@@ -85,7 +85,10 @@ impl<'a, 'b, 'c, 's, 'cfg, 'g> Context<'a, 'b, 'c, 's, 'cfg, 'g> {
             "worker_started":false,"backup_complete":false});
         let record = crate::control_record::Retained::create(
             &parent,
-            std::path::Path::new(&format!("{}.json", self.original["id"].as_str().unwrap())),
+            std::path::Path::new(&format!(
+                "{}.json",
+                enzimos_platform::json::string(&self.original["id"])?
+            )),
             &value,
             4096,
             mount,

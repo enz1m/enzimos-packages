@@ -60,7 +60,7 @@ impl Checkpoint {
         self.sequence += 1;
         let challenge = value!({"schema":1,"id":request["id"],"request_sha256":json::fingerprint(request)?,
             "sequence":self.sequence,"nonce":files::random_hex(16)?});
-        let caller = request["caller"]["pid"].as_u64().unwrap() as u32;
+        let caller = enzimos_platform::json::unsigned(&request["caller"]["pid"])? as u32;
         self.channel
             .send(&json::canonical(&challenge)?, &[], Duration::from_secs(2))?;
         self.channel.wait_ready(
@@ -86,7 +86,7 @@ impl Checkpoint {
         )?;
         self.failed = true;
         let request = handoff.request()?;
-        let task = request["task"].as_str().unwrap();
+        let task = enzimos_platform::json::string(&request["task"])?;
         crate::backup_worker_result::for_request(result, request)?;
         require(
             header.is_some() == (result["status"] == "provisioned"),
@@ -114,7 +114,7 @@ impl Checkpoint {
         report_acknowledgement(
             &reply,
             &v,
-            request["caller"]["pid"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&request["caller"]["pid"])? as u32,
         )?;
         handoff.recheck()
     }

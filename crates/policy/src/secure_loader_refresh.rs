@@ -70,9 +70,20 @@ pub fn refresh_authorized(
     )?;
     let certificate = memfile::sealed("enzimos-loader-certificate", &material.pem)?;
     let receipt = Path::new(secure_boot::DIRECTORY).join("loaders.json");
-    let receipt_parent = files::directory(receipt.parent().unwrap(), Some(0))?;
-    let previous_file =
-        files::optional_relative(&receipt_parent, Path::new(receipt.file_name().unwrap()))?;
+    let receipt_parent = files::directory(
+        receipt
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
+    let previous_file = files::optional_relative(
+        &receipt_parent,
+        Path::new(
+            receipt
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
+    )?;
     let previous_epoch = previous_file
         .as_ref()
         .map(|f| f.metadata().map(|m| files::identity(&m)))

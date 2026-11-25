@@ -190,12 +190,20 @@ fn shape(f: &File) -> Result<(u64, u64, u32, u32, u32)> {
 }
 impl Device {
     fn open(row: &Value, protected: &topology::Graph) -> Result<Self> {
-        let path = Path::new(row["name"].as_str().unwrap());
-        let parent = files::directory(path.parent().unwrap(), Some(0))?;
-        let file = open_device(&parent, path.file_name().unwrap())?;
+        let path = Path::new(enzimos_platform::json::string(&row["name"])?);
+        let parent = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let file = open_device(
+            &parent,
+            path.file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        )?;
         let inode = files::identity(&file.metadata()?);
         let observed = block::observe(file.as_fd())?;
-        let number = device_number(row["maj:min"].as_str().unwrap())?;
+        let number = device_number(enzimos_platform::json::string(&row["maj:min"])?)?;
         require(
             observed["major"] == number.0
                 && observed["minor"] == number.1
@@ -228,8 +236,18 @@ impl Device {
         Ok(this)
     }
     fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
-        let named = open_device(&self.parent, self.path.file_name().unwrap())?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let named = open_device(
+            &self.parent,
+            self.path
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        )?;
         require(
             shape(&parent)? == self.parent_shape
                 && shape(&self.parent)? == self.parent_shape
@@ -242,8 +260,8 @@ impl Device {
                 && block::observe(self.file.as_fd())? == self.observed
                 && block::observe(named.as_fd())? == self.observed
                 && topology::observe(&[(
-                    self.observed["major"].as_u64().unwrap() as u32,
-                    self.observed["minor"].as_u64().unwrap() as u32,
+                    enzimos_platform::json::unsigned(&self.observed["major"])? as u32,
+                    enzimos_platform::json::unsigned(&self.observed["minor"])? as u32,
                 )])? == self.graph,
             "original backup device changed or replaced",
         )
@@ -265,9 +283,10 @@ impl Discovery {
         let guard = Guard::observe()?;
         let vendor = Command::open("/usr/bin/lsblk")?;
         let boot = operation::boot_id()?;
-        let source =
-            topology::mounted_btrfs(guard.configuration["filesystem_uuid"].as_str().unwrap())?;
-        let uuid = guard.configuration["filesystem_uuid"].as_str().unwrap();
+        let source = topology::mounted_btrfs(enzimos_platform::json::string(
+            &guard.configuration["filesystem_uuid"],
+        )?)?;
+        let uuid = enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?;
         let source_members = topology::btrfs_roots(uuid)?;
         let devices = source_runtime_hints(Self::read(&vendor)?, uuid, &source_members)?;
         let this = Self {
@@ -297,9 +316,7 @@ impl Discovery {
         )?)
     }
     fn read_current(&self) -> Result<Vec<Value>> {
-        let uuid = self.guard.configuration["filesystem_uuid"]
-            .as_str()
-            .unwrap();
+        let uuid = enzimos_platform::json::string(&self.guard.configuration["filesystem_uuid"])?;
         require(
             topology::btrfs_roots(uuid)? == self.source_members,
             "backup source members changed",
@@ -311,11 +328,9 @@ impl Discovery {
         self.vendor.recheck()?;
         require(
             operation::boot_id()? == self.boot
-                && topology::mounted_btrfs(
-                    self.guard.configuration["filesystem_uuid"]
-                        .as_str()
-                        .unwrap(),
-                )? == self.source,
+                && topology::mounted_btrfs(enzimos_platform::json::string(
+                    &self.guard.configuration["filesystem_uuid"],
+                )?)? == self.source,
             "system storage changed during backup discovery",
         )
     }
@@ -444,7 +459,10 @@ fn attached_inventory(original: &[Value], current: &[Value], selected: &str) -> 
         matches.len() == 1,
         "unique original attached device required",
     )?;
-    let row = matches.into_iter().next().unwrap();
+    let row = matches
+        .into_iter()
+        .next()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
     require(
         row["mountpoints"]
             .as_array()
@@ -638,7 +656,7 @@ impl Selection<'_> {
                 mount.source_uuid(),
                 mount.source_members(),
             )?,
-            self.row["name"].as_str().unwrap(),
+            enzimos_platform::json::string(&self.row["name"])?,
         )?;
         mount.recheck_kernel()?;
         self.device.recheck()?;

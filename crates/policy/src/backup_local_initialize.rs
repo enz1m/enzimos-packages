@@ -40,7 +40,7 @@ impl<'a> Empty<'a> {
     fn observe(source: &'a storage_runtime::Guard) -> Result<Self> {
         source.recheck()?;
         let config = Configuration::open()?;
-        let uuid = config.value()["destination_uuid"].as_str().unwrap();
+        let uuid = enzimos_platform::json::string(&config.value()["destination_uuid"])?;
         require(
             source.configuration["filesystem_uuid"] != uuid,
             "initial repository must be independent of system filesystem",
@@ -56,8 +56,9 @@ impl<'a> Empty<'a> {
         let mounted = mount(&storage_runtime::rows()?, normal)?;
         writable(&mounted)?;
         let topology = topology::mounted_btrfs(uuid)?;
-        let source_topology =
-            topology::mounted_btrfs(source.configuration["filesystem_uuid"].as_str().unwrap())?;
+        let source_topology = topology::mounted_btrfs(enzimos_platform::json::string(
+            &source.configuration["filesystem_uuid"],
+        )?)?;
         independent(&topology.json(), &source_topology.json())?;
         let repository = files::directory_relative(&root, Path::new("restic"), Some(0))?;
         let root_epoch = files::identity(&root.metadata()?);
@@ -106,14 +107,14 @@ impl<'a> Empty<'a> {
         )?;
         self.image.evidence()?;
         require(
-            topology::mounted_btrfs(self.config.value()["destination_uuid"].as_str().unwrap())?
-                .json()
+            topology::mounted_btrfs(enzimos_platform::json::string(
+                &self.config.value()["destination_uuid"],
+            )?)?
+            .json()
                 == self.topology.json()
-                && topology::mounted_btrfs(
-                    self.source.configuration["filesystem_uuid"]
-                        .as_str()
-                        .unwrap(),
-                )?
+                && topology::mounted_btrfs(enzimos_platform::json::string(
+                    &self.source.configuration["filesystem_uuid"],
+                )?)?
                 .json()
                     == self.source_topology.json(),
             "original initialization topology changed",

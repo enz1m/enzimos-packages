@@ -40,7 +40,7 @@ enum Role {
 }
 fn roles(intent: &Value) -> Result<Vec<Role>> {
     retirement_journal::intent(intent)?;
-    let id = intent["id"].as_str().unwrap();
+    let id = enzimos_platform::json::string(&intent["id"])?;
     let generation = id
         .strip_prefix("boot-")
         .ok_or_else(|| Error("fixed boot continuation ID required".into()))?;
@@ -53,9 +53,9 @@ fn roles(intent: &Value) -> Result<Vec<Role>> {
     let mut directory = 0;
     let mut tombstone = 0;
     let mut ukis = 0;
-    for step in intent["steps"].as_array().unwrap() {
-        let name = step["id"].as_str().unwrap();
-        let role = match (step["kind"].as_str().unwrap(), name) {
+    for step in enzimos_platform::json::array(&intent["steps"])? {
+        let name = enzimos_platform::json::string(&step["id"])?;
+        let role = match (enzimos_platform::json::string(&step["kind"])?, name) {
             ("uefi-entry", name) => {
                 let flavor = name
                     .strip_prefix("uefi-")
@@ -123,12 +123,12 @@ fn classify(record: &Value, states: &[String]) -> Result<Vec<&'static str>> {
         .as_str()
         .ok_or_else(|| Error("continuation ID required".into()))?;
     retirement_journal::validate(record, id)?;
-    let steps = record["intent"]["steps"].as_array().unwrap();
+    let steps = enzimos_platform::json::array(&record["intent"]["steps"])?;
     require(
         states.len() == steps.len(),
         "exact continuation observation count required",
     )?;
-    let next = record["next_step"].as_u64().unwrap() as usize;
+    let next = enzimos_platform::json::unsigned(&record["next_step"])? as usize;
     let inflight = record["inflight"].as_u64().map(|n| n as usize);
     let complete = record["phase"] == "complete";
     states
@@ -439,8 +439,14 @@ impl<'a> Admission<'a> {
                     if !admission.retain_parent(&path)? {
                         absent.clone()
                     } else {
-                        let parent = path.parent().unwrap();
-                        let leaf = path.file_name().unwrap().to_str().unwrap();
+                        let parent = path
+                            .parent()
+                            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?;
+                        let leaf = path
+                            .file_name()
+                            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                            .to_str()
+                            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?;
                         if !admission.directories[parent].names.contains(leaf) {
                             absent.clone()
                         } else {
@@ -452,17 +458,21 @@ impl<'a> Admission<'a> {
                     }
                 }
                 Role::Directory(path) => {
-                    let parent = path.parent().unwrap();
+                    let parent = path
+                        .parent()
+                        .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?;
                     if !admission.directories.contains_key(parent) {
                         admission.directories.insert(
                             parent.into(),
                             Directory::observe(&admission.volume, parent)?,
                         );
                     }
-                    if !admission.directories[parent]
-                        .names
-                        .contains(path.file_name().unwrap().to_str().unwrap())
-                    {
+                    if !admission.directories[parent].names.contains(
+                        path.file_name()
+                            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                            .to_str()
+                            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+                    ) {
                         absent.clone()
                     } else {
                         if !admission.directories.contains_key(&path) {
@@ -481,7 +491,9 @@ impl<'a> Admission<'a> {
                         let (current, precondition) = directory_precondition(
                             current_names,
                             &actual_members,
-                            admission.record.value()?["next_step"].as_u64().unwrap() as usize,
+                            enzimos_platform::json::unsigned(
+                                &admission.record.value()?["next_step"],
+                            )? as usize,
                             index,
                         )?;
                         projection = Some(precondition);
@@ -539,7 +551,7 @@ impl<'a> Admission<'a> {
     fn evidence(&self) -> Result<Value> {
         self.recheck()?;
         let record = self.record.value()?;
-        let steps:Vec<_>=record["intent"]["steps"].as_array().unwrap().iter().enumerate().map(|(i,s)|value!({"id":s["id"],"kind":s["kind"],"current_state":self.observed_states[i],"step_precondition_state":self.states[i],"future_directory_precondition":self.observed_states[i]!=self.states[i],"classification":self.classification[i]})).collect();
+        let steps:Vec<_>=enzimos_platform::json::array(&record["intent"]["steps"])?.iter().enumerate().map(|(i,s)|value!({"id":s["id"],"kind":s["kind"],"current_state":self.observed_states[i],"step_precondition_state":self.states[i],"future_directory_precondition":self.observed_states[i]!=self.states[i],"classification":self.classification[i]})).collect();
         let mut report = value!({"schema":1,"status":"boot-retirement-continuation-observed","id":record["intent"]["id"],"phase":record["phase"],"next_step":record["next_step"],"inflight":record["inflight"],"source":self.source,"receipt":self.record.evidence()?,"registry":self.registry.evidence()?,"signed_protection":self.signed.as_ref().ok_or_else(||Error("original continuation signed closure absent".into()))?.evidence(self)?,"loader_protection":self.loaders.as_ref().ok_or_else(||Error("original continuation loader protection absent".into()))?.evidence(self)?,"reference_protection":self.references.as_ref().ok_or_else(||Error("original continuation references absent".into()))?.evidence(&self.record)?,"catalog":self.catalog.evidence()?,"steps":steps,"execution_available":false,"root_subvolume_retained":true,"automatic_replay":false,"blockers":["explicit-fresh-execution-admission-required"]});
         report["review_sha256"] = value!(json::fingerprint(&report)?);
         self.recheck()?;

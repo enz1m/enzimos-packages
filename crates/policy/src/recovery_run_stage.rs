@@ -28,7 +28,7 @@ pub(crate) fn luks_uuid(guard: &Guard) -> Result<String> {
         .trim()
         .split('[')
         .next()
-        .unwrap();
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
     require(
         source.starts_with("/dev/")
             && source.len() <= 1024

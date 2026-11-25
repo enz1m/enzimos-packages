@@ -59,9 +59,9 @@ pub(crate) fn layout(config: &Value) -> Result<Vec<Dataset>> {
     crate::backup_configuration::validate(config)?;
     let mut sources = base();
     if let Some(rows) = config.get("additional_sources") {
-        for row in rows.as_array().unwrap() {
-            let name = row["snapper_config"].as_str().unwrap();
-            let path = row["path"].as_str().unwrap();
+        for row in enzimos_platform::json::array(rows)? {
+            let name = enzimos_platform::json::string(&row["snapper_config"])?;
+            let path = enzimos_platform::json::string(&row["path"])?;
             additional(name, path)?;
             require(
                 !sources.iter().any(|s| {

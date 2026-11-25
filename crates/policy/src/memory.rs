@@ -339,7 +339,7 @@ fn service_state_with(command: &Command) -> Result<Value> {
     let mut v = parse_service(
         std::str::from_utf8(&b).map_err(|_| Error("memory service state encoding".into()))?,
     )?;
-    let pid = v["MainPID"].as_u64().unwrap() as u32;
+    let pid = enzimos_platform::json::unsigned(&v["MainPID"])? as u32;
     // An unconfirmed task leaves EffectiveMode null: unknown is never a mode.
     if pid > 0
         && let Ok(body) = running_command_line(pid)
@@ -394,7 +394,7 @@ fn settle(mode: &str, fx: &mut dyn Effects) -> Result<()> {
 pub fn transition(mode: &str, before: &[u8], fx: &mut dyn Effects) -> Result<Value> {
     let previous = json::decode(before, 1024)?;
     validate_document(&previous)?;
-    let previous = previous["mode"].as_str().unwrap().to_owned();
+    let previous = enzimos_platform::json::string(&previous["mode"])?.to_owned();
     let body = json::canonical(&value!({"schema":1,"mode":mode}))?;
     validate_document(&json::decode(&body, 1024)?)?;
     fx.authorize()?;
@@ -473,7 +473,11 @@ pub fn set_policy<F: FnMut() -> Result<()>>(v: &Value, authorization: F) -> Resu
         lock: &lock,
         deadline: Instant::now(),
     };
-    transition(v["mode"].as_str().unwrap(), &before, &mut live)
+    transition(
+        enzimos_platform::json::string(&v["mode"])?,
+        &before,
+        &mut live,
+    )
 }
 pub fn plan() -> Result<Value> {
     let lock = operation::lock()?;
@@ -485,7 +489,7 @@ pub fn plan() -> Result<Value> {
 pub fn observation() -> Result<Value> {
     let config = Config::open(CONFIG, 1024)?;
     let mut state = policy()?;
-    state.as_object_mut().unwrap().remove("service");
+    enzimos_platform::json::object_mut(&mut state)?.remove("service");
     let command = Command::open("/usr/bin/systemctl")?;
     config.recheck()?;
     Ok(value!({"state":state,"configuration":config.evidence()?,"provider":command.evidence()?}))
@@ -495,7 +499,9 @@ pub fn configured_arguments() -> Result<Option<Vec<String>>> {
     if v["mode"] == "off" {
         Ok(None)
     } else {
-        Ok(Some(arguments(v["mode"].as_str().unwrap())?))
+        Ok(Some(arguments(enzimos_platform::json::string(
+            &v["mode"],
+        )?)?))
     }
 }
 
@@ -523,7 +529,7 @@ pub fn launch(action: &str) -> Result<Value> {
             value!({"status":if document["mode"]=="off" {"memory-policy-disabled"} else {"memory-policy-enabled"}}),
         );
     }
-    let args = arguments(document["mode"].as_str().unwrap())?;
+    let args = arguments(enzimos_platform::json::string(&document["mode"])?)?;
     let parent = files::directory(Path::new("/usr/bin"), Some(0))?;
     let executable = files::open_relative(&parent, Path::new("earlyoom"))?;
     let epoch = files::identity(&executable.metadata()?);
@@ -534,7 +540,11 @@ pub fn launch(action: &str) -> Result<Value> {
             && body.starts_with(b"\x7fELF")
             && body[4] == 2
             && body[5] == 1
-            && u16::from_le_bytes(body[18..20].try_into().unwrap()) == 62
+            && u16::from_le_bytes(
+                body[18..20]
+                    .try_into()
+                    .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+            ) == 62
             && executable.metadata()?.mode() & 0o111 == 0o111
             && executable.metadata()?.gid() == 0,
         "original x86_64 earlyoom executable required",
@@ -546,8 +556,10 @@ pub fn launch(action: &str) -> Result<Value> {
     let mut argv: Vec<_> = arguments.iter().map(|a| a.as_ptr()).collect();
     argv.push(std::ptr::null());
     let environment = [
-        CString::new("PATH=/usr/bin").unwrap(),
-        CString::new("LANG=C.UTF-8").unwrap(),
+        CString::new("PATH=/usr/bin")
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?,
+        CString::new("LANG=C.UTF-8")
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?,
     ];
     let mut env: Vec<_> = environment.iter().map(|a| a.as_ptr()).collect();
     env.push(std::ptr::null());

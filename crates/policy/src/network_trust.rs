@@ -16,7 +16,9 @@ pub(crate) fn terse(line: &str) -> Result<Vec<String>> {
     for c in line.chars() {
         if escaped {
             require(matches!(c, ':' | '\\'), "network connection escape differs")?;
-            rows.last_mut().unwrap().push(c);
+            rows.last_mut()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+                .push(c);
             escaped = false;
         } else if c == '\\' {
             escaped = true;
@@ -24,7 +26,9 @@ pub(crate) fn terse(line: &str) -> Result<Vec<String>> {
             require(rows.len() < 4, "network connection column bound")?;
             rows.push(String::new());
         } else {
-            rows.last_mut().unwrap().push(c);
+            rows.last_mut()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+                .push(c);
         }
     }
     require(!escaped && rows.len() == 4, "network connection row shape")?;

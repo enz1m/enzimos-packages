@@ -13,10 +13,16 @@ fn closure(inventory: &Records, targets: &Value) -> Result<()> {
         .as_array()
         .ok_or_else(|| Error("offline inventory target rows".into()))?;
     require(
-        (1..=64).contains(&targets.len()) && targets.last().unwrap()["role"] == "root-subvolume",
+        (1..=64).contains(&targets.len())
+            && targets
+                .last()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["role"]
+                == "root-subvolume",
         "one bounded final offline root target required",
     )?;
-    let root = targets.last().unwrap()["path"]
+    let root = targets
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| Error("offline inventory root path".into()))?;
     crate::identity::safe_id(root)?;
@@ -34,7 +40,7 @@ fn closure(inventory: &Records, targets: &Value) -> Result<()> {
             expected.insert(path.to_owned()),
             "duplicate offline target path",
         )?;
-        let mut identity = row.as_object().unwrap().clone();
+        let mut identity = enzimos_platform::json::object(row)?.clone();
         identity.remove("role");
         require(
             inventory.get(path) == Some(&Value::Object(identity)),

@@ -39,7 +39,7 @@ impl Inputs<'_> {
         if request["credential"]["kind"] == "sealed-caller-input" {
             enzimos_platform::secret::retain(
                 self.credential.as_fd(),
-                request["plan"]["owner_uid"].as_u64().unwrap() as u32,
+                enzimos_platform::json::unsigned(&request["plan"]["owner_uid"])? as u32,
             )?
             .recheck()?;
             let reader = crate::settings_command::Command::open(
@@ -82,8 +82,8 @@ impl Inputs<'_> {
         if let Some(file) = self.temporary {
             crate::backup_auth_input::borrowed(
                 &request["consumer_input"],
-                request["id"].as_str().unwrap(),
-                request["credential"]["identity"][2].as_u64().unwrap(),
+                enzimos_platform::json::string(&request["id"])?,
+                enzimos_platform::json::unsigned(&request["credential"]["identity"][2])?,
                 file,
             )?;
         }

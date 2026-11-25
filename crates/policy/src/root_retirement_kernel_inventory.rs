@@ -93,7 +93,7 @@ fn u64_at(bytes: &[u8], offset: usize, native: bool) -> Result<u64> {
         .get(offset..offset + 8)
         .ok_or_else(|| Error("truncated Btrfs inventory integer".into()))?
         .try_into()
-        .unwrap();
+        .map_err(|_| enzimos_platform::Error("value out of range".into()))?;
     Ok(if native {
         u64::from_ne_bytes(raw)
     } else {
@@ -105,7 +105,7 @@ fn u32_at(bytes: &[u8], offset: usize, native: bool) -> Result<u32> {
         .get(offset..offset + 4)
         .ok_or_else(|| Error("truncated Btrfs inventory integer".into()))?
         .try_into()
-        .unwrap();
+        .map_err(|_| enzimos_platform::Error("value out of range".into()))?;
     Ok(if native {
         u32::from_ne_bytes(raw)
     } else {
@@ -187,7 +187,11 @@ impl Tree {
             }
             144 | 156 => {
                 require(body.len() >= 18, "complete Btrfs root reference required")?;
-                let length = u16::from_le_bytes(body[16..18].try_into().unwrap()) as usize;
+                let length = u16::from_le_bytes(
+                    body[16..18]
+                        .try_into()
+                        .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+                ) as usize;
                 require(
                     body.len() == 18 + length,
                     "Btrfs root reference byte length differs",

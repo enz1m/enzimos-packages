@@ -227,7 +227,7 @@ impl<'a, 's> Original<'a, 's> {
         )?;
         let descriptor = running.descriptor()?;
         require(
-            kernel.sha == descriptor["kernel_sha256"].as_str().unwrap()
+            kernel.sha == enzimos_platform::json::string(&descriptor["kernel_sha256"])?
                 && json::decode(
                     &files::read_file(&identity.file, 2 * 1024 * 1024, Some(0), true)?,
                     2 * 1024 * 1024,
@@ -241,9 +241,7 @@ impl<'a, 's> Original<'a, 's> {
             true,
         )?;
         assembly(&bytes, descriptor)?;
-        let wanted = descriptor["policy_files"]
-            .as_object()
-            .unwrap()
+        let wanted = enzimos_platform::json::object(&descriptor["policy_files"])?
             .keys()
             .map(|name| format!("usr/lib/enzimos-native/{name}"))
             .chain(std::iter::once(
@@ -251,7 +249,7 @@ impl<'a, 's> Original<'a, 's> {
             ))
             .collect();
         let members = initramfs::inventory(&bytes, &wanted)?;
-        for (name, digest) in descriptor["policy_files"].as_object().unwrap() {
+        for (name, digest) in enzimos_platform::json::object(&descriptor["policy_files"])? {
             let member = members
                 .get(&format!("usr/lib/enzimos-native/{name}"))
                 .ok_or_else(|| Error("actual ESP initrd native policy member missing".into()))?;
@@ -408,8 +406,8 @@ impl Restored<'_, '_> {
             TextState::Replaced(_) => "restored",
         };
         Ok(
-            value!({"uefi":state(self.original.defaults.as_ref().unwrap()),
-            "bios":state(self.original.bios.as_ref().unwrap())}),
+            value!({"uefi":state(self.original.defaults.as_ref().ok_or_else(|| enzimos_platform::Error("missing value".into()))?),
+            "bios":state(self.original.bios.as_ref().ok_or_else(|| enzimos_platform::Error("missing value".into()))?)}),
         )
     }
     pub(crate) fn previous_root(&self) -> Result<String> {
@@ -477,8 +475,19 @@ impl Restored<'_, '_> {
     pub fn recheck(&self) -> Result<()> {
         self.original.recheck()?;
         require(
-            self.original.defaults.as_ref().unwrap().body == self.original.plan.defaults
-                && self.original.bios.as_ref().unwrap().body == self.original.plan.bios,
+            self.original
+                .defaults
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .body
+                == self.original.plan.defaults
+                && self
+                    .original
+                    .bios
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                    .body
+                    == self.original.plan.bios,
             "actual owned loader restoration readback differs",
         )
     }

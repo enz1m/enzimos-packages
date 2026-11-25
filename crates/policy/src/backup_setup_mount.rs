@@ -48,7 +48,7 @@ pub(crate) fn validate_receipt(v: &Value, id: &str) -> Result<()> {
             ),
         "setup mount ID/phase invalid",
     )?;
-    let phase = v["phase"].as_str().unwrap();
+    let phase = enzimos_platform::json::string(&v["phase"])?;
     let closed = matches!(phase, "complete" | "rolled-back");
     match v["schema"].as_u64() {
         Some(2) => {
@@ -296,11 +296,11 @@ impl Owned {
             .as_ref()
             .ok_or_else(|| Error("setup mount already closed".into()))?;
         let named = files::directory(Path::new(TARGET), Some(0))?;
-        let uuid = self.filesystem["filesystem_uuid"].as_str().unwrap();
+        let uuid = enzimos_platform::json::string(&self.filesystem["filesystem_uuid"])?;
         let d = &self.selected["device"];
         let member = (
-            d["major"].as_u64().unwrap() as u32,
-            d["minor"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&d["major"])? as u32,
+            enzimos_platform::json::unsigned(&d["minor"])? as u32,
         );
         require(
             shape(root)? == self.root_shape
@@ -336,9 +336,9 @@ impl Owned {
         )?;
         self.rollback.disarm();
         self.area.uncovered()?;
-        crate::backup_review_mount::wait_closed(
-            self.filesystem["filesystem_uuid"].as_str().unwrap(),
-        )?;
+        crate::backup_review_mount::wait_closed(enzimos_platform::json::string(
+            &self.filesystem["filesystem_uuid"],
+        )?)?;
         selection.recheck_area(&self.area)?;
         drop(self.area);
         lock.recheck()
@@ -363,7 +363,12 @@ impl Scope<'_, '_, '_> {
     /// unmount and durable completion; no descriptor number enters a receipt.
     pub fn descriptor(&self) -> Result<BorrowedFd<'_>> {
         self.recheck()?;
-        Ok(self.owned.root.as_ref().unwrap().as_fd())
+        Ok(self
+            .owned
+            .root
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+            .as_fd())
     }
     pub fn evidence(&self) -> Result<Value> {
         self.recheck()?;
@@ -415,7 +420,9 @@ impl<'a, 'r, 'd, T> Closed<'a, 'r, 'd, T> {
         self.review.recheck()?;
         self.idle.recheck()?;
         self.stub.recheck()?;
-        crate::backup_review_mount::wait_closed(self.binding["filesystem_uuid"].as_str().unwrap())?;
+        crate::backup_review_mount::wait_closed(enzimos_platform::json::string(
+            &self.binding["filesystem_uuid"],
+        )?)?;
         require(
             crate::backup_signature::observe(self.review.selection())? == self.signature,
             "original closed destination signature changed",
@@ -553,7 +560,11 @@ impl<'a, 'r, 'd> Active<'a, 'r, 'd> {
             scope.recheck()?;
             require(
                 crate::backup_review_mount::repository_metadata(
-                    scope.owned.root.as_ref().unwrap(),
+                    scope
+                        .owned
+                        .root
+                        .as_ref()
+                        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                     scope.owned.unique,
                     0,
                 )? == review.original()["result"]["repository"],

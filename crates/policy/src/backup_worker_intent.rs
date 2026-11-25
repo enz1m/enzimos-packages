@@ -133,7 +133,11 @@ impl<'g> Store<'g> {
         )?;
         let bytes = files::read_file(&file, LIMIT, Some(self.owner), true)?;
         let value = json::decode(&bytes, LIMIT)?;
-        validate(&value, name.strip_suffix(".json").unwrap())?;
+        validate(
+            &value,
+            name.strip_suffix(".json")
+                .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?,
+        )?;
         let identity = files::identity(&m);
         require(
             files::identity(&file.metadata()?) == identity,
@@ -218,7 +222,7 @@ impl<'g> Store<'g> {
                     .all(|r| r.value["phase"] == "complete"),
             "unfinished native worker/capacity requires inspection; no replay",
         )?;
-        let id = request["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&request["id"])?;
         let name = format!("{id}.json");
         require(
             !self.records.contains_key(&name),
@@ -320,7 +324,11 @@ impl<'g> Store<'g> {
     }
     fn publish_original(&mut self, name: &str, v: Value) -> Result<Value> {
         self.recheck()?;
-        validate(&v, name.strip_suffix(".json").unwrap())?;
+        validate(
+            &v,
+            name.strip_suffix(".json")
+                .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?,
+        )?;
         let row = self
             .records
             .get(name)
@@ -478,7 +486,7 @@ impl<'g> Intent<'g> {
         store.prepare(request)?;
         let this = Self {
             store,
-            id: request["id"].as_str().unwrap().into(),
+            id: enzimos_platform::json::string(&request["id"])?.into(),
             image,
             lock,
             source: guard,

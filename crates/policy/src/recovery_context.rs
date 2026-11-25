@@ -260,9 +260,7 @@ fn conflicts(guard: &IndependentGuard, volume: &Volume) -> Result<Value> {
     )?;
     let catalog = catalog_data(guard)?;
     require(
-        catalog["generations"]
-            .as_object()
-            .unwrap()
+        enzimos_platform::json::object(&catalog["generations"])?
             .values()
             .all(|r| r["state"] == "ready"),
         "incomplete generation prevents recovery",
@@ -322,7 +320,9 @@ pub(crate) fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<(
         "/usr/bin/pacman",
         &[
             "--root",
-            source.to_str().unwrap(),
+            source
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             "--config",
             QUERY_CONFIG,
             "-Q",
@@ -352,7 +352,7 @@ pub(crate) fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<(
         "recovery boot manifest changed",
     )?;
     ready.recheck()?;
-    for row in plan["material"]["files"].as_array().unwrap() {
+    for row in enzimos_platform::json::array(&plan["material"]["files"])? {
         let artifact = volume.artifact(
             Path::new(&format!(
                 "{prefix}/{}",
@@ -361,7 +361,8 @@ pub(crate) fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<(
             128 * 1024 * 1024,
         )?;
         require(
-            artifact.bytes == row["bytes"].as_u64().unwrap() && artifact.sha == row["sha256"],
+            artifact.bytes == enzimos_platform::json::unsigned(&row["bytes"])?
+                && artifact.sha == row["sha256"],
             "recovery boot artifact changed",
         )?;
         artifact.recheck()?;
@@ -373,12 +374,10 @@ pub(crate) fn contents(plan: &Value, source: &Path, volume: &Volume) -> Result<(
         let before = files::identity(&file.metadata()?);
         let (_, sha) = stream_copy::hash(&mut file, 128 * 1024 * 1024, Some(0))?;
         let name = format!("vmlinuz-{flavor}");
-        let expected = plan["material"]["files"]
-            .as_array()
-            .unwrap()
+        let expected = enzimos_platform::json::array(&plan["material"]["files"])?
             .iter()
             .find(|r| r["name"] == name)
-            .unwrap();
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         require(
             sha == expected["sha256"]
                 && files::identity(&files::open_relative(&root, Path::new("vmlinuz"))?.metadata()?)
@@ -436,8 +435,12 @@ impl Context {
         let target =
             Path::new(IndependentGuard::TOP).join(recovery_records::text(plan, "target_name")?);
         namespaces::observe()?.refuse_subtrees(
-            source_path.to_str().unwrap(),
-            target.to_str().unwrap(),
+            source_path
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+            target
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             &format!("/{}", recovery_records::text(plan, "target_name")?),
         )?;
         require(
@@ -476,8 +479,12 @@ impl Context {
         let target_name = recovery_records::text(&self.plan, "target_name")?;
         let target = Path::new(IndependentGuard::TOP).join(target_name);
         namespaces::observe()?.refuse_subtrees(
-            self.source_path.to_str().unwrap(),
-            target.to_str().unwrap(),
+            self.source_path
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+            target
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             &format!("/{target_name}"),
         )?;
         let expected = &self.plan["source_birth"]["snapshot"]["object"];

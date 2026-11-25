@@ -326,7 +326,8 @@ impl Mask {
         let mount = mount_identity::id(parent.as_fd(), true)?;
         let m = parent.metadata()?;
         let shape = (m.dev(), m.ino(), m.mode());
-        let leaf = CString::new(MASK).unwrap();
+        let leaf =
+            CString::new(MASK).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
         let mut status: libc::stat = unsafe { std::mem::zeroed() };
         let found = unsafe {
@@ -382,7 +383,8 @@ impl Mask {
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     fn retain_link(&mut self) -> Result<()> {
-        let leaf = CString::new(MASK).unwrap();
+        let leaf =
+            CString::new(MASK).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let fd = unsafe {
             libc::openat(
                 self.parent.as_raw_fd(),
@@ -426,7 +428,8 @@ impl Mask {
                 .link
                 .as_ref()
                 .ok_or_else(|| Error("owned mask handle absent".into()))?;
-            let leaf = CString::new(MASK).unwrap();
+            let leaf = CString::new(MASK)
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             // SAFETY: `libc::stat` is a plain C struct, for which all-zero bytes are a valid value.
             let mut status: libc::stat = unsafe { std::mem::zeroed() };
             require(
@@ -444,7 +447,8 @@ impl Mask {
                     && mount_identity::id(held.as_fd(), true)? == self.mount,
                 "original updater mask replaced/changed",
             )?;
-            let leaf = CString::new(MASK).unwrap();
+            let leaf = CString::new(MASK)
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             let mut target = [0u8; 32];
             let count = unsafe {
                 libc::readlinkat(
@@ -487,14 +491,20 @@ impl Mask {
         if self.ready {
             return Ok(());
         }
-        let leaf = CString::new(MASK).unwrap();
+        let leaf =
+            CString::new(MASK).map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         if self.original.is_some() {
             require(
                 unsafe { libc::unlinkat(self.parent.as_raw_fd(), leaf.as_ptr(), 0) } == 0,
                 "owned updater unit unlink uncertain; no replay",
             )?;
             require(
-                self.original.as_ref().unwrap().metadata()?.nlink() == 0,
+                self.original
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                    .metadata()?
+                    .nlink()
+                    == 0,
                 "owned updater unit unlink not observed",
             )?;
         }
@@ -663,7 +673,9 @@ pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
         wrapped.require_original_entry(&text, &mut || permission())?;
         let rewritten = wrapped.text(&mut || permission())?.to_owned();
         let mut rows = entries.borrow_mut();
-        let entry = rows.get_mut(name).unwrap();
+        let entry = rows
+            .get_mut(name)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         entry.text = rewritten;
         entry.wrapped = Some(wrapped);
     }
@@ -679,7 +691,7 @@ pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
         let source_path = secure_loader_refresh::LOADERS
             .iter()
             .find(|(n, _)| *n == name)
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
             .1;
         let permission = || {
             base()?;
@@ -712,7 +724,11 @@ pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
                 permission()
             })?;
         }
-        loaders.borrow_mut().get_mut(name).unwrap().signed = Some(signed);
+        loaders
+            .borrow_mut()
+            .get_mut(name)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+            .signed = Some(signed);
     }
     for name in &keys {
         let target = Path::new("/boot/loader/entries").join(name);
@@ -739,26 +755,38 @@ pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
         entries.borrow()[name]
             .original
             .as_ref()
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
             .require_original_publication(&prepared)?;
         let committed = prepared.commit_checked(
             true,
             &mut || {
                 permission()?;
-                entries.borrow()[name].original.as_ref().unwrap().recheck()
+                entries.borrow()[name]
+                    .original
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                    .recheck()
             },
             &mut |actual| {
                 permission()?;
                 entries.borrow()[name]
                     .original
                     .as_ref()
-                    .unwrap()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
                     .require_owned_replacement(actual)
             },
         )?;
         let mut rows = entries.borrow_mut();
-        let entry = rows.get_mut(name).unwrap();
-        entry.replaced = Some(entry.original.take().unwrap().into_replaced(committed)?);
+        let entry = rows
+            .get_mut(name)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
+        entry.replaced = Some(
+            entry
+                .original
+                .take()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .into_replaced(committed)?,
+        );
     }
     require(
         files::directory_names(&directory, 128)? == names,
@@ -769,10 +797,8 @@ pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
         .iter()
         .map(|(n, e)| (n.clone(), e.text.clone()))
         .collect::<BTreeMap<_, _>>();
-    for generation in registry.data["generations"]
-        .as_object_mut()
-        .unwrap()
-        .values_mut()
+    for generation in
+        enzimos_platform::json::object_mut(&mut registry.data["generations"])?.values_mut()
     {
         generation["entry_fingerprints"] =
             boot_entries::fingerprint_entries(generation, &after_texts, &bios_text)?;
@@ -789,7 +815,7 @@ pub fn enable_locked(lock: &files::Lock) -> Result<Value> {
         }
         Ok(())
     };
-    if !registry.data["generations"].as_object().unwrap().is_empty() {
+    if !enzimos_platform::json::object(&registry.data["generations"])?.is_empty() {
         registry.commit_idle_authorized(&idle, &mut || {
             operation::root_only()?;
             crate::namespaces::initial()?;

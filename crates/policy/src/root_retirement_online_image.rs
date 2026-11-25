@@ -58,7 +58,7 @@ impl<'a> Image<'a> {
                 && record["filesystem_uuid"] == guard.configuration["filesystem_uuid"]
                 && crate::subvolume::observe(
                     guard.control().as_fd(),
-                    guard.configuration["control_subvol"].as_str().unwrap(),
+                    enzimos_platform::json::string(&guard.configuration["control_subvol"])?,
                 )?
                 .0 == record["control"],
             "original ready native image filesystem/control mismatch",
@@ -188,7 +188,7 @@ impl<'a> Image<'a> {
                 .require_original_source(self.guard, self.lock, authorize)?;
             self.receipt.recheck()?;
         }
-        let id = self.record["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&self.record["id"])?;
         require(
             self.references.original_image_receipt(id)? == &self.record,
             "original native image receipt changed",

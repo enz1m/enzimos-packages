@@ -95,7 +95,10 @@ fn selected(rows: &[Value], label: Label, mounted: bool) -> Result<Value> {
     )?;
     number(&row["maj:min"])?;
     if row["type"] == "rom" {
-        let basename = path.file_name().unwrap().as_encoded_bytes();
+        let basename = path
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .as_encoded_bytes();
         let digits = basename.strip_prefix(b"sr").unwrap_or_default();
         require(
             !digits.is_empty()
@@ -107,7 +110,7 @@ fn selected(rows: &[Value], label: Label, mounted: bool) -> Result<Value> {
     let uuid = row["uuid"]
         .as_str()
         .ok_or_else(|| Error("answer volume UUID required".into()))?;
-    match row["fstype"].as_str().unwrap() {
+    match enzimos_platform::json::string(&row["fstype"])? {
         "ext4" => {
             identity::uuid(uuid)?;
         }
@@ -199,9 +202,14 @@ impl Device {
         crate::operation::root_only()?;
         let lsblk = Command::open("/usr/bin/lsblk")?;
         let row = selected(&inventory(&lsblk)?, label, false)?;
-        let path = PathBuf::from(row["name"].as_str().unwrap());
+        let path = PathBuf::from(enzimos_platform::json::string(&row["name"])?);
         let parent = files::directory(Path::new("/dev"), Some(0))?;
-        let name = CString::new(path.file_name().unwrap().as_encoded_bytes()).unwrap();
+        let name = CString::new(
+            path.file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                .as_encoded_bytes(),
+        )
+        .unwrap();
         let raw = unsafe {
             libc::openat(
                 parent.as_raw_fd(),
@@ -218,8 +226,8 @@ impl Device {
         let device = number(&row["maj:min"])?;
         require(
             (
-                block["major"].as_u64().unwrap() as u32,
-                block["minor"].as_u64().unwrap() as u32,
+                enzimos_platform::json::unsigned(&block["major"])? as u32,
+                enzimos_platform::json::unsigned(&block["minor"])? as u32,
             ) == device
                 && block["bytes"] == row["size"]
                 && block["read_only"] == row["ro"],
@@ -253,7 +261,13 @@ impl Device {
     pub fn recheck(&self, mounted: bool) -> Result<()> {
         crate::namespaces::initial()?;
         crate::operation::root_only()?;
-        let name = CString::new(self.path.file_name().unwrap().as_encoded_bytes()).unwrap();
+        let name = CString::new(
+            self.path
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                .as_encoded_bytes(),
+        )
+        .unwrap();
         let raw = unsafe {
             libc::openat(
                 self.parent.as_raw_fd(),

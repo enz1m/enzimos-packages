@@ -64,12 +64,20 @@ fn directory_unchanged(volume: &Volume, parent: &File, relative: &str) -> Result
 #[allow(unsafe_code, reason = "Linux syscall ABI (renameat2, unlinkat).")]
 fn remove_owned(volume: &Volume, entry: &Text) -> Result<()> {
     let parent = volume.directory(Path::new("loader/entries"))?;
-    let old = CString::new(entry.artifact.path.file_name().unwrap().as_encoded_bytes())
-        .map_err(|_| Error("run entry filename".into()))?;
+    let old = CString::new(
+        entry
+            .artifact
+            .path
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .as_encoded_bytes(),
+    )
+    .map_err(|_| Error("run entry filename".into()))?;
     // An unexpected object moved by a race remains at a private random name for
     // inspection. It is never deleted on a failed identity or content check.
     let name = format!(".enzimos-write-detached-{}", files::random_hex(16)?);
-    let new = CString::new(name.as_str()).unwrap();
+    let new = CString::new(name.as_str())
+        .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
     directory_unchanged(volume, &parent, "loader/entries")?;
     volume.writable()?;
     entry.artifact.recheck()?;

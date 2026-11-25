@@ -271,7 +271,7 @@ fn run(args: &[String]) -> Result<Value> {
                     &observed,
                     &mut operation::root_only,
                 )?;
-                result.as_object_mut().unwrap().remove("grant_id");
+                enzimos_platform::json::object_mut(&mut result)?.remove("grant_id");
                 result["id"] = value!(options["id"]);
                 Ok(result)
             }

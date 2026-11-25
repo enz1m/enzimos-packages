@@ -233,7 +233,8 @@ impl<'a> Original<'a> {
                 )?)?,
             "owned one-shot attributes/bytes differ",
         )?;
-        let leaf_c = CString::new(leaf.as_str()).unwrap();
+        let leaf_c = CString::new(leaf.as_str())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let fd = unsafe {
             libc::openat(
                 self.directory.as_raw_fd(),
@@ -282,7 +283,10 @@ impl<'a> Original<'a> {
             "EFI deletion writer did not become empty",
         )?;
         drop(writer);
-        let original = self.metadata.get(&leaf).unwrap();
+        let original = self
+            .metadata
+            .get(&leaf)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         let retired_epoch = files::identity(&original.file.metadata()?);
         require(
             retired_epoch.0 == original.epoch.0

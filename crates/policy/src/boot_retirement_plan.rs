@@ -81,7 +81,7 @@ pub fn retention(
     identity::safe_id(generation)?;
     identity::uuid(boot)?;
     catalog::validate(data, data["filesystem_uuid"].as_str().unwrap_or(""))?;
-    let rows = data["generations"].as_object().unwrap();
+    let rows = enzimos_platform::json::object(&data["generations"])?;
     let candidate = rows
         .get(generation)
         .ok_or_else(|| Error("publisher generation required".into()))?;
@@ -107,13 +107,17 @@ pub fn retention(
         "generation pin bound",
     )?;
     for (id, pin) in pins {
-        crate::generation_pins::validate(pin, id, data["filesystem_uuid"].as_str().unwrap())?;
+        crate::generation_pins::validate(
+            pin,
+            id,
+            enzimos_platform::json::string(&data["filesystem_uuid"])?,
+        )?;
         require(
             pin["generation"] != generation,
             "generation pin protects retirement candidate",
         )?;
     }
-    let ordinal = candidate["ordinal"].as_u64().unwrap();
+    let ordinal = enzimos_platform::json::unsigned(&candidate["ordinal"])?;
     require(
         rows.values()
             .filter(|r| r["state"] == "ready" && r["ordinal"].as_u64().unwrap() > ordinal)
@@ -163,11 +167,11 @@ pub(crate) fn tombstone(data: &Value, generation: &str, boot: &str) -> Result<Va
         "retirement name already consumed",
     )?;
     after["retired"][generation] = value!({"ordinal":row["ordinal"],"material_sha256":json::fingerprint(&row["material"])?,"retired_boot":boot});
-    after["generations"]
-        .as_object_mut()
-        .unwrap()
-        .remove(generation);
-    catalog::validate(&after, data["filesystem_uuid"].as_str().unwrap())?;
+    enzimos_platform::json::object_mut(&mut after["generations"])?.remove(generation);
+    catalog::validate(
+        &after,
+        enzimos_platform::json::string(&data["filesystem_uuid"])?,
+    )?;
     Ok(after)
 }
 /// Conservative token matching retains unknown or historical references for

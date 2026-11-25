@@ -31,18 +31,28 @@ pub struct Lease {
 impl Lease {
     pub fn observe(request: &Value) -> Result<Self> {
         crate::update_worker_record::execution_request(request)?;
-        let id = request["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&request["id"])?;
         let guard = Guard::observe()?;
         let path = Path::new(operation::CONTROL)
             .join("update-applies")
             .join(format!("{id}.json"));
-        let directory = files::directory(path.parent().unwrap(), Some(0))?;
+        let directory = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let shape = shape(&directory)?;
         require(
             shape["mount"] == guard.control_mount_id(),
             "apply lease registry independently mounted",
         )?;
-        let file = files::open_relative(&directory, Path::new(path.file_name().unwrap()))?;
+        let file = files::open_relative(
+            &directory,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let identity = files::identity(&file.metadata()?);
         require(
             file.metadata()?.mode() & 0o7777 == 0o600
@@ -77,13 +87,24 @@ impl Lease {
     }
     pub fn recheck(&self) -> Result<()> {
         self.guard.recheck()?;
-        let directory = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let directory = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         require(
             shape(&directory)? == self.shape && shape(&self.directory)? == self.shape,
             "original apply lease directory replaced",
         )?;
-        let named =
-            files::open_relative(&self.directory, Path::new(self.path.file_name().unwrap()))?;
+        let named = files::open_relative(
+            &self.directory,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         for file in [&named, &self.file] {
             require(
                 files::identity(&file.metadata()?) == self.identity

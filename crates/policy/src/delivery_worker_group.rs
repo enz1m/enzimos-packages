@@ -107,7 +107,8 @@ impl Group {
         let parent = files::directory(Path::new(PARENT), Some(0))?;
         let parent_shape = shape(&parent)?;
         let name = format!("delivery-{}", files::random_hex(16)?);
-        let c = CString::new(name.as_bytes()).unwrap();
+        let c = CString::new(name.as_bytes())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe { libc::mkdirat(parent.as_raw_fd(), c.as_ptr(), 0o700) } == 0,
             "fresh delivery cgroup required",
@@ -134,7 +135,10 @@ impl Group {
     }
     pub fn nonce(&self) -> Result<&str> {
         self.recheck()?;
-        let nonce = self.name.strip_prefix("delivery-").unwrap();
+        let nonce = self
+            .name
+            .strip_prefix("delivery-")
+            .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?;
         membership_value(nonce)?;
         Ok(nonce)
     }
@@ -187,7 +191,8 @@ impl Group {
     #[allow(unsafe_code, reason = "Linux syscall ABI (openat).")]
     pub fn membership(&self) -> Result<File> {
         self.recheck()?;
-        let c = CString::new("cgroup.procs").unwrap();
+        let c = CString::new("cgroup.procs")
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let fd = unsafe {
             libc::openat(
                 self.directory.as_raw_fd(),
@@ -238,7 +243,8 @@ impl Group {
     pub fn retire(self) -> Result<()> {
         self.recheck()?;
         require(self.empty()?, "populated delivery cgroup cannot retire")?;
-        let name = CString::new(self.name.as_bytes()).unwrap();
+        let name = CString::new(self.name.as_bytes())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
                 == 0,

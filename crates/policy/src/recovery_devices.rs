@@ -153,7 +153,11 @@ impl Block {
                 || path.parent() == Some(Path::new("/dev/mapper")),
             "fixed recovery device location required",
         )?;
-        let parent = files::directory(path.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let name = CString::new(
             path.file_name()
                 .ok_or_else(|| Error("block device filename".into()))?

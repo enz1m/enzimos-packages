@@ -32,7 +32,7 @@ pub(crate) fn entries(
         let prefix = format!("/enzimos/generations/{generation}");
         let text = format!(
             "title enzimOS {generation} {flavor}\nlinux {prefix}/vmlinuz-{flavor}\ninitrd {prefix}/initramfs-{flavor}.img\noptions {}\n",
-            material["options"].as_str().unwrap()
+            enzimos_platform::json::string(&material["options"])?
         );
         let text = if let Some(certificate) = certificate {
             let digest = |name: &str| {
@@ -48,7 +48,7 @@ pub(crate) fn entries(
             let binding = signed_entry::digest(
                 digest(&format!("vmlinuz-{flavor}")),
                 digest(&format!("initramfs-{flavor}.img")),
-                material["options"].as_str().unwrap(),
+                enzimos_platform::json::string(&material["options"])?,
                 certificate,
             )?;
             signed_entry::rewrite(&text, &format!("/enzimos/secure-boot/{binding}.efi"))?
@@ -77,7 +77,7 @@ pub(crate) fn bios(generation: &str, material: &Value, before: &str) -> Result<S
     let mut result = format!("{before}\n");
     for flavor in ["linux", "linux-lts"] {
         let prefix = format!("/enzimos/generations/{generation}");
-        result.push_str(&format!("/enzimOS {generation} {flavor}\n    protocol: linux\n    path: boot():{prefix}/vmlinuz-{flavor}\n    module_path: boot():{prefix}/initramfs-{flavor}.img\n    cmdline: {}\n",material["options"].as_str().unwrap()));
+        result.push_str(&format!("/enzimOS {generation} {flavor}\n    protocol: linux\n    path: boot():{prefix}/vmlinuz-{flavor}\n    module_path: boot():{prefix}/initramfs-{flavor}.img\n    cmdline: {}\n",enzimos_platform::json::string(&material["options"])?));
     }
     boot_entries::menu(&result)?;
     Ok(result)
@@ -104,7 +104,7 @@ pub(crate) fn validate(record: &Value, generation: &str) -> Result<()> {
         )?;
     }
     catalog::material(&record["material"], generation)?;
-    let options = record["material"]["options"].as_str().unwrap();
+    let options = enzimos_platform::json::string(&record["material"]["options"])?;
     require(
         boot_options::generation_options(options, generation)? == options
             && !options.split_whitespace().any(|w| {
@@ -162,12 +162,15 @@ pub(crate) fn transition(before: Option<&Value>, after: &Value, generation: &str
     validate(after, generation)?;
     if let Some(before) = before {
         validate(before, generation)?;
-        let position = PHASES.iter().position(|p| before["phase"] == *p).unwrap();
+        let position = PHASES
+            .iter()
+            .position(|p| before["phase"] == *p)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         require(
             position + 1 < PHASES.len() && after["phase"] == PHASES[position + 1],
             "publication phase cannot replay, skip or resume implicitly",
         )?;
-        for (key, value) in before.as_object().unwrap() {
+        for (key, value) in enzimos_platform::json::object(before)? {
             if !matches!(key.as_str(), "phase" | "journal_sha256") {
                 require(after[key] == *value, "publication immutable intent changed")?;
             }

@@ -82,7 +82,12 @@ impl Source {
         })
     }
     fn check(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let current = stream_copy::open(&parent, name(&self.path)?)?;
         require(
             files::identity(&self.file.metadata()?) == self.epoch
@@ -151,7 +156,12 @@ impl Stage {
         authorize()?;
         let destination_text = spelling(destination)?;
         name(destination)?;
-        let parent = files::directory(destination.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            destination
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let mount = mount_identity::id(parent.as_fd(), true)?;
         let parent_before = files::identity(&parent.metadata()?);
         let existing_file = files::optional_relative(&parent, Path::new(name(destination)?))?;
@@ -188,8 +198,14 @@ impl Stage {
         )?;
         let digest = json::fingerprint(&value!(destination_text))?;
         let receipt = directory.join(format!("{digest}.json"));
-        let previous_receipt =
-            files::optional_relative(&root, Path::new(receipt.file_name().unwrap()))?;
+        let previous_receipt = files::optional_relative(
+            &root,
+            Path::new(
+                receipt
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let previous_receipt_epoch = previous_receipt
             .as_ref()
             .map(|f| f.metadata().map(|m| files::identity(&m)))
@@ -274,7 +290,12 @@ impl Stage {
         let temporary = format!("{}.signed-new", name(&self.destination)?);
         let copy = Copy::create(&mut file, &self.parent, &temporary, bytes, &sha, 0, before)?;
         before()?;
-        let named_directory = files::directory(self.destination.parent().unwrap(), Some(0))?;
+        let named_directory = files::directory(
+            self.destination
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let held = self.parent.metadata()?;
         let named = named_directory.metadata()?;
         require(
@@ -296,7 +317,11 @@ impl Stage {
                 replace
                     && Some(files::identity(&original.metadata()?)) == self.existing_epoch
                     && Some(files::identity(&named.metadata()?)) == self.existing_epoch
-                    && identity(&original.metadata()?) == *self.existing.as_ref().unwrap(),
+                    && identity(&original.metadata()?)
+                        == *self
+                            .existing
+                            .as_ref()
+                            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 "original signed destination description changed",
             )?;
         }
@@ -346,7 +371,12 @@ impl Signed {
     pub fn recheck(&self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         self.copy.checkpoint(authorize)?;
         self.receipt.recheck()?;
-        let named = files::directory(self.path.parent().unwrap(), Some(0))?;
+        let named = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let a = self.parent.metadata()?;
         let b = named.metadata()?;
         require(

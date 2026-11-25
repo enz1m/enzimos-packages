@@ -50,7 +50,7 @@ pub fn next(previous: Option<&Value>, action: &str, boot: &str, now: u64) -> Res
     if let Some(previous) = previous {
         validate(previous, action)?;
         require(
-            now >= previous["last_deferred_unix"].as_u64().unwrap(),
+            now >= enzimos_platform::json::unsigned(&previous["last_deferred_unix"])?,
             "clock moved backwards during deferred admission",
         )?;
     }

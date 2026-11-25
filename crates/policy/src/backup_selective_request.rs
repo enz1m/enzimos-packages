@@ -115,7 +115,10 @@ pub(crate) fn context_kind(v: &Value, kind: Kind) -> Result<()> {
         &v["operation_lock"]["inode"],
     ] {
         require(
-            distinct.insert((file[0].as_u64().unwrap(), file[1].as_u64().unwrap())),
+            distinct.insert((
+                enzimos_platform::json::unsigned(&file[0])?,
+                enzimos_platform::json::unsigned(&file[1])?,
+            )),
             "selective descriptor roles alias",
         )?;
     }
@@ -149,7 +152,9 @@ pub fn frame(v: &Value, request_value: &Value, sender: &Credentials) -> Result<V
             && v["kind"] == request_value["kind"]
             && v["id"] == request_value["id"]
             && v["request_sha256"] == json::fingerprint(request_value)?
-            && sender.pid == request_value["context"]["caller"]["pid"].as_u64().unwrap() as u32
+            && sender.pid
+                == enzimos_platform::json::unsigned(&request_value["context"]["caller"]["pid"])?
+                    as u32
             && sender.uid == 0
             && sender.gid == 0,
         "selective frame not from original Root caller/request",

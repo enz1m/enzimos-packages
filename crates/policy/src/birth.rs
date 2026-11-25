@@ -103,7 +103,8 @@ pub fn validate(v: &Value, identifier: &str, fs_uuid: &str) -> Result<()> {
             continue;
         }
         require(
-            ids.insert(obj["id"].as_u64().unwrap()) && uuids.insert(text(obj, "uuid")?),
+            ids.insert(enzimos_platform::json::unsigned(&obj["id"])?)
+                && uuids.insert(text(obj, "uuid")?),
             "birth identities are not independent",
         )?;
     }

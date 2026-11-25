@@ -201,7 +201,9 @@ impl<'a, 'g> Inventory<'a, 'g> {
         for source in &sources {
             let evidence = source.evidence()?;
             require(
-                objects.insert(evidence["object"]["uuid"].as_str().unwrap().to_owned()),
+                objects.insert(
+                    enzimos_platform::json::string(&evidence["object"]["uuid"])?.to_owned(),
+                ),
                 "backup dataset aliases another configured source",
             )?;
         }
@@ -209,7 +211,7 @@ impl<'a, 'g> Inventory<'a, 'g> {
         qualify_mounts(
             &mounts,
             &datasets,
-            guard.configuration["filesystem_uuid"].as_str().unwrap(),
+            enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?,
         )?;
         let vendor = Command::open("/usr/bin/btrfs")?;
         let full = Self::sample(&sources, &datasets, &vendor)?;

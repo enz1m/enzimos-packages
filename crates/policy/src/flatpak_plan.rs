@@ -264,7 +264,11 @@ fn public_packets(mut bytes: &[u8]) -> Result<String> {
                 }
                 255 => {
                     require(bytes.len() >= 4, "remote signing packet length truncated")?;
-                    let size = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
+                    let size = u32::from_be_bytes(
+                        bytes[..4]
+                            .try_into()
+                            .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+                    ) as usize;
                     bytes = &bytes[4..];
                     size
                 }

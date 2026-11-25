@@ -165,7 +165,7 @@ impl<'a> Observation<'a> {
             }
         };
         let pins = crate::generation_pins::Snapshot::observe(guard)?;
-        let control_name = guard.configuration["control_subvol"].as_str().unwrap();
+        let control_name = enzimos_platform::json::string(&guard.configuration["control_subvol"])?;
         let (control_identity, control_readonly) =
             crate::subvolume::observe(guard.control().as_fd(), control_name)?;
         require(
@@ -214,7 +214,7 @@ impl<'a> Observation<'a> {
         require(
             crate::subvolume::observe(
                 self.guard.control().as_fd(),
-                self.guard.configuration["control_subvol"].as_str().unwrap(),
+                enzimos_platform::json::string(&self.guard.configuration["control_subvol"])?,
             )? == (self.original["control_identity"].clone(), false),
             "original Root retirement control subvolume changed",
         )?;
@@ -299,7 +299,7 @@ impl<'a> Observation<'a> {
                 && self.catalog.evidence()? == self.original["catalog_identity"]
                 && crate::subvolume::observe(
                     self.guard.control().as_fd(),
-                    self.guard.configuration["control_subvol"].as_str().unwrap(),
+                    enzimos_platform::json::string(&self.guard.configuration["control_subvol"])?,
                 )? == (self.original["control_identity"].clone(), false),
             "independent original Root publication references changed",
         )?;
@@ -512,7 +512,7 @@ impl<'a> Observation<'a> {
             let rows = targets.rows(authorize)?;
             let expected = all
                 .as_array()
-                .unwrap()
+                .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?
                 .iter()
                 .filter(|row| rows.as_array().unwrap().contains(row))
                 .cloned()
@@ -541,8 +541,8 @@ impl<'a> Observation<'a> {
         };
         let rows = rows.clone();
         crate::root_retirement_offline_catalog::unmentioned(&self.original["catalog"], &rows)?;
-        let jobs = self.original["records"]["jobs"].as_object().unwrap();
-        let activations = self.original["records"]["activations"].as_object().unwrap();
+        let jobs = enzimos_platform::json::object(&self.original["records"]["jobs"])?;
+        let activations = enzimos_platform::json::object(&self.original["records"]["activations"])?;
         let mut concluded = std::collections::BTreeSet::new();
         for (id, job) in jobs {
             let done = activations
@@ -563,9 +563,11 @@ impl<'a> Observation<'a> {
                 let roots = crate::root_retirement_offline_publications::historical_roots(
                     &activation["intent"],
                 )?;
-                let root = rows.as_array().unwrap().last().unwrap()["path"]
+                let root = enzimos_platform::json::array(&rows)?
+                    .last()
+                    .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
                     .as_str()
-                    .unwrap();
+                    .ok_or_else(|| enzimos_platform::Error("unexpected JSON value type".into()))?;
                 require(
                     roots
                         .iter()
@@ -574,18 +576,13 @@ impl<'a> Observation<'a> {
                 )?;
             }
         }
-        for pin in self.original["pins"]["pins"].as_object().unwrap().values() {
+        for pin in enzimos_platform::json::object(&self.original["pins"]["pins"])?.values() {
             identity_unmentioned(&pin["material"]["root_identity"], &rows)?;
         }
-        for row in self.original["records"]["rebinds"]
-            .as_object()
-            .unwrap()
-            .values()
-        {
+        for row in enzimos_platform::json::object(&self.original["records"]["rebinds"])?.values() {
             identity_unmentioned(&row["source"], &rows)?;
             require(
-                rows.as_array()
-                    .unwrap()
+                enzimos_platform::json::array(&rows)?
                     .iter()
                     .all(|target| target["uuid"] != row["snapshot"]["uuid"]),
                 "original rebind source snapshot protects online Root target",
@@ -595,11 +592,7 @@ impl<'a> Observation<'a> {
             .iter()
             .map(|(id, row)| (id.clone(), row.clone()))
             .collect();
-        for row in self.original["backend"]["records"]
-            .as_object()
-            .unwrap()
-            .values()
-        {
+        for row in enzimos_platform::json::object(&self.original["backend"]["records"])?.values() {
             require(
                 matches!(
                     row["state"].as_str(),

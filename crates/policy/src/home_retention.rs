@@ -17,9 +17,7 @@ const KEYS: [(&str, &str); 6] = [
 pub fn validate(policy: &Value) -> Result<()> {
     json::fields(policy, "hourly daily weekly monthly yearly manual")?;
     require(
-        policy
-            .as_object()
-            .unwrap()
+        enzimos_platform::json::object(policy)?
             .values()
             .all(|n| n.as_u64().is_some_and(|n| n <= 1000)),
         "home retention bounds",
@@ -30,7 +28,7 @@ pub fn validate(policy: &Value) -> Result<()> {
         .map(|(k, _)| policy[*k].as_u64().unwrap())
         .sum::<u64>();
     require(
-        policy["manual"].as_u64().unwrap() > 0 && (1..=1000).contains(&timeline),
+        enzimos_platform::json::unsigned(&policy["manual"])? > 0 && (1..=1000).contains(&timeline),
         "home retention timeline or manual bounds",
     )
 }
@@ -94,7 +92,7 @@ pub fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
             out.push_str(&format!(
                 "{prefix}{}=\"{}\"{end}",
                 key.unwrap(),
-                next[label].as_u64().unwrap()
+                enzimos_platform::json::unsigned(&next[label])?
             ));
         } else {
             out.push_str(line);
@@ -106,7 +104,7 @@ pub fn replacement(bytes: &[u8], next: &Value) -> Result<Vec<u8>> {
         }
         out.push_str(&format!(
             "NUMBER_LIMIT_IMPORTANT=\"{}\"\n",
-            next["manual"].as_u64().unwrap()
+            enzimos_platform::json::unsigned(&next["manual"])?
         ));
     }
     home_history_source::configuration(out.as_bytes())?;

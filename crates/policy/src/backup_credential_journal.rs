@@ -83,7 +83,11 @@ impl Store {
             let epoch = files::identity(&m);
             let bytes = files::read_file(&file, record::LIMIT, Some(owner), true)?;
             let value = json::decode(&bytes, record::LIMIT)?;
-            record::validate(&value, name.strip_suffix(".json").unwrap())?;
+            record::validate(
+                &value,
+                name.strip_suffix(".json")
+                    .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?,
+            )?;
             require(
                 files::identity(&file.metadata()?) == epoch,
                 "credential journal changed during observation",

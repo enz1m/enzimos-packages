@@ -237,7 +237,10 @@ impl Wrapped {
             leaf.strip_suffix(".efi")
                 .ok_or_else(|| Error("signed namespace suffix".into()))?,
         )?;
-        let output = self.verified.as_ref().unwrap();
+        let output = self
+            .verified
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let named = files::open_relative(parent, Path::new(leaf))?;
         require(
             files::identity(&named.metadata()?) == files::identity(&output.file.metadata()?)
@@ -274,7 +277,14 @@ impl Wrapped {
             created.recheck(authorize)?;
             require(
                 files::identity(&created.file(authorize)?.metadata()?)
-                    == files::identity(&self.verified.as_ref().unwrap().file.metadata()?),
+                    == files::identity(
+                        &self
+                            .verified
+                            .as_ref()
+                            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                            .file
+                            .metadata()?,
+                    ),
                 "retained signed entry differs from actual owned UKI output",
             )?;
         }
@@ -381,7 +391,11 @@ fn wrap_inner(
             )?;
             let temporary = destination.with_file_name(format!(
                 "{}.new",
-                destination.file_name().unwrap().to_str().unwrap()
+                destination
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
             ));
             require(
                 matches!(std::fs::symlink_metadata(temporary), Err(e) if e.kind() == std::io::ErrorKind::NotFound),

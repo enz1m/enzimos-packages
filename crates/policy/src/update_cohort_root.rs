@@ -41,7 +41,7 @@ impl Admitted {
             let file = files::open_relative(&authority_directory, Path::new(name))?;
             require(
                 mount_identity::id(file.as_fd(), true)?
-                    == authority.identity()["mount"].as_u64().unwrap()
+                    == enzimos_platform::json::unsigned(&authority.identity()["mount"])?
                     && json::sha256(&files::read_file(&file, 8 * 1024 * 1024, Some(0), true)?)
                         == authority_hashes[name],
                 "original update authority file changed",
@@ -121,7 +121,9 @@ impl Admitted {
                 require(
                     files::identity(&file.metadata()?) == *identity
                         && mount_identity::id(file.as_fd(), true)?
-                            == self.authority.identity()["mount"].as_u64().unwrap(),
+                            == enzimos_platform::json::unsigned(
+                                &self.authority.identity()["mount"],
+                            )?,
                     "original update authority file replaced or changed",
                 )?;
             }

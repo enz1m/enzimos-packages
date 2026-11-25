@@ -52,7 +52,7 @@ pub(crate) fn texts(volume: &Volume) -> Result<Texts> {
     Ok(result)
 }
 pub(crate) fn generations(volume: &Volume, catalog: &Value) -> Result<()> {
-    let records = catalog["generations"].as_object().unwrap();
+    let records = enzimos_platform::json::object(&catalog["generations"])?;
     let path = volume.path(Path::new("enzimos/generations"))?;
     let mut original_members = Vec::new();
     let names = match std::fs::symlink_metadata(&path) {
@@ -104,14 +104,15 @@ pub(crate) fn generations(volume: &Volume, catalog: &Value) -> Result<()> {
                 == value!({"generation":id,"kernels":record["material"]["kernels"],"files":record["material"]["files"]}),
             "immutable generation manifest changed",
         )?;
-        for row in record["material"]["files"].as_array().unwrap() {
-            let name = row["name"].as_str().unwrap();
+        for row in enzimos_platform::json::array(&record["material"]["files"])? {
+            let name = enzimos_platform::json::string(&row["name"])?;
             let artifact = volume.artifact(
                 Path::new(&format!("enzimos/generations/{id}/{name}")),
                 128 * 1024 * 1024,
             )?;
             require(
-                artifact.bytes == row["bytes"].as_u64().unwrap() && artifact.sha == row["sha256"],
+                artifact.bytes == enzimos_platform::json::unsigned(&row["bytes"])?
+                    && artifact.sha == row["sha256"],
                 "immutable generation bytes changed",
             )?;
             artifact.recheck()?;
@@ -125,10 +126,10 @@ pub(crate) fn generations(volume: &Volume, catalog: &Value) -> Result<()> {
 pub(crate) fn auxiliary(volume: &Volume, images: &Value, activations: &Value) -> Result<()> {
     let actual = texts(volume)?;
     let menu = boot_entries::menu(&actual["limine/limine.conf"])?;
-    for image in images.as_object().unwrap().values() {
+    for image in enzimos_platform::json::object(images)?.values() {
         recovery_image::verify_published(image)?;
     }
-    for (id, activation) in activations.as_object().unwrap() {
+    for (id, activation) in enzimos_platform::json::object(activations)? {
         recovery_activation::validate(activation, id)?;
         let entries = recovery_boot::entries(&activation["intent"]["job"])?;
         for (name, expected) in entries.uefi {

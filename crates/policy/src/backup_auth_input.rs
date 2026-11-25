@@ -86,7 +86,8 @@ impl<'i> Temporary<'i> {
             )?;
         }
         let name = format!("backup-auth-input-{id}");
-        let raw_name = CString::new(name.as_bytes()).unwrap();
+        let raw_name = CString::new(name.as_bytes())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         input.recheck()?;
         preflight()?;
         require(
@@ -196,7 +197,7 @@ impl<'i> Temporary<'i> {
             self.name
                 == format!(
                     "backup-auth-input-{}",
-                    closed.binding()?["id"].as_str().unwrap()
+                    enzimos_platform::json::string(&closed.binding()?["id"])?
                 ),
             "temporary retirement belongs to another original worker",
         )?;
@@ -219,7 +220,8 @@ impl<'i> Temporary<'i> {
                 && mount_identity::id(named.as_fd(), true)? == self.mount,
             "authentication folder changed before retirement",
         )?;
-        let name = CString::new(self.name.as_bytes()).unwrap();
+        let name = CString::new(self.name.as_bytes())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         closed.recheck()?;
         require(
             unsafe { libc::unlinkat(self.parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) }
@@ -301,7 +303,7 @@ pub(crate) fn borrowed(v: &serde_json::Value, id: &str, length: u64, file: &File
     crate::namespaces::initial()?;
     crate::backup_worker_request::consumer(v, id, length)?;
     let parent = files::directory(Path::new("/run/enzimos"), Some(0))?;
-    let name = v["name"].as_str().unwrap();
+    let name = enzimos_platform::json::string(&v["name"])?;
     let folder = files::directory_relative(&parent, Path::new(name), Some(0))?;
     // SAFETY: `libc::statfs` is a plain C struct, for which all-zero bytes are a valid value.
     let mut fs: libc::statfs = unsafe { std::mem::zeroed() };
@@ -315,7 +317,7 @@ pub(crate) fn borrowed(v: &serde_json::Value, id: &str, length: u64, file: &File
             && serde_json::to_value(shape(&folder, 0)?)? == v["directory"],
         "borrowed temporary parent/folder/read-only authority changed",
     )?;
-    let mount = v["mount"].as_u64().unwrap();
+    let mount = enzimos_platform::json::unsigned(&v["mount"])?;
     require(
         mount_identity::id(parent.as_fd(), true)? == mount
             && mount_identity::id(folder.as_fd(), true)? == mount

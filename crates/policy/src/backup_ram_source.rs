@@ -101,7 +101,7 @@ impl Source {
                 && root_row.id == mount_identity::id(root.as_fd(), false)?,
             "actual RAM root mount differs",
         )?;
-        let name = configuration.value()["control_subvol"].as_str().unwrap();
+        let name = enzimos_platform::json::string(&configuration.value()["control_subvol"])?;
         require(
             control_row.filesystem == "btrfs"
                 && control_row.root == format!("/{name}")
@@ -116,8 +116,9 @@ impl Source {
         )?;
         let (object, readonly) = subvolume::observe(control.as_fd(), name)?;
         require(!readonly, "RAM control subvolume readonly")?;
-        let topology =
-            topology::mounted_btrfs(configuration.value()["filesystem_uuid"].as_str().unwrap())?;
+        let topology = topology::mounted_btrfs(enzimos_platform::json::string(
+            &configuration.value()["filesystem_uuid"],
+        )?)?;
         let this = Self {
             configuration,
             root,
@@ -171,7 +172,7 @@ impl Source {
                     && filesystem::observe(original.as_fd())? == self.filesystem
                     && subvolume::observe(
                         original.as_fd(),
-                        self.configuration()["control_subvol"].as_str().unwrap(),
+                        enzimos_platform::json::string(&self.configuration()["control_subvol"])?,
                     )? == (self.object.clone(), false),
                 "original RAM control replaced/changed",
             )?;
@@ -196,8 +197,9 @@ impl Source {
             "RAM root/control/home mount state changed",
         )?;
         require(
-            topology::mounted_btrfs(self.configuration()["filesystem_uuid"].as_str().unwrap())?
-                == self.topology,
+            topology::mounted_btrfs(enzimos_platform::json::string(
+                &self.configuration()["filesystem_uuid"],
+            )?)? == self.topology,
             "RAM protected filesystem disk topology changed",
         )
     }

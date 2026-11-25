@@ -210,11 +210,11 @@ impl Cohort {
                 files::open_relative(&packages, Path::new(name))?,
                 owner,
                 &packages_shape["mount"],
-                row["bytes"].as_u64().unwrap(),
+                enzimos_platform::json::unsigned(&row["bytes"])?,
             )?;
             let (bytes, digest) = stream_copy::hash_borrowed(
                 &member.file,
-                row["bytes"].as_u64().unwrap(),
+                enzimos_platform::json::unsigned(&row["bytes"])?,
                 Some(owner),
             )?;
             require(
@@ -231,13 +231,13 @@ impl Cohort {
                 continue;
             }
             let mut row = package_archive::identity(&member.file)?;
-            let package = row["name"].as_str().unwrap().to_owned();
+            let package = enzimos_platform::json::string(&row["name"])?.to_owned();
             require(
                 unique.insert(package.clone())
                     && package_archive::filename_matches(
                         name,
                         &package,
-                        row["version"].as_str().unwrap(),
+                        enzimos_platform::json::string(&row["version"])?,
                     ),
                 "cohort archive filename or package identity differs",
             )?;
@@ -251,7 +251,8 @@ impl Cohort {
             packages_metadata.push(row);
         }
         require(
-            kernels.as_object().unwrap().len() == 2 && kernels["linux"] != kernels["linux-lts"],
+            enzimos_platform::json::object(&kernels)?.len() == 2
+                && kernels["linux"] != kernels["linux-lts"],
             "cohort requires separate actual dual kernel releases",
         )?;
         package_database::verify(&members["verified.db"].file, &packages_metadata)?;
@@ -302,7 +303,9 @@ impl Cohort {
         Ok(())
     }
     pub fn recheck(&self) -> Result<()> {
-        fresh_expiry(self.document["expires_at"].as_str().unwrap())?;
+        fresh_expiry(enzimos_platform::json::string(
+            &self.document["expires_at"],
+        )?)?;
         let named = files::directory(&self.path, Some(self.owner))?;
         let packages =
             files::directory_relative(&self.directory, Path::new("packages"), Some(self.owner))?;

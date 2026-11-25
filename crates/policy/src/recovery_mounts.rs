@@ -111,8 +111,14 @@ impl Mounts {
             let current = files::directory(&mount.path, Some(0))?;
             require(
                 mount_identity::id(current.as_fd(), true)? == mount.unique
-                    && mount_identity::id(mount.file.as_ref().unwrap().as_fd(), true)?
-                        == mount.unique
+                    && mount_identity::id(
+                        mount
+                            .file
+                            .as_ref()
+                            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                            .as_fd(),
+                        true,
+                    )? == mount.unique
                     && rows
                         .iter()
                         .filter(|r| r.target == mount.path.to_str().unwrap())
@@ -134,8 +140,12 @@ impl Mounts {
         )?;
         while !self.mounts.is_empty() {
             self.recheck()?;
-            let mount = self.mounts.last_mut().unwrap();
-            let named = CString::new(mount.path.as_os_str().as_encoded_bytes()).unwrap();
+            let mount = self
+                .mounts
+                .last_mut()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
+            let named = CString::new(mount.path.as_os_str().as_encoded_bytes())
+                .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
             drop(mount.file.take());
             let result = unsafe { libc::umount2(named.as_ptr(), 0) };
             if result != 0 {

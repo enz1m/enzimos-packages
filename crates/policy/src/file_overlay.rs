@@ -227,7 +227,7 @@ fn scan(
             }
         }
         if row["kind"] == "symlink" {
-            link_target(name, row["target"].as_str().unwrap())?;
+            link_target(name, enzimos_platform::json::string(&row["target"])?)?;
         }
     }
     Ok(rows)
@@ -367,8 +367,13 @@ pub fn extract(
                     "reviewed overlay file changed",
                 )?;
                 let path = Path::new(&name);
-                let parent =
-                    files::ensure_directory_relative(root, path.parent().unwrap(), 0o755, owner)?;
+                let parent = files::ensure_directory_relative(
+                    root,
+                    path.parent()
+                        .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+                    0o755,
+                    owner,
+                )?;
                 require(
                     enzimos_platform::mount_identity::id(parent.as_fd(), true)? == root_mount,
                     "overlay file crosses target mount",
@@ -376,9 +381,12 @@ pub fn extract(
                 let output = stream_copy::verified_reader(
                     &mut entry,
                     &parent,
-                    path.file_name().unwrap().to_str().unwrap(),
-                    row["bytes"].as_u64().unwrap(),
-                    row["sha256"].as_str().unwrap(),
+                    path.file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                        .to_str()
+                        .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+                    enzimos_platform::json::unsigned(&row["bytes"])?,
+                    enzimos_platform::json::string(&row["sha256"])?,
                     mode,
                     owner,
                     true,
@@ -405,9 +413,7 @@ pub fn extract(
     require(
         archive.into_inner().limit() > 0
             && names
-                == reviewed["members"]
-                    .as_object()
-                    .unwrap()
+                == enzimos_platform::json::object(&reviewed["members"])?
                     .keys()
                     .cloned()
                     .collect(),
@@ -417,12 +423,26 @@ pub fn extract(
     for (name, target) in &links {
         guard()?;
         let path = Path::new(name);
-        let parent = files::ensure_directory_relative(root, path.parent().unwrap(), 0o755, owner)?;
+        let parent = files::ensure_directory_relative(
+            root,
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            0o755,
+            owner,
+        )?;
         require(
             enzimos_platform::mount_identity::id(parent.as_fd(), true)? == root_mount,
             "overlay link crosses target mount",
         )?;
-        files::symlink_member(&parent, Path::new(path.file_name().unwrap()), target, owner)?;
+        files::symlink_member(
+            &parent,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+            target,
+            owner,
+        )?;
         let (file, row) = capture(root, name, owner)?;
         require(
             row["kind"] == "symlink" && row["target"] == *target,
@@ -449,7 +469,7 @@ pub fn extract(
     guard()?;
     let mut link_receipts = Vec::new();
     for (file, row) in link_outputs {
-        let (_, actual) = capture(root, row["path"].as_str().unwrap(), owner)?;
+        let (_, actual) = capture(root, enzimos_platform::json::string(&row["path"])?, owner)?;
         require(
             actual == row && value!(files::identity(&file.metadata()?)) == row["inode"],
             "original published overlay link changed",
@@ -480,9 +500,18 @@ pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
         "capture requires canonical installation member",
     )?;
     let path = Path::new(name);
-    let parent = files::directory_relative(root, path.parent().unwrap(), Some(owner))?;
-    let leaf = std::ffi::CString::new(path.file_name().unwrap().as_encoded_bytes())
-        .map_err(|_| Error("overlay capture name encoding".into()))?;
+    let parent = files::directory_relative(
+        root,
+        path.parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(owner),
+    )?;
+    let leaf = std::ffi::CString::new(
+        path.file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .as_encoded_bytes(),
+    )
+    .map_err(|_| Error("overlay capture name encoding".into()))?;
     let raw = unsafe {
         libc::openat(
             parent.as_raw_fd(),
@@ -505,7 +534,10 @@ pub fn capture(root: &File, name: &str, owner: u32) -> Result<(File, Value)> {
         let target = std::fs::read_link(format!(
             "/proc/self/fd/{}/{}",
             parent.as_raw_fd(),
-            path.file_name().unwrap().to_str().unwrap()
+            path.file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?
         ))?;
         let target = target
             .to_str()

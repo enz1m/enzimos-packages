@@ -34,7 +34,8 @@ pub fn receive(
     )?;
     let mut message = channel.receive_counts(4096, &[0, 1], Duration::from_secs(3))?;
     require(
-        u64::from(message.sender.pid) == worker["worker"]["pid"].as_u64().unwrap()
+        u64::from(message.sender.pid)
+            == enzimos_platform::json::unsigned(&worker["worker"]["pid"])?
             && message.sender.uid == 0
             && message.sender.gid == 0,
         "observation packet sender is not original Root worker",
@@ -54,7 +55,10 @@ pub fn receive(
     )?;
     let header = if let Some(file) = message.files.pop() {
         let file = File::from(file);
-        scope.require_description(file.as_fd(), body["header_number"].as_u64().unwrap() as u32)?;
+        scope.require_description(
+            file.as_fd(),
+            enzimos_platform::json::unsigned(&body["header_number"])? as u32,
+        )?;
         crate::backup_worker_handoff::readonly(&file)?;
         crate::backup_worker_handoff::identity(&file, &body["result"]["header"]["identity"])?;
         Some(file)

@@ -34,8 +34,18 @@ impl Configuration {
         Self::retained(Path::new("/etc/enzimos/storage.json"), 0)
     }
     fn retained(path: &Path, owner: u32) -> Result<Self> {
-        let parent = files::directory(path.parent().unwrap(), Some(owner))?;
-        let file = files::open_relative(&parent, Path::new(path.file_name().unwrap()))?;
+        let parent = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(owner),
+        )?;
+        let file = files::open_relative(
+            &parent,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         let m = file.metadata()?;
         require(
             m.uid() == owner && m.gid() == owner && m.nlink() == 1 && m.mode() & 0o022 == 0,
@@ -63,8 +73,20 @@ impl Configuration {
         &self.value
     }
     pub(crate) fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(self.owner))?;
-        let named = files::open_relative(&self.parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(self.owner),
+        )?;
+        let named = files::open_relative(
+            &self.parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             shape(&self.parent, self.owner)? == self.parent_shape
                 && shape(&parent, self.owner)? == self.parent_shape

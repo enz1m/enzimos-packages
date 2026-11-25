@@ -44,7 +44,7 @@ pub fn manifest(v: &Value) -> Result<()> {
     )?;
     descriptor(&v["identity"])?;
     json::fields(&v["files"], "kernel initrd.img")?;
-    for row in v["files"].as_object().unwrap().values() {
+    for row in enzimos_platform::json::object(&v["files"])?.values() {
         json::fields(row, "bytes sha256")?;
         require(
             row["bytes"]
@@ -140,7 +140,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
     )?;
     for (mode, pair) in observations {
         json::fields(pair, "first latest")?;
-        for observation in pair.as_object().unwrap().values() {
+        for observation in enzimos_platform::json::object(pair)?.values() {
             json::fields(
                 observation,
                 "boot_id kernel identity_sha256 assurance selected_entry",
@@ -214,10 +214,10 @@ pub(crate) fn retain_artifacts(v: &Value) -> Result<Artifacts> {
         "unexpected recovery image members",
     )?;
     let mut artifacts = Vec::new();
-    for (name, expected) in v["inputs"]["files"].as_object().unwrap() {
+    for (name, expected) in enzimos_platform::json::object(&v["inputs"]["files"])? {
         let artifact = volume.artifact(Path::new(&format!("{relative}/{name}")), MAX_IMAGE)?;
         require(
-            artifact.bytes == expected["bytes"].as_u64().unwrap()
+            artifact.bytes == enzimos_platform::json::unsigned(&expected["bytes"])?
                 && artifact.sha == records::text(expected, "sha256")?,
             "recovery image artifact drift",
         )?;
@@ -393,7 +393,9 @@ pub fn status_locked(lock: &enzimos_platform::files::Lock) -> Result<Value> {
             blockers.insert(format!("pending-recovery-publication:{id}"));
             false
         };
-        let modes: Vec<_> = record["observations"].as_object().unwrap().keys().collect();
+        let modes: Vec<_> = enzimos_platform::json::object(&record["observations"])?
+            .keys()
+            .collect();
         images.insert(id.clone(), serde_json::json!({"phase":record["phase"],"live_bindings_match":valid,"software_observed_modes":modes,"deletion_authorized":false}));
     }
     if images.is_empty() {

@@ -163,8 +163,8 @@ impl<'a, 'c, 's, 'cfg, 'g> Inputs<'a, 'c, 's, 'cfg, 'g> {
                 );
             }
             args.extend(enzimos_platform::backup_command::skipped_arguments());
-            for source in self.scope["sources"].as_array().unwrap() {
-                args.push(source.as_str().unwrap().to_owned());
+            for source in enzimos_platform::json::array(&self.scope["sources"])? {
+                args.push(enzimos_platform::json::string(source)?.to_owned());
             }
             self.recheck()?;
             Ok(args)

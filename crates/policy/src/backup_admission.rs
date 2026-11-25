@@ -54,9 +54,11 @@ impl Document {
             "fixed original schedule retirement required",
         )?;
         self.recheck()?;
-        let source = std::ffi::CString::new("backup.enabled").unwrap();
+        let source = std::ffi::CString::new("backup.enabled")
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let retired = format!(".backup-enabled-revoked-{id}");
-        let destination = std::ffi::CString::new(retired.as_str()).unwrap();
+        let destination = std::ffi::CString::new(retired.as_str())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe {
                 libc::renameat2(
@@ -100,8 +102,10 @@ impl Document {
             "fixed original repository pin retirement required",
         )?;
         let retired = format!(".backup-destination-retired-{id}");
-        let source = std::ffi::CString::new("backup-destination.json").unwrap();
-        let destination = std::ffi::CString::new(retired.as_str()).unwrap();
+        let source = std::ffi::CString::new("backup-destination.json")
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        let destination = std::ffi::CString::new(retired.as_str())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         require(
             unsafe {
                 libc::renameat2(
@@ -127,10 +131,20 @@ impl Document {
         Ok(self)
     }
     pub(crate) fn optional(path: &Path, owner: u32) -> Result<Option<Self>> {
-        let parent = files::directory(path.parent().unwrap(), Some(owner))?;
+        let parent = files::directory(
+            path.parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(owner),
+        )?;
         let parent_shape = shape(&parent, owner)?;
         let mount = mount_identity::id(parent.as_fd(), true)?;
-        let Some(file) = files::optional_relative(&parent, Path::new(path.file_name().unwrap()))?
+        let Some(file) = files::optional_relative(
+            &parent,
+            Path::new(
+                path.file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?
         else {
             return Ok(None);
         };
@@ -157,8 +171,20 @@ impl Document {
         Ok(Some(this))
     }
     pub(crate) fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(self.owner))?;
-        let named = files::open_relative(&self.parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(self.owner),
+        )?;
+        let named = files::open_relative(
+            &self.parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             shape(&parent, self.owner)? == self.shape
                 && shape(&self.parent, self.owner)? == self.shape

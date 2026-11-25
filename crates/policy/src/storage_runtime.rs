@@ -121,7 +121,10 @@ impl Guard {
                 "configured storage filesystem mismatch",
             )?;
         }
-        let expected = format!("/{}", configuration["control_subvol"].as_str().unwrap());
+        let expected = format!(
+            "/{}",
+            enzimos_platform::json::string(&configuration["control_subvol"])?
+        );
         let observed = rows()?;
         mount_row(
             &observed,
@@ -130,7 +133,9 @@ impl Guard {
             control.normal,
         )?;
         mount_row(&observed, "/", None, root.normal)?;
-        let topology = topology::mounted_btrfs(configuration["filesystem_uuid"].as_str().unwrap())?;
+        let topology = topology::mounted_btrfs(enzimos_platform::json::string(
+            &configuration["filesystem_uuid"],
+        )?)?;
         let namespace = namespace(std::process::id())?;
         let guard = Self {
             configuration,
@@ -165,7 +170,7 @@ impl Guard {
     }
     pub fn backup_root_binding(&self) -> Result<Value> {
         self.recheck()?;
-        let root_path = self.configuration["root_subvol"].as_str().unwrap();
+        let root_path = enzimos_platform::json::string(&self.configuration["root_subvol"])?;
         let rows = rows()?;
         let row = mount_row(&rows, "/", Some(&format!("/{root_path}")), self.root.normal)?;
         let (object, readonly) = crate::subvolume::observe(self.root.file.as_fd(), root_path)?;
@@ -196,7 +201,7 @@ impl Guard {
         let observed = rows()?;
         let expected = format!(
             "/{}",
-            self.configuration["control_subvol"].as_str().unwrap()
+            enzimos_platform::json::string(&self.configuration["control_subvol"])?
         );
         mount_row(
             &observed,
@@ -206,8 +211,9 @@ impl Guard {
         )?;
         mount_row(&observed, "/", None, self.root.normal)?;
         require(
-            topology::mounted_btrfs(self.configuration["filesystem_uuid"].as_str().unwrap())?
-                == self.topology,
+            topology::mounted_btrfs(enzimos_platform::json::string(
+                &self.configuration["filesystem_uuid"],
+            )?)? == self.topology,
             "storage members changed",
         )?;
         self.original_configuration.recheck()
@@ -239,7 +245,7 @@ impl TopMount {
         )?;
         let source = format!(
             "UUID={}",
-            guard.configuration["filesystem_uuid"].as_str().unwrap()
+            enzimos_platform::json::string(&guard.configuration["filesystem_uuid"])?
         );
         operation::query(
             "/usr/bin/mount",
@@ -249,7 +255,8 @@ impl TopMount {
                 "-o",
                 "subvolid=5,nodiscard,nodev,nosuid,noexec",
                 &source,
-                path.to_str().unwrap(),
+                path.to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             ],
             Duration::from_secs(30),
             65536,
@@ -263,8 +270,18 @@ impl TopMount {
             close_on_drop,
         };
         let result = (|| {
-            let m = top.mounted.as_ref().unwrap();
-            mount_row(&rows()?, top.path.to_str().unwrap(), Some("/"), m.normal)?;
+            let m = top
+                .mounted
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
+            mount_row(
+                &rows()?,
+                top.path
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+                Some("/"),
+                m.normal,
+            )?;
             require(
                 m.filesystem["filesystem_uuid"] == guard.configuration["filesystem_uuid"],
                 "wrong birth top-level filesystem",
@@ -293,7 +310,14 @@ impl TopMount {
             .as_ref()
             .ok_or_else(|| Error("top mount closed".into()))?;
         m.recheck()?;
-        mount_row(&rows()?, self.path.to_str().unwrap(), Some("/"), m.normal)?;
+        mount_row(
+            &rows()?,
+            self.path
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
+            Some("/"),
+            m.normal,
+        )?;
         Ok(())
     }
     pub fn close(&mut self) -> Result<()> {
@@ -303,7 +327,10 @@ impl TopMount {
         self.recheck()?;
         // Close our retained descriptor first. Other retained references cause a
         // normal unmount refusal; there is no lazy detach or forced cleanup.
-        let original = self.mounted.as_ref().unwrap();
+        let original = self
+            .mounted
+            .as_ref()
+            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
         let expected = (
             original.identity,
             original.unique,
@@ -313,7 +340,10 @@ impl TopMount {
         drop(self.mounted.take());
         let outcome = operation::query(
             "/usr/bin/umount",
-            &[self.path.to_str().unwrap()],
+            &[self
+                .path
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?],
             Duration::from_secs(15),
             65536,
             &[0],
@@ -375,7 +405,8 @@ impl IndependentGuard {
         let ram_mount = mount_identity::id(ram.as_fd(), true)?;
         let control = Mounted::open(Path::new(operation::CONTROL))?;
         let top = Mounted::open(Path::new(Self::TOP))?;
-        let topology = topology::mounted_btrfs(plan["filesystem_uuid"].as_str().unwrap())?;
+        let topology =
+            topology::mounted_btrfs(enzimos_platform::json::string(&plan["filesystem_uuid"])?)?;
         let guard = Self {
             plan: plan.clone(),
             control,
@@ -424,7 +455,7 @@ impl IndependentGuard {
         )?;
         self.control.recheck()?;
         self.top.recheck()?;
-        let uuid = self.plan["filesystem_uuid"].as_str().unwrap();
+        let uuid = enzimos_platform::json::string(&self.plan["filesystem_uuid"])?;
         for mounted in [&self.control, &self.top] {
             require(
                 mounted.filesystem["filesystem_uuid"] == uuid,
@@ -436,7 +467,7 @@ impl IndependentGuard {
             "unsafe independent control storage",
         )?;
         let control = &self.plan["protected"]["control"];
-        let path = control["path"].as_str().unwrap();
+        let path = enzimos_platform::json::string(&control["path"])?;
         mount_row(
             &rows,
             operation::CONTROL,

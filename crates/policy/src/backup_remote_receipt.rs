@@ -106,7 +106,7 @@ impl Intent {
             ctx["direction"] == "retrieve",
             "retrieval receipt requires original retrieve worker",
         )?;
-        let snapshot = ctx["snapshot"].as_str().unwrap();
+        let snapshot = enzimos_platform::json::string(&ctx["snapshot"])?;
         crate::backup_remote_points::retrieval_admission(source, snapshot, before)?;
         let selected = crate::backup_remote_points::selected(source, snapshot)?;
         let original = selected.get("original").unwrap_or_else(|| &selected["id"]);
@@ -147,7 +147,10 @@ impl Intent {
         record(&value)?;
         let record = Retained::create(
             &parent,
-            Path::new(&format!("{}.json", ctx["receipt_id"].as_str().unwrap())),
+            Path::new(&format!(
+                "{}.json",
+                enzimos_platform::json::string(&ctx["receipt_id"])?
+            )),
             &value,
             LIMIT,
             mount,

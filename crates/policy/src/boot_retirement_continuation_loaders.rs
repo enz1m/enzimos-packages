@@ -78,12 +78,11 @@ pub(super) struct Loaders {
 impl Loaders {
     pub(super) fn observe(admission: &Admission<'_>) -> Result<Self> {
         let volume = &admission.volume;
-        let generation = admission.record.value()?["intent"]["id"]
-            .as_str()
-            .unwrap()
-            .strip_prefix("boot-")
-            .unwrap()
-            .to_owned();
+        let generation =
+            enzimos_platform::json::string(&admission.record.value()?["intent"]["id"])?
+                .strip_prefix("boot-")
+                .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?
+                .to_owned();
         let texts = crate::root_rebind_boot::texts(volume)?;
         let mut artifacts = BTreeMap::new();
         let mut directories = BTreeMap::new();
@@ -109,8 +108,8 @@ impl Loaders {
         }
         let mut selected = independent_loader_closure(&texts, &generation, &ukis)?;
         let firmware = crate::boot_retirement_context::firmware()?;
-        for variable in firmware["variables"].as_object().unwrap().values() {
-            selected.insert(variable.as_str().unwrap().into());
+        for variable in enzimos_platform::json::object(&firmware["variables"])?.values() {
+            selected.insert(enzimos_platform::json::string(variable)?.into());
         }
         let command_line = crate::boot_retirement_context::command_line()?;
         let uefi: BTreeMap<_, _> = texts
@@ -121,7 +120,7 @@ impl Loaders {
             })
             .collect();
         let mut expected_generation_names = BTreeSet::new();
-        for (id, row) in admission.catalog.data["generations"].as_object().unwrap() {
+        for (id, row) in enzimos_platform::json::object(&admission.catalog.data["generations"])? {
             if id == &generation {
                 if directories[Path::new("enzimos/generations")]
                     .names
@@ -151,9 +150,7 @@ impl Loaders {
                     128 * 1024 * 1024
                 };
                 let artifact = volume.artifact(&relative, limit as u64)?;
-                if let Some(expected) = row["material"]["files"]
-                    .as_array()
-                    .unwrap()
+                if let Some(expected) = enzimos_platform::json::array(&row["material"]["files"])?
                     .iter()
                     .find(|r| r["name"] == leaf)
                 {
@@ -224,7 +221,11 @@ impl Loaders {
                 directory.advance_removed(
                     volume,
                     retired.removal()?,
-                    relative.file_name().unwrap().to_str().unwrap(),
+                    relative
+                        .file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                        .to_str()
+                        .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
                 )?;
             }
             self.artifacts.remove(relative);
@@ -281,7 +282,11 @@ impl Loaders {
             .advance_removed(
                 volume,
                 removed,
-                relative.file_name().unwrap().to_str().unwrap(),
+                relative
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+                    .to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
             )?;
         self.directories.remove(relative);
         removed.recheck()
@@ -328,8 +333,8 @@ impl Loaders {
             "actual original firmware/current boot changed during owned continuation",
         )?;
         let mut selected = independent_loader_closure(&self.texts, &self.generation, &self.ukis)?;
-        for variable in self.firmware["variables"].as_object().unwrap().values() {
-            selected.insert(variable.as_str().unwrap().into());
+        for variable in enzimos_platform::json::object(&self.firmware["variables"])?.values() {
+            selected.insert(enzimos_platform::json::string(variable)?.into());
         }
         require(
             selected == self.selected,
@@ -374,11 +379,9 @@ impl Loaders {
                     .get(&self.generation)
                     .is_some()
                     && json::fingerprint(&admission.catalog.data)?
-                        == journal.current()?["intent"]["steps"]
-                            .as_array()
-                            .unwrap()
+                        == enzimos_platform::json::array(&journal.current()?["intent"]["steps"])?
                             .last()
-                            .unwrap()["after"],
+                            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["after"],
                 "known terminal owned publisher tombstone differs",
             )?;
         }
@@ -402,8 +405,8 @@ impl Loaders {
             "actual firmware/current boot changed during continuation review",
         )?;
         let mut selected = independent_loader_closure(&self.texts, &self.generation, &self.ukis)?;
-        for variable in self.firmware["variables"].as_object().unwrap().values() {
-            selected.insert(variable.as_str().unwrap().into());
+        for variable in enzimos_platform::json::object(&self.firmware["variables"])?.values() {
+            selected.insert(enzimos_platform::json::string(variable)?.into());
         }
         require(
             selected == self.selected,
@@ -456,11 +459,9 @@ impl Loaders {
                     && admission
                         .states
                         .iter()
-                        .zip(
-                            admission.record.value()?["intent"]["steps"]
-                                .as_array()
-                                .unwrap(),
-                        )
+                        .zip(enzimos_platform::json::array(
+                            &admission.record.value()?["intent"]["steps"],
+                        )?)
                         .all(|(s, r)| r["after"] == s.as_str()),
                 "retired publisher reconciliation requires every actual resource already after",
             )?;

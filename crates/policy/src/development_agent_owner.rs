@@ -45,7 +45,8 @@ impl Owner {
             .args([
                 "--no-options",
                 "--homedir",
-                home.to_str().unwrap(),
+                home.to_str()
+                    .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?,
                 "--daemon",
                 "--no-detach",
                 "--disable-scdaemon",

@@ -171,7 +171,7 @@ pub fn policy() -> Result<Value> {
     let (_, action, risk, checksum) = read()?;
     let available = capabilities();
     Ok(
-        value!({"configured_action":ACTIONS.iter().find(|a|a.1==action).unwrap().0,"risky_action_allowed":risk,"supported_actions":ACTIONS.iter().filter(|a|!matches!(a.0,"suspend"|"hibernate")||available.contains(a.0)).map(|a|a.0).collect::<Vec<_>>(),"risk_acknowledgement_required":["ignore","suspend"],"config_sha256":checksum,"effective_after":"next-boot","owner":"UPower"}),
+        value!({"configured_action":ACTIONS.iter().find(|a|a.1==action).ok_or_else(|| enzimos_platform::Error("missing element".into()))?.0,"risky_action_allowed":risk,"supported_actions":ACTIONS.iter().filter(|a|!matches!(a.0,"suspend"|"hibernate")||available.contains(a.0)).map(|a|a.0).collect::<Vec<_>>(),"risk_acknowledgement_required":["ignore","suspend"],"config_sha256":checksum,"effective_after":"next-boot","owner":"UPower"}),
     )
 }
 pub fn set_action<F: FnMut() -> Result<()>>(
@@ -188,9 +188,7 @@ pub fn set_action<F: FnMut() -> Result<()>>(
     lock.recheck()?;
     let before = policy()?;
     require(
-        before["supported_actions"]
-            .as_array()
-            .unwrap()
+        enzimos_platform::json::array(&before["supported_actions"])?
             .iter()
             .any(|v| v == action),
         "critical power action unavailable",

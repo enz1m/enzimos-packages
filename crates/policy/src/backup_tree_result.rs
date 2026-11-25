@@ -163,7 +163,10 @@ pub(crate) fn verify_tar(bytes: &[u8], path: &str, listing: &Listing) -> Result<
         tail <= bytes.len() && bytes[tail..].iter().all(|b| *b == 0),
         "tree tar contains trailing unobserved data",
     )?;
-    let parent = path.rsplit_once('/').unwrap().0;
+    let parent = path
+        .rsplit_once('/')
+        .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?
+        .0;
     let absolute = listing
         .nodes
         .iter()

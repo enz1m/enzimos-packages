@@ -70,11 +70,11 @@ pub fn storage_guard() -> Result<Value> {
         &[0],
     )?;
     let text = std::str::from_utf8(&mounted).map_err(|_| Error("control mount encoding".into()))?;
-    let expected_root = format!("/{}", c["control_subvol"].as_str().unwrap());
+    let expected_root = format!("/{}", enzimos_platform::json::string(&c["control_subvol"])?);
     require(
         text.split_whitespace().collect::<Vec<_>>()
             == vec![
-                c["filesystem_uuid"].as_str().unwrap(),
+                enzimos_platform::json::string(&c["filesystem_uuid"])?,
                 &expected_root,
                 "btrfs",
             ],

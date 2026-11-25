@@ -378,7 +378,11 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
     let mut firmware = Firmware::observe()?;
     require(
         files::optional_relative(
-            &owner.directory.as_ref().unwrap().0,
+            &owner
+                .directory
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .0,
             Path::new("enrollment-attempt.json"),
         )?
         .is_none(),
@@ -405,7 +409,14 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
     if let Some(bytes) = &before {
         require(
             bytes.len() >= 4
-                && matches!(u32::from_le_bytes(bytes[..4].try_into().unwrap()), 7 | 0x27),
+                && matches!(
+                    u32::from_le_bytes(
+                        bytes[..4]
+                            .try_into()
+                            .map_err(|_| enzimos_platform::Error("value out of range".into()))?
+                    ),
+                    7 | 0x27
+                ),
             "unsupported original EFI db attributes",
         )?;
         if secure_boot::db_contains(bytes, der)? {
@@ -466,7 +477,8 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
         }
         authorize()?;
         receipt.recheck()?;
-        let leaf = CString::new(secure_boot::DB).unwrap();
+        let leaf = CString::new(secure_boot::DB)
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         let open_flags = libc::O_WRONLY
             | libc::O_NOFOLLOW
             | libc::O_CLOEXEC
@@ -505,7 +517,9 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
             require_reader(
                 file,
                 reader_flags.unwrap(),
-                after.as_ref().unwrap(),
+                after
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 firmware.mount,
             )?;
         }
@@ -534,8 +548,16 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
             require(
                 (m.dev(), m.ino())
                     == (
-                        after.as_ref().unwrap().epoch.0,
-                        after.as_ref().unwrap().epoch.1,
+                        after
+                            .as_ref()
+                            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                            .epoch
+                            .0,
+                        after
+                            .as_ref()
+                            .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                            .epoch
+                            .1,
                     ),
                 "EFI db replaced across append",
             )?;
@@ -558,7 +580,9 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
     // Cleanup uses retained object identity, never a fresh path as authority.
     let restore_inode = (|| -> Result<()> {
         if changed {
-            let file = original.as_ref().unwrap();
+            let file = original
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?;
             let named = Member::open(&firmware.directory, secure_boot::DB, firmware.mount)?;
             let m = file.metadata()?;
             require(
@@ -595,7 +619,9 @@ pub fn enroll_locked(lock: &files::Lock) -> Result<Value> {
         require_reader(
             file,
             reader_flags.unwrap(),
-            after.as_ref().unwrap(),
+            after
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             firmware.mount,
         )?;
     }

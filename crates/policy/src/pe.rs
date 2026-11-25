@@ -7,7 +7,7 @@ fn word(body: &[u8], p: usize) -> Result<u16> {
         body.get(p..p + 2)
             .ok_or_else(|| Error("truncated PE header".into()))?
             .try_into()
-            .unwrap(),
+            .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
     ))
 }
 fn dword(body: &[u8], p: usize) -> Result<u32> {
@@ -15,7 +15,7 @@ fn dword(body: &[u8], p: usize) -> Result<u32> {
         body.get(p..p + 4)
             .ok_or_else(|| Error("truncated PE header".into()))?
             .try_into()
-            .unwrap(),
+            .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
     ))
 }
 pub(crate) fn sections(body: &[u8]) -> Result<BTreeMap<String, &[u8]>> {

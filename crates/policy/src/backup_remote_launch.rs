@@ -47,7 +47,10 @@ impl<'g> Launch<'g> {
         let value = value!({"schema":1,"id":original["id"],"phase":"starting","context_sha256":json::fingerprint(original)?,"boot_id":original["remote"]["boot_id"],"worker_closed":false,"receipt_complete":false});
         let record = Retained::create(
             &parent,
-            Path::new(&format!("{}.json", original["id"].as_str().unwrap())),
+            Path::new(&format!(
+                "{}.json",
+                enzimos_platform::json::string(&original["id"])?
+            )),
             &value,
             4096,
             mount,

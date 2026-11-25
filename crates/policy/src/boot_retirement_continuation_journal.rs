@@ -13,7 +13,7 @@ impl Journal {
     pub(super) fn observe(admission: &Admission<'_>) -> Result<Self> {
         admission.recheck()?;
         let before = admission.record.value()?.clone();
-        let id = before["intent"]["id"].as_str().unwrap().to_owned();
+        let id = enzimos_platform::json::string(&before["intent"]["id"])?.to_owned();
         let parent = files::directory_relative(
             admission.guard.control(),
             Path::new("boot-retirements"),
@@ -131,11 +131,11 @@ fn transition(old: &Value, next: &Value, id: &str) -> Result<()> {
         old["intent"] == next["intent"] && old != next,
         "immutable continuation intent or no-op checkpoint",
     )?;
-    let number = old["next_step"].as_u64().unwrap();
-    let count = old["intent"]["steps"].as_array().unwrap().len() as u64;
+    let number = enzimos_platform::json::unsigned(&old["next_step"])?;
+    let count = enzimos_platform::json::array(&old["intent"]["steps"])?.len() as u64;
     let allowed = match (
-        old["phase"].as_str().unwrap(),
-        next["phase"].as_str().unwrap(),
+        enzimos_platform::json::string(&old["phase"])?,
+        enzimos_platform::json::string(&next["phase"])?,
     ) {
         ("prepared", "executing") => next["next_step"] == number && next["inflight"].is_null(),
         ("executing", "executing") => {

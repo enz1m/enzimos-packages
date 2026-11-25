@@ -43,8 +43,20 @@ impl Source {
         Ok(source)
     }
     pub(crate) fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(0))?;
-        let named = files::open_relative(&parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
+        let named = files::open_relative(
+            &parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             files::identity(&named.metadata()?) == self.identity
                 && files::identity(&self.file.metadata()?) == self.identity

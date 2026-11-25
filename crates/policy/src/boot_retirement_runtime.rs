@@ -124,7 +124,7 @@ impl Runtime<'_, '_, '_, '_> {
     }
     fn persist(&mut self, next: Value) -> Result<()> {
         self.verify()?;
-        let id = self.intent["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&self.intent["id"])?;
         crate::retirement_journal::validate(&next, id)?;
         require(
             next["intent"] == self.intent,
@@ -165,7 +165,9 @@ impl Runtime<'_, '_, '_, '_> {
         let rel = path
             .strip_prefix("/boot")
             .map_err(|_| Error("retirement artifact outside ESP".into()))?;
-        let parent_relative = rel.parent().unwrap();
+        let parent_relative = rel
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?;
         let parent = self.context.volume.directory(parent_relative)?;
         let references = self.references;
         let generation = self.context.generation.clone();
@@ -193,7 +195,11 @@ impl Runtime<'_, '_, '_, '_> {
         }
         .ok_or_else(|| Error("original artifact retirement cannot replay".into()))?;
         let retired = artifact.into_retired(removed)?;
-        let leaf = path.file_name().unwrap().to_str().unwrap();
+        let leaf = path
+            .file_name()
+            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?
+            .to_str()
+            .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?;
         if signed {
             let directory = self
                 .context
@@ -206,7 +212,9 @@ impl Runtime<'_, '_, '_, '_> {
                 "owned UKI directory original member missing",
             )?;
         } else {
-            let parent = parent_relative.to_str().unwrap();
+            let parent = parent_relative
+                .to_str()
+                .ok_or_else(|| enzimos_platform::Error("path encoding".into()))?;
             let directory = self
                 .context
                 .directories
@@ -323,9 +331,9 @@ impl Runtime<'_, '_, '_, '_> {
         self.verify()
     }
     fn state(&self, step: &Value) -> Result<String> {
-        let id = step["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&step["id"])?;
         let absent = json::fingerprint(&value!({"absent":true}))?;
-        match step["kind"].as_str().unwrap() {
+        match enzimos_platform::json::string(&step["kind"])? {
             "uefi-entry" => {
                 let flavor = id
                     .strip_prefix("uefi-")
@@ -402,8 +410,8 @@ impl Runtime<'_, '_, '_, '_> {
         }
     }
     fn apply(&mut self, step: &Value) -> Result<()> {
-        let id = step["id"].as_str().unwrap();
-        match step["kind"].as_str().unwrap() {
+        let id = enzimos_platform::json::string(&step["id"])?;
+        match enzimos_platform::json::string(&step["kind"])? {
             "uefi-entry" => {
                 let flavor = id
                     .strip_prefix("uefi-")
@@ -494,7 +502,7 @@ pub(super) fn retire<'a, 'g: 'a>(
         .ok_or_else(|| Error("original retirement registry missing".into()))?;
     let absent = context.reference_registries[index].originally_absent()?;
     let folder = Path::new(operation::CONTROL).join("boot-retirements");
-    let leaf = format!("{}.json", intent["id"].as_str().unwrap());
+    let leaf = format!("{}.json", enzimos_platform::json::string(&intent["id"])?);
     let registry = if absent {
         let created = created_directory::Created::create(
             context.guard.control(),
@@ -539,7 +547,7 @@ pub(super) fn retire<'a, 'g: 'a>(
         directory: None,
     };
     runtime.persist(record)?;
-    let steps = runtime.intent["steps"].as_array().unwrap().clone();
+    let steps = enzimos_platform::json::array(&runtime.intent["steps"])?.clone();
     for (index, step) in steps.iter().enumerate() {
         runtime.verify()?;
         require(

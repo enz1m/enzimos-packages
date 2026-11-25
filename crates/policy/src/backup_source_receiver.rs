@@ -291,7 +291,10 @@ impl<'a> Received<'a> {
         let mut body = value!({"schema":1,"id":request["id"],"phase":"entered","request_sha256":json::sha256(&json::canonical(&request)?),"nonce":request["nonce"],"worker":scope.binding()?,"received_chunks":1,"source_mounts_admitted":false,"transfer_complete":false,"backup_complete":false});
         let record = Retained::create(
             &registry,
-            Path::new(&format!("{}.json", request["id"].as_str().unwrap())),
+            Path::new(&format!(
+                "{}.json",
+                enzimos_platform::json::string(&request["id"])?
+            )),
             &body,
             wire::LIMIT,
             registry_shape.5,

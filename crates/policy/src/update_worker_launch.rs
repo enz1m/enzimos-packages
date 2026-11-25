@@ -84,15 +84,37 @@ pub fn run_authorized(
         "worker coordinator boot stage changed",
     )?;
     let config_path = Path::new(record::CONFIG);
-    let config_parent = files::directory(config_path.parent().unwrap(), Some(0))?;
-    let config_file =
-        files::open_relative(&config_parent, Path::new(config_path.file_name().unwrap()))?;
+    let config_parent = files::directory(
+        config_path
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
+    let config_file = files::open_relative(
+        &config_parent,
+        Path::new(
+            config_path
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
+    )?;
     let config_epoch = files::identity(&config_file.metadata()?);
     let config = files::read_file(&config_file, 65536, Some(0), true)?;
     let cohort_path = Path::new(COHORT);
-    let cohort_parent = files::directory(cohort_path.parent().unwrap(), Some(0))?;
-    let cohort_file =
-        files::open_relative(&cohort_parent, Path::new(cohort_path.file_name().unwrap()))?;
+    let cohort_parent = files::directory(
+        cohort_path
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
+    let cohort_file = files::open_relative(
+        &cohort_parent,
+        Path::new(
+            cohort_path
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
+    )?;
     let cohort_epoch = files::identity(&cohort_file.metadata()?);
     let cohort_bytes = files::read_file(&cohort_file, 2 * 1024 * 1024, Some(0), true)?;
     let cohort = json::decode(&cohort_bytes, 2 * 1024 * 1024)?;
@@ -104,10 +126,19 @@ pub fn run_authorized(
     )?;
     let admission = admission_record.value()?.clone();
     let coordinator_path = Path::new(record::EXECUTABLE);
-    let coordinator_parent = files::directory(coordinator_path.parent().unwrap(), Some(0))?;
+    let coordinator_parent = files::directory(
+        coordinator_path
+            .parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
     let coordinator = files::open_relative(
         &coordinator_parent,
-        Path::new(coordinator_path.file_name().unwrap()),
+        Path::new(
+            coordinator_path
+                .file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
     )?;
     let coordinator_epoch = files::identity(&coordinator.metadata()?);
     require(
@@ -150,14 +181,23 @@ pub fn run_authorized(
                 &coordinator_directory,
             ),
         ] {
-            let current_parent = files::directory(path.parent().unwrap(), Some(0))?;
+            let current_parent = files::directory(
+                path.parent()
+                    .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+                Some(0),
+            )?;
             require(
                 input_directory(parent)? == *parent_epoch
                     && input_directory(&current_parent)? == *parent_epoch,
                 "original worker coordinator input directory changed",
             )?;
-            let named =
-                files::open_relative(&current_parent, Path::new(path.file_name().unwrap()))?;
+            let named = files::open_relative(
+                &current_parent,
+                Path::new(
+                    path.file_name()
+                        .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+                ),
+            )?;
             require(
                 files::identity(&held.metadata()?) == epoch
                     && files::identity(&named.metadata()?) == epoch

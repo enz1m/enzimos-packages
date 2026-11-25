@@ -78,9 +78,12 @@ impl Graph {
                 "reference artifact size bound",
             )?;
             identity::sha(text(&expected, "sha256")?)?;
-            let values = self.nodes.get_mut(&key).unwrap()["expected"]
-                .as_array_mut()
-                .unwrap();
+            let values = enzimos_platform::json::array_mut(
+                &mut self
+                    .nodes
+                    .get_mut(&key)
+                    .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["expected"],
+            )?;
             if !values.contains(&expected) {
                 values.push(expected);
             }
@@ -111,7 +114,10 @@ impl Graph {
                     .all(|(k, v)| actual.get(k) == Some(v))
             })
         });
-        let row = self.nodes.get_mut(&key).unwrap();
+        let row = self
+            .nodes
+            .get_mut(&key)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         require(
             ["path", "id", "uuid"]
                 .iter()
@@ -415,9 +421,13 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
                 )?;
             }
         }
-        graph.nodes.get_mut(&key).unwrap()["observed_mounts"] = row["mount_references"].clone();
+        graph
+            .nodes
+            .get_mut(&key)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["observed_mounts"] =
+            row["mount_references"].clone();
     }
-    for (name, row) in catalog["generations"].as_object().unwrap() {
+    for (name, row) in enzimos_platform::json::object(&catalog["generations"])? {
         let key = format!("system:{name}");
         graph.node(&key, "system-generation", value!({"state":row["state"]}))?;
         graph.material(&key, name, &row["material"], &inventory, "root", "artifact")?;
@@ -474,7 +484,7 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
             graph.link(&key, &target, &format!("rebind-{role}"))?;
         }
         for phase in ["before_catalog", "after_catalog"] {
-            for (name, generation) in row[phase]["generations"].as_object().unwrap() {
+            for (name, generation) in enzimos_platform::json::object(&row[phase]["generations"])? {
                 graph.material(
                     &key,
                     name,
@@ -488,7 +498,7 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
         let path = format!(
             "{}/.snapshots/{}/snapshot",
             text(&row["source"], "path")?,
-            row["snapshot"]["number"].as_u64().unwrap()
+            enzimos_platform::json::unsigned(&row["snapshot"]["number"])?
         );
         if let Some(actual) = inventory
             .get(&path)
@@ -570,7 +580,9 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
         crate::recovery_image::validate(row, id)?;
         require(row["filesystem_uuid"] == fs, "image graph source mismatch")?;
         let key = format!("recovery:{id}");
-        let modes: Vec<_> = row["observations"].as_object().unwrap().keys().collect();
+        let modes: Vec<_> = enzimos_platform::json::object(&row["observations"])?
+            .keys()
+            .collect();
         graph.node(
             &key,
             "recovery-image",
@@ -588,7 +600,7 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
         }
         let target = graph.root(&row["control"], &inventory)?;
         graph.link(&key, &target, "control-storage")?;
-        for (name, item) in row["inputs"]["files"].as_object().unwrap() {
+        for (name, item) in enzimos_platform::json::object(&row["inputs"]["files"])? {
             let target = graph.artifact(
                 &format!("/enzimos/recovery-images/{id}/{name}"),
                 Some(item.clone()),
@@ -645,7 +657,7 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
         }
         let target = graph.root(&record["control"], &inventory)?;
         graph.link(&key, &target, "control-storage")?;
-        for (name, item) in record["inputs"]["files"].as_object().unwrap() {
+        for (name, item) in enzimos_platform::json::object(&record["inputs"]["files"])? {
             let target = graph.artifact(
                 &format!("/enzimos/recovery-images/{id}/{name}"),
                 Some(item.clone()),
@@ -653,9 +665,15 @@ pub(crate) fn join(input: &Value) -> Result<Value> {
             graph.link(&key, &target, "journal-artifact")?;
         }
         let menu = boot_entries::menu(text(row, "bios_before")?)?;
-        graph.nodes.get_mut(&key).unwrap()["bios_default_before"] =
+        graph
+            .nodes
+            .get_mut(&key)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["bios_default_before"] =
             value!(menu.entries[menu.selected - 1].title);
-        graph.nodes.get_mut(&key).unwrap()["uefi_config_before"] =
+        graph
+            .nodes
+            .get_mut(&key)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["uefi_config_before"] =
             value!(boot_entries::fields(text(row, "default_before")?, false)?);
         graph.before_menu(
             &key,

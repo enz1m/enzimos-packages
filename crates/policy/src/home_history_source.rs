@@ -139,7 +139,12 @@ impl Source {
         let guard = Guard::observe()?;
         let home = files::directory(Path::new("/home"), Some(0))?;
         let snapshots = files::directory_relative(&home, Path::new(".snapshots"), Some(0))?;
-        let directory = files::directory(Path::new(CONFIG).parent().unwrap(), Some(0))?;
+        let directory = files::directory(
+            Path::new(CONFIG)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let config = files::open_relative(&directory, Path::new("home"))?;
         let config_bytes = files::read_file(&config, 65536, Some(0), true)?;
         configuration(&config_bytes)?;
@@ -183,7 +188,12 @@ impl Source {
         self.guard.recheck()?;
         let home = files::directory(Path::new("/home"), Some(0))?;
         let snapshots = files::directory_relative(&home, Path::new(".snapshots"), Some(0))?;
-        let directory = files::directory(Path::new(CONFIG).parent().unwrap(), Some(0))?;
+        let directory = files::directory(
+            Path::new(CONFIG)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         let config = files::open_relative(&directory, Path::new("home"))?;
         require(
             shape(&home)? == self.home_shape

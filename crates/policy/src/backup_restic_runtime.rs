@@ -60,7 +60,11 @@ fn observed(task: Task, code: Option<i32>, stdout: &[u8]) -> Result<Observed> {
             return Ok(Observed::IncorrectPassword);
         }
         let keys = crate::backup_restic_result::keys(code, stdout)?;
-        let current = keys.into_iter().find(|(_, current)| *current).unwrap().0;
+        let current = keys
+            .into_iter()
+            .find(|(_, current)| *current)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
+            .0;
         return Ok(Observed::Authenticated(current));
     }
     require(
@@ -246,8 +250,8 @@ impl Runtime {
         handoff.recheck()?;
         let request = handoff.request()?.clone();
         let selected = &request["context"]["selection"];
-        let snapshot = selected["snapshot"].as_str().unwrap();
-        let path = selected["path"].as_str().unwrap();
+        let snapshot = enzimos_platform::json::string(&selected["snapshot"])?;
+        let path = enzimos_platform::json::string(&selected["path"])?;
         let selection = SelectedFile::new(snapshot, path)?;
         require(
             self.image_evidence()? == request["context"]["restic"],
@@ -462,7 +466,7 @@ impl Runtime {
             &ctx["remote"]["inputs"]["configuration"],
             files["remote-share-password"],
         )?;
-        let snapshot = ctx["snapshot"].as_str().unwrap();
+        let snapshot = enzimos_platform::json::string(&ctx["snapshot"])?;
         // The copy itself is bounded by COPY_TIMEOUT and a no-output watchdog.
         let deadline =
             std::time::Instant::now() + enzimos_platform::remote_restic::WORKFLOW_TIMEOUT;

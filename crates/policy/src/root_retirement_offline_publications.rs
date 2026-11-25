@@ -148,14 +148,14 @@ impl<'a, 's> Publications<'a, 's> {
             )?;
             members(&folder)?;
             let mut artifacts = BTreeMap::new();
-            for (name, expected) in image["inputs"]["files"].as_object().unwrap() {
+            for (name, expected) in enzimos_platform::json::object(&image["inputs"]["files"])? {
                 let artifact = volume.artifact(
                     Path::new(&format!("{prefix}/{name}")),
                     crate::recovery_image::MAX_IMAGE,
                 )?;
                 require(
-                    artifact.bytes == expected["bytes"].as_u64().unwrap()
-                        && artifact.sha == expected["sha256"].as_str().unwrap(),
+                    artifact.bytes == enzimos_platform::json::unsigned(&expected["bytes"])?
+                        && artifact.sha == enzimos_platform::json::string(&expected["sha256"])?,
                     "original ready image artifact differs from retained receipt",
                 )?;
                 artifacts.insert(name.clone(), (artifact, 0));
@@ -259,7 +259,9 @@ impl<'a, 's> Publications<'a, 's> {
             .as_array()
             .filter(|rows| (1..=64).contains(&rows.len()))
             .ok_or_else(|| Error("original publication target list bound".into()))?;
-        let root = rows.last().unwrap()["path"]
+        let root = rows
+            .last()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
             .as_str()
             .ok_or_else(|| Error("original publication target root".into()))?;
         require(

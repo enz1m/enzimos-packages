@@ -93,7 +93,7 @@ pub fn run(parameters: &Parameters) -> Result<Value> {
             &protection,
             &helpers,
         )?;
-        let count = journal.record()?["targets"].as_array().unwrap().len();
+        let count = enzimos_platform::json::array(&journal.record()?["targets"])?.len();
         let advanced = journal
             .enter(&sealed)?
             .begin_first()?

@@ -12,7 +12,7 @@ pub(crate) fn validate(v: &Value, id: &str) -> Result<()> {
     recovery_image::validate(&v["record"], id)?;
     require(
         v["record"]["phase"] == "intent"
-            && v["record"]["observations"].as_object().unwrap().is_empty(),
+            && enzimos_platform::json::object(&v["record"]["observations"])?.is_empty(),
         "publication journal must bind unconfirmed intent",
     )?;
     let bios = recovery_records::text(v, "bios_before")?;

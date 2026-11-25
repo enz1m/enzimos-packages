@@ -81,7 +81,7 @@ pub fn validate(v: &Value, id: &str) -> Result<()> {
         v["intent"]["id"] == id,
         "retirement record filename mismatch",
     )?;
-    let count = v["intent"]["steps"].as_array().unwrap().len() as u64;
+    let count = enzimos_platform::json::array(&v["intent"]["steps"])?.len() as u64;
     let next = v["next_step"]
         .as_u64()
         .ok_or_else(|| Error("retirement progress integer".into()))?;
@@ -171,8 +171,8 @@ pub fn replay(executor: &mut impl Executor, id: &str) -> Result<Value> {
         record["phase"] = value!("executing");
         checkpoint(executor, id, &previous, &record)?;
     }
-    let steps = intent["steps"].as_array().unwrap();
-    for number in record["next_step"].as_u64().unwrap() as usize..steps.len() {
+    let steps = enzimos_platform::json::array(&intent["steps"])?;
+    for number in enzimos_platform::json::unsigned(&record["next_step"])? as usize..steps.len() {
         let step = &steps[number];
         executor.verify_context(&intent)?;
         for prior in &steps[..number] {

@@ -40,7 +40,7 @@ impl<'a> Mount<'a> {
         crate::namespaces::initial()?;
         guard.recheck()?;
         configuration.recheck()?;
-        let uuid = configuration.value()["destination_uuid"].as_str().unwrap();
+        let uuid = enzimos_platform::json::string(&configuration.value()["destination_uuid"])?;
         require(
             guard.configuration["filesystem_uuid"] != uuid,
             "rotation destination overlaps system filesystem",
@@ -58,8 +58,10 @@ impl<'a> Mount<'a> {
         let topology = topology::mounted_btrfs(uuid)?;
         backup_destination::independent(
             &topology.json(),
-            &topology::mounted_btrfs(guard.configuration["filesystem_uuid"].as_str().unwrap())?
-                .json(),
+            &topology::mounted_btrfs(enzimos_platform::json::string(
+                &guard.configuration["filesystem_uuid"],
+            )?)?
+            .json(),
         )?;
         let original = Self {
             guard,
@@ -89,11 +91,9 @@ impl<'a> Mount<'a> {
                 && mount_identity::id(self.root.as_fd(), false)? == self.normal
                 && filesystem::observe(self.root.as_fd())? == self.filesystem
                 && row == self.row
-                && topology::mounted_btrfs(
-                    self.configuration.value()["destination_uuid"]
-                        .as_str()
-                        .unwrap(),
-                )? == self.topology,
+                && topology::mounted_btrfs(enzimos_platform::json::string(
+                    &self.configuration.value()["destination_uuid"],
+                )?)? == self.topology,
             "original rotation mount replaced or drifted",
         )
     }

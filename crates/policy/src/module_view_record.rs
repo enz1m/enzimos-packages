@@ -129,8 +129,8 @@ pub(crate) fn transition(before: Option<&Value>, after: &Value, id: &str) -> Res
             "module view retained mount changed",
         )?;
     }
-    let phase = before["phase"].as_str().unwrap();
-    let next = after["phase"].as_str().unwrap();
+    let phase = enzimos_platform::json::string(&before["phase"])?;
+    let next = enzimos_platform::json::string(&after["phase"])?;
     require(
         matches!(
             (phase, next),

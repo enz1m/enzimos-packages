@@ -152,7 +152,11 @@ impl<'a, 'g> Capture<'a, 'g> {
             .flatten();
         let present = if let Some(repository) = repository {
             let repository_shape = shape(&repository, 0)?;
-            let system_file = system.as_ref().unwrap().0.try_clone()?;
+            let system_file = system
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .0
+                .try_clone()?;
             let system_shape = shape(&system_file, 0)?;
             let vendor = Command::open("/usr/bin/pacman")?;
             // pacman -Q prints one short line; 4 KiB leaves room for a warning.

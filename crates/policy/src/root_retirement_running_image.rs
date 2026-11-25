@@ -124,7 +124,7 @@ impl<'a> Original<'a> {
             descriptor["schema"] == 2,
             "running retirement requires a native image descriptor",
         )?;
-        let policy = descriptor["policy_files"].as_object().unwrap();
+        let policy = enzimos_platform::json::object(&descriptor["policy_files"])?;
         let expected = policy
             .keys()
             .cloned()

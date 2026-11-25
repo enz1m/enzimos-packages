@@ -66,12 +66,12 @@ pub(crate) fn validate(record: &Value, id: &str) -> Result<()> {
     require(
         inode.len() == 5
             && inode.iter().all(|n| n.as_u64().is_some())
-            && inode[0].as_u64().unwrap() > 0
-            && inode[1].as_u64().unwrap() > 0
+            && enzimos_platform::json::unsigned(&inode[0])? > 0
+            && enzimos_platform::json::unsigned(&inode[1])? > 0
             && inode[2] == 0
-            && inode[3].as_u64().unwrap() <= u64::from(u32::MAX)
-            && inode[4].as_u64().unwrap() <= u64::from(u32::MAX)
-            && inode[4].as_u64().unwrap() & 0o177777 == 0o40700
+            && enzimos_platform::json::unsigned(&inode[3])? <= u64::from(u32::MAX)
+            && enzimos_platform::json::unsigned(&inode[4])? <= u64::from(u32::MAX)
+            && enzimos_platform::json::unsigned(&inode[4])? & 0o177777 == 0o40700
             && mounted["mount"].as_u64().is_some_and(|n| n > 0),
         "authority mounted inode or mode refused",
     )?;
@@ -115,7 +115,8 @@ pub(crate) fn validate(record: &Value, id: &str) -> Result<()> {
         }
     }
     require(
-        record["summary"]["approved_packagers"] == record["approved"].as_array().unwrap().len()
+        record["summary"]["approved_packagers"]
+            == enzimos_platform::json::array(&record["approved"])?.len()
             && record["summary"]["local_keys_kept"] == record["local"]
             && record["authority"]["filesystem_uuid"] == record["filesystem_uuid"],
         "authority summary or mounted identity changed",

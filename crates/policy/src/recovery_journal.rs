@@ -140,8 +140,8 @@ pub fn transition(kind: Kind, previous: Option<&Value>, next: &Value, id: &str) 
                 valid && previous != next,
                 "recovery image checkpoint skipped or replayed",
             )?;
-            let before = previous["observations"].as_object().unwrap();
-            let after = next["observations"].as_object().unwrap();
+            let before = enzimos_platform::json::object(&previous["observations"])?;
+            let after = enzimos_platform::json::object(&next["observations"])?;
             for (mode, observation) in before {
                 require(
                     after
@@ -564,7 +564,9 @@ impl Journal {
                 "recovery journal full",
             )?;
             let original = crate::control_record::Retained::create(
-                self.directory.as_ref().unwrap(),
+                self.directory
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
                 Path::new(&name),
                 &next,
                 self.kind.limit(),

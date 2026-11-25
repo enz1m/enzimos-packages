@@ -67,7 +67,7 @@ pub fn receive(
         *binding == request["worker"],
         "selective report requires original live scope",
     )?;
-    let pid = binding["worker"]["pid"].as_u64().unwrap() as u32;
+    let pid = enzimos_platform::json::unsigned(&binding["worker"]["pid"])? as u32;
     let peer = channel.peer_credentials()?;
     require(
         peer.pid == pid && peer.uid == 0 && peer.gid == 0,
@@ -88,10 +88,15 @@ pub fn receive(
         message.files.len() == 1,
         "selective report requires one original sealed observation",
     )?;
-    let output = File::from(message.files.pop().unwrap());
+    let output = File::from(
+        message
+            .files
+            .pop()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+    );
     scope.require_description(
         output.as_fd(),
-        body["stdout_descriptor_number"].as_u64().unwrap() as u32,
+        enzimos_platform::json::unsigned(&body["stdout_descriptor_number"])? as u32,
     )?;
     let observed = Reported {
         request,

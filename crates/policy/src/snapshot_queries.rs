@@ -107,7 +107,7 @@ fn parse(v: &Value, owned: &BTreeSet<u64>) -> Result<Vec<Row>> {
         }
         let (date, text) = utc(&row["date"])?;
         let pre = number(&row["pre-number"], true)?;
-        result.push(Row { date,original_date:row["date"].as_str().unwrap().into(),number:n,public:value!({"number":n,"date":text,"kind":kind,"description":description,"cleanup":cleanup,"pre_number":pre}) });
+        result.push(Row { date,original_date:enzimos_platform::json::string(&row["date"])?.into(),number:n,public:value!({"number":n,"date":text,"kind":kind,"description":description,"cleanup":cleanup,"pre_number":pre}) });
     }
     Ok(result)
 }

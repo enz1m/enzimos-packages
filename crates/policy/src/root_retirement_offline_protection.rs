@@ -51,12 +51,14 @@ fn unmentioned(
         .as_array()
         .filter(|rows| (1..=64).contains(&rows.len()))
         .ok_or_else(|| Error("configured protection target bound".into()))?;
-    let retired = rows.last().unwrap()["path"]
+    let retired = rows
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| Error("configured protection target root".into()))?;
     crate::identity::safe_id(retired)?;
     for key in KEYS {
-        let path = configuration[*key].as_str().unwrap();
+        let path = enzimos_platform::json::string(&configuration[*key])?;
         let actual = identities
             .get(path)
             .ok_or_else(|| Error("original configured protection identity missing".into()))?;
@@ -153,13 +155,13 @@ impl<'a, 's> Protection<'a, 's> {
         let mut ids = std::collections::BTreeSet::new();
         let mut uuids = std::collections::BTreeSet::new();
         for key in KEYS {
-            let name = configuration[*key].as_str().unwrap();
+            let name = enzimos_platform::json::string(&configuration[*key])?;
             let file = files::directory_relative(top, Path::new(name), Some(0))?;
             let epoch = directory(&file, mount, true)?;
             let (identity, readonly) = crate::subvolume::observe(file.as_fd(), name)?;
             require(
-                ids.insert(identity["id"].as_u64().unwrap())
-                    && uuids.insert(identity["uuid"].as_str().unwrap().to_owned())
+                ids.insert(enzimos_platform::json::unsigned(&identity["id"])?)
+                    && uuids.insert(enzimos_platform::json::string(&identity["uuid"])?.to_owned())
                     && crate::filesystem::observe(file.as_fd())?["filesystem_uuid"] == filesystem,
                 "configured protected subvolumes alias or cross filesystem",
             )?;

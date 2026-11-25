@@ -239,14 +239,21 @@ impl<'a, 's> OwnedTop<'a, 's> {
         self.recheck()?;
         Mounts::observe(
             self.mapping.original_scope()?,
-            self.top.as_ref().unwrap(),
+            self.top
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
             self.mapping.filesystem_uuid()?,
         )
     }
     #[allow(unsafe_code, reason = "Linux syscall ABI (umount2).")]
     pub fn unmount(mut self) -> Result<Unmounted<'a, 's>> {
         self.recheck()?;
-        crate::subvolume::sync(self.top.as_ref().unwrap().as_fd())?;
+        crate::subvolume::sync(
+            self.top
+                .as_ref()
+                .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+                .as_fd(),
+        )?;
         self.recheck()?;
         drop(self.top.take());
         require(

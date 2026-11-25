@@ -200,7 +200,7 @@ impl<'s> ClosedDescription<'s> {
         proof.require_original(self.scope, self.mapper_epoch)?;
         require(
             matches!(std::fs::symlink_metadata(&self.mapper_path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
-                && matches!(std::fs::symlink_metadata(self.mapper_holders.path.parent().unwrap()), Err(e) if e.kind() == std::io::ErrorKind::NotFound),
+                && matches!(std::fs::symlink_metadata(self.mapper_holders.path.parent().ok_or_else(|| enzimos_platform::Error("missing parent".into()))?), Err(e) if e.kind() == std::io::ErrorKind::NotFound),
             "actual removed mapper node or kernel device still present",
         )?;
         let old = self.source_holders.epoch;
@@ -229,7 +229,7 @@ impl RemovedSource<'_> {
             original_flags(&original.source.file)? == original.source_flags
                 && crate::block::observe(original.source.file.as_fd())? == original.source_identity
                 && matches!(std::fs::symlink_metadata(&original.mapper_path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
-                && matches!(std::fs::symlink_metadata(original.mapper_holders.path.parent().unwrap()), Err(e) if e.kind() == std::io::ErrorKind::NotFound),
+                && matches!(std::fs::symlink_metadata(original.mapper_holders.path.parent().ok_or_else(|| enzimos_platform::Error("missing parent".into()))?), Err(e) if e.kind() == std::io::ErrorKind::NotFound),
             "original source changed or removed mapper reappeared",
         )?;
         original.source_holders.recheck()?;

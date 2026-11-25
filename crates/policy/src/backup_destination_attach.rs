@@ -110,8 +110,10 @@ pub(crate) fn detached_evidence(
     let evidence = selection.evidence()?;
     crate::backup_destination::independent(
         &evidence["topology"],
-        &crate::topology::mounted_btrfs(guard.configuration["filesystem_uuid"].as_str().unwrap())?
-            .json(),
+        &crate::topology::mounted_btrfs(enzimos_platform::json::string(
+            &guard.configuration["filesystem_uuid"],
+        )?)?
+        .json(),
     )?;
     let result = crate::backup_destination::stable(
         &uuid,

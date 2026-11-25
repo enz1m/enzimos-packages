@@ -69,7 +69,12 @@ impl Runtime<'_> {
             root_rebind_boot::texts(&self.volume)? == self.metadata,
             "original or published boot metadata membership or bytes drifted",
         )?;
-        let parent = files::directory(self.receipt.parent().unwrap(), Some(0))?;
+        let parent = files::directory(
+            self.receipt
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(0),
+        )?;
         for directory in [&self.receipt_directory, &parent] {
             let m = directory.metadata()?;
             require(
@@ -84,7 +89,7 @@ impl Runtime<'_> {
         }
         self.receipt_registry.recheck()?;
         if self.snapshot.records["boot_publications"]
-            .get(self.record["generation"].as_str().unwrap())
+            .get(enzimos_platform::json::string(&self.record["generation"])?)
             .is_some()
         {
             require(
@@ -98,14 +103,23 @@ impl Runtime<'_> {
             )?;
         }
         if self.snapshot.records["boot_publications"]
-            .get(self.record["generation"].as_str().unwrap())
+            .get(enzimos_platform::json::string(&self.record["generation"])?)
             .is_some()
         {
-            let parent = files::directory(self.receipt.parent().unwrap(), Some(0))?;
+            let parent = files::directory(
+                self.receipt
+                    .parent()
+                    .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+                Some(0),
+            )?;
             require(
                 control_record::read(
                     &parent,
-                    Path::new(self.receipt.file_name().unwrap()),
+                    Path::new(
+                        self.receipt
+                            .file_name()
+                            .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+                    ),
                     catalog::MAX_CATALOG,
                     self.snapshot.guard.control_mount_id(),
                 )? == self.record,
@@ -117,14 +131,14 @@ impl Runtime<'_> {
     fn checkpoint(&mut self, phase: &str) -> Result<()> {
         self.verify()?;
         let before = self.snapshot.records["boot_publications"]
-            .get(self.record["generation"].as_str().unwrap())
+            .get(enzimos_platform::json::string(&self.record["generation"])?)
             .cloned();
         self.record["phase"] = value!(phase);
         self.record = journal::seal(self.record.clone())?;
         journal::transition(
             before.as_ref(),
             &self.record,
-            self.record["generation"].as_str().unwrap(),
+            enzimos_platform::json::string(&self.record["generation"])?,
         )?;
         let bytes = json::canonical(&self.record)?;
         self.receipt_registry.publish(&bytes, self.authorize)?;
@@ -134,7 +148,11 @@ impl Runtime<'_> {
     fn write(&mut self, name: &str, text: String, replace: bool) -> Result<()> {
         self.verify()?;
         let path = self.volume.path(Path::new(name))?;
-        let parent = self.volume.directory(Path::new(name).parent().unwrap())?;
+        let parent = self.volume.directory(
+            Path::new(name)
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        )?;
         require(
             mount_identity::id(parent.as_fd(), true)? == self.volume.unique,
             "generation metadata destination crosses another mount",
@@ -170,8 +188,11 @@ impl Runtime<'_> {
         self.verify()
     }
     fn artifacts(&mut self, directory: &File) -> Result<()> {
-        for row in self.source.material["files"].as_array().unwrap() {
-            let file = files::open_relative(directory, Path::new(row["name"].as_str().unwrap()))?;
+        for row in enzimos_platform::json::array(&self.source.material["files"])? {
+            let file = files::open_relative(
+                directory,
+                Path::new(enzimos_platform::json::string(&row["name"])?),
+            )?;
             require(
                 mount_identity::id(file.as_fd(), true)? == self.volume.unique
                     && enzimos_platform::stream_copy::hash_borrowed(
@@ -179,8 +200,8 @@ impl Runtime<'_> {
                         128 * 1024 * 1024,
                         Some(0),
                     )? == (
-                        row["bytes"].as_u64().unwrap(),
-                        row["sha256"].as_str().unwrap().into(),
+                        enzimos_platform::json::unsigned(&row["bytes"])?,
+                        enzimos_platform::json::string(&row["sha256"])?.into(),
                     ),
                 "published generation artifact bytes or mount differ",
             )?;
@@ -259,12 +280,10 @@ pub fn publish_authorized(
             "existing or partial generation loader entry cannot be adopted",
         )?;
     }
-    let artifact_bytes = source.material["files"]
-        .as_array()
-        .unwrap()
+    let artifact_bytes = enzimos_platform::json::array(&source.material["files"])?
         .iter()
         .try_fold(0u64, |sum, row| {
-            sum.checked_add(row["bytes"].as_u64().unwrap())
+            sum.checked_add(enzimos_platform::json::unsigned(&row["bytes"])?)
                 .ok_or_else(|| Error("generation ESP reservation overflow".into()))
         })?;
     let needed =
@@ -359,11 +378,11 @@ pub fn publish_authorized(
         runtime.authorize,
     )?
     .commit_retained_authorized(false, runtime.authorize)?;
-    runtime.output.as_mut().unwrap().add_published(
-        "READY.json",
-        &runtime.volume,
-        ready_publication,
-    )?;
+    runtime
+        .output
+        .as_mut()
+        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+        .add_published("READY.json", &runtime.volume, ready_publication)?;
     require(
         json::decode(
             &root_rebind_boot::body(
@@ -391,11 +410,11 @@ pub fn publish_authorized(
     let bios = journal::bios(
         generation,
         &source.material,
-        runtime.record["bios_before"].as_str().unwrap(),
+        enzimos_platform::json::string(&runtime.record["bios_before"])?,
     )?;
     runtime.write("limine/limine.conf", bios.clone(), true)?;
     runtime.checkpoint("bios")?;
-    let published = value!({"generation":generation,"bios_first_entry":boot_entries::menu(runtime.record["bios_before"].as_str().unwrap())?.entries.len()+1,"flavors":["linux","linux-lts"]});
+    let published = value!({"generation":generation,"bios_first_entry":boot_entries::menu(enzimos_platform::json::string(&runtime.record["bios_before"])?)?.entries.len()+1,"flavors":["linux","linux-lts"]});
     runtime.verify()?;
     let published_publication = publication::Prepared::write_authorized(
         &destination.join("PUBLISHED.json"),
@@ -404,11 +423,11 @@ pub fn publish_authorized(
         runtime.authorize,
     )?
     .commit_retained_authorized(false, runtime.authorize)?;
-    runtime.output.as_mut().unwrap().add_published(
-        "PUBLISHED.json",
-        &runtime.volume,
-        published_publication,
-    )?;
+    runtime
+        .output
+        .as_mut()
+        .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
+        .add_published("PUBLISHED.json", &runtime.volume, published_publication)?;
     require(
         json::decode(
             &root_rebind_boot::body(
@@ -447,7 +466,7 @@ pub fn publish_authorized(
     runtime.write(
         "loader/loader.conf",
         recovery_boot::replace_default(
-            runtime.record["defaults_before"].as_str().unwrap(),
+            enzimos_platform::json::string(&runtime.record["defaults_before"])?,
             "default ",
             &format!("enzimos-{generation}-linux.conf"),
         )?,

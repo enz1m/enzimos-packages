@@ -139,7 +139,11 @@ impl Original {
                         && body.starts_with(b"\x7fELF")
                         && body[4] == 2
                         && body[5] == 1
-                        && u16::from_le_bytes(body[18..20].try_into().unwrap()) == 62
+                        && u16::from_le_bytes(
+                            body[18..20].try_into().map_err(|_| {
+                                enzimos_platform::Error("value out of range".into())
+                            })?,
+                        ) == 62
                         && file.metadata()?.mode() & 0o111 == 0o111,
                     "installed x86_64 native runtime ELF required",
                 )?;

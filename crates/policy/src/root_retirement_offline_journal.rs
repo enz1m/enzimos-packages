@@ -61,11 +61,13 @@ fn first_step_data(prepared: &Value) -> Result<Value> {
 fn first_advanced_data(prepared: &Value) -> Result<Value> {
     let mut result = entered_data(prepared)?;
     result["next_step"] = value!(1);
-    result["phase"] = value!(if prepared["targets"].as_array().unwrap().len() == 1 {
-        "deleted"
-    } else {
-        "executing"
-    });
+    result["phase"] = value!(
+        if enzimos_platform::json::array(&prepared["targets"])?.len() == 1 {
+            "deleted"
+        } else {
+            "executing"
+        }
+    );
     Ok(result)
 }
 fn second_step_data(prepared: &Value) -> Result<Value> {
@@ -79,7 +81,7 @@ fn second_step_data(prepared: &Value) -> Result<Value> {
 }
 fn cursor_data(prepared: &Value, index: usize, inflight: bool) -> Result<Value> {
     let mut result = entered_data(prepared)?;
-    let count = prepared["targets"].as_array().unwrap().len();
+    let count = enzimos_platform::json::array(&prepared["targets"])?.len();
     require(
         index >= 1 && index <= count && (!inflight || index < count),
         "original remaining progress bound",

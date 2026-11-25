@@ -34,19 +34,22 @@ pub fn receive(
     require(
         peer.uid == 0
             && peer.gid == 0
-            && u64::from(peer.pid) == worker["worker"]["pid"].as_u64().unwrap(),
+            && u64::from(peer.pid) == enzimos_platform::json::unsigned(&worker["worker"]["pid"])?,
         "transfer control peer is not original worker",
     )?;
     let mut message = channel.receive_counts(4096, &[0, 1], Duration::from_secs(3))?;
     require(
-        message.sender.pid == worker["worker"]["pid"].as_u64().unwrap() as u32
+        message.sender.pid == enzimos_platform::json::unsigned(&worker["worker"]["pid"])? as u32
             && message.sender.uid == 0
             && message.sender.gid == 0,
         "original transfer kernel sender differs",
     )?;
     let body = json::decode(&message.body, 4096)?;
     if body.get("result").is_none() {
-        sender(&message, worker["worker"]["pid"].as_u64().unwrap() as u32)?;
+        sender(
+            &message,
+            enzimos_platform::json::unsigned(&worker["worker"]["pid"])? as u32,
+        )?;
         return Ok(Incoming::Challenge(message));
     }
     report(&body, request, sequence)?;
@@ -55,10 +58,15 @@ pub fn receive(
             message.files.len() == 1,
             "version2 transfer report requires one actual sealed output",
         )?;
-        let file = File::from(message.files.pop().unwrap());
+        let file = File::from(
+            message
+                .files
+                .pop()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+        );
         scope.require_description(
             file.as_fd(),
-            body["stdout_descriptor_number"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&body["stdout_descriptor_number"])? as u32,
         )?;
         output(&file, &body)?;
         Some(file)

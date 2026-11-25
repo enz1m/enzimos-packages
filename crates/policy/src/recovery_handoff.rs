@@ -62,9 +62,7 @@ pub(crate) fn load(id: &str, activation: &Value, luks: &str, secret: &[u8]) -> R
         "handoff ESP differs from selected plan",
     )?;
     let artifact = |name: &str| -> Result<(crate::boot_volume::Artifact, Vec<u8>)> {
-        let expected = plan["material"]["files"]
-            .as_array()
-            .unwrap()
+        let expected = enzimos_platform::json::array(&plan["material"]["files"])?
             .iter()
             .find(|v| v["name"] == name)
             .ok_or_else(|| Error("handoff artifact is not recorded".into()))?;
@@ -74,7 +72,7 @@ pub(crate) fn load(id: &str, activation: &Value, luks: &str, secret: &[u8]) -> R
         );
         let file = volume.artifact(Path::new(&path), crate::recovery_image::MAX_IMAGE)?;
         require(
-            file.bytes == expected["bytes"].as_u64().unwrap()
+            file.bytes == enzimos_platform::json::unsigned(&expected["bytes"])?
                 && file.sha == records::text(expected, "sha256")?,
             "handoff artifact binding differs",
         )?;
@@ -149,9 +147,9 @@ pub(crate) fn validate(
         ("kernel_sha256", format!("vmlinuz-{flavor}")),
         ("base_initrd_sha256", format!("initramfs-{flavor}.img")),
     ] {
-        let material = activation["intent"]["job"]["plan"]["material"]["files"]
-            .as_array()
-            .unwrap();
+        let material = enzimos_platform::json::array(
+            &activation["intent"]["job"]["plan"]["material"]["files"],
+        )?;
         let artifact = material
             .iter()
             .find(|v| v["name"] == name)

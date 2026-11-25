@@ -92,7 +92,7 @@ fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
         .ok_or_else(|| Error(format!("apply {key} string required")))
 }
 fn seal(mut record: Value) -> Result<Value> {
-    record.as_object_mut().unwrap().remove("journal_sha256");
+    enzimos_platform::json::object_mut(&mut record)?.remove("journal_sha256");
     record["journal_sha256"] = value!(json::fingerprint(&record)?);
     Ok(record)
 }
@@ -238,9 +238,7 @@ pub fn advance(
         "only an apply stopped before its rebind can end with its fallback kept",
     )?;
     let mut current = previous.clone();
-    current["steps"]
-        .as_array_mut()
-        .unwrap()
+    enzimos_platform::json::array_mut(&mut current["steps"])?
         .push(value!({"phase":phase,"sha256":json::fingerprint(evidence)?}));
     current["phase"] = value!(phase);
     current["result"] = value!(result);
@@ -265,8 +263,8 @@ pub fn transition(previous: &Value, current: &Value, id: &str) -> Result<()> {
             "immutable apply intent changed",
         )?;
     }
-    let before = previous["steps"].as_array().unwrap();
-    let after = current["steps"].as_array().unwrap();
+    let before = enzimos_platform::json::array(&previous["steps"])?;
+    let after = enzimos_platform::json::array(&current["steps"])?;
     require(
         after.len() == before.len() + 1 && after[..before.len()] == before[..],
         "apply evidence rewritten or replayed",

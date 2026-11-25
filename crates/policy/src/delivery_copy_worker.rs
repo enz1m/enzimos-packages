@@ -192,9 +192,21 @@ fn run(channel: Packet) -> Result<()> {
         "delivery handoff kernel sender or frame refused",
     )?;
     let mut descriptors_received = message.files.into_iter();
-    let sealed = File::from(descriptors_received.next().unwrap());
-    let source = File::from(descriptors_received.next().unwrap());
-    let home = File::from(descriptors_received.next().unwrap());
+    let sealed = File::from(
+        descriptors_received
+            .next()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+    );
+    let source = File::from(
+        descriptors_received
+            .next()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+    );
+    let home = File::from(
+        descriptors_received
+            .next()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+    );
     let body = memfile::read_sealed(&sealed, crate::delivery_copy_request::LIMIT, 0)?;
     let request = Request::decode(&body)?;
     let parent = Parent::open(&message.sender, &request)?;

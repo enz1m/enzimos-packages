@@ -108,14 +108,12 @@ fn durable(name: &str, document: &Value, replace: bool) -> Result<()> {
 fn safe_roots(plan: &Plan) -> Result<()> {
     plan.admitted().recheck()?;
     let root = files::directory(Path::new("/"), Some(0))?;
-    let name = plan.document()["storage"]["root_subvol"].as_str().unwrap();
+    let name = enzimos_platform::json::string(&plan.document()["storage"]["root_subvol"])?;
     let (object, readonly) = subvolume::observe(root.as_fd(), name)?;
     require(!readonly, "live package root became read-only")?;
     let transaction = catalog::Transaction::begin()?;
     require(
-        transaction.data["generations"]
-            .as_object()
-            .unwrap()
+        enzimos_platform::json::object(&transaction.data["generations"])?
             .values()
             .all(|row| {
                 row["state"] == "ready" && row["material"]["root"]["uuid"] != object["uuid"]
@@ -240,9 +238,7 @@ fn apply_original(
     birth::validate(
         &birth,
         &id,
-        plan.document()["storage"]["filesystem_uuid"]
-            .as_str()
-            .unwrap(),
+        enzimos_platform::json::string(&plan.document()["storage"]["filesystem_uuid"])?,
     )?;
     require(
         birth["phase"] == "ready"
@@ -257,7 +253,10 @@ fn apply_original(
     let name = created["subvolume"]
         .as_str()
         .ok_or_else(|| Error("created fallback name missing".into()))?;
-    let options = boot_options::root_options(plan.document()["options"].as_str().unwrap(), name)?;
+    let options = boot_options::root_options(
+        enzimos_platform::json::string(&plan.document()["options"])?,
+        name,
+    )?;
     authorize()?;
     lock.recheck()?;
     let mut top = TopMount::open(plan.admitted().guard())?;
@@ -362,7 +361,7 @@ fn apply_original(
     )?;
     let (object, readonly) = subvolume::observe(
         root.as_fd(),
-        plan.document()["storage"]["root_subvol"].as_str().unwrap(),
+        enzimos_platform::json::string(&plan.document()["storage"]["root_subvol"])?,
     )?;
     require(!readonly, "completed update root is read-only")?;
     let expected_root = value!({"path":object["path"],"id":object["id"],"uuid":object["uuid"],"ownership":"not-established"});
@@ -370,7 +369,7 @@ fn apply_original(
         &stage.path,
         &id,
         &completed["kernels"],
-        completed["options"].as_str().unwrap(),
+        enzimos_platform::json::string(&completed["options"])?,
         &root,
         Path::new("/"),
         &expected_root,

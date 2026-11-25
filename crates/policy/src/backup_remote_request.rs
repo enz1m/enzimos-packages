@@ -108,7 +108,10 @@ pub fn context(v: &Value) -> Result<()> {
         &v["local_header"]["identity"],
     ]) {
         require(
-            objects.insert((e[0].as_u64().unwrap(), e[1].as_u64().unwrap())),
+            objects.insert((
+                enzimos_platform::json::unsigned(&e[0])?,
+                enzimos_platform::json::unsigned(&e[1])?,
+            )),
             "remote worker original file roles alias one inode",
         )?;
     }

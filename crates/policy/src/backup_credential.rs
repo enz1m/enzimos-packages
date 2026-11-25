@@ -91,8 +91,20 @@ impl Credential {
         Ok(this)
     }
     pub fn recheck(&self) -> Result<()> {
-        let parent = files::directory(self.path.parent().unwrap(), Some(self.owner))?;
-        let named = files::open_relative(&self.parent, Path::new(self.path.file_name().unwrap()))?;
+        let parent = files::directory(
+            self.path
+                .parent()
+                .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+            Some(self.owner),
+        )?;
+        let named = files::open_relative(
+            &self.parent,
+            Path::new(
+                self.path
+                    .file_name()
+                    .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+            ),
+        )?;
         require(
             shape(&parent, self.owner)? == self.parent_shape
                 && shape(&self.parent, self.owner)? == self.parent_shape

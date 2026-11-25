@@ -77,7 +77,7 @@ pub fn publish_locked(lock: &files::Lock, stage_uuid: &str) -> Result<Value> {
     require(
         layout
             == crate::backup_restore_layout::layout(
-                ram.configuration()["filesystem_uuid"].as_str().unwrap(),
+                enzimos_platform::json::string(&ram.configuration()["filesystem_uuid"])?,
                 &uuid,
                 luks,
                 false,
@@ -453,7 +453,7 @@ pub fn publish_locked(lock: &files::Lock, stage_uuid: &str) -> Result<Value> {
     let mut menu =
         String::from("timeout: 1\nquiet: yes\ndefault_entry: 1\ninterface_branding: enzimOS\n");
     for flavor in ["linux", "linux-lts"] {
-        menu.push_str(&format!("/enzimOS {flavor}\n    protocol: linux\n    path: boot():/vmlinuz-{flavor}\n    module_path: boot():/initramfs-{flavor}.img\n    cmdline: {}\n",layout["boot_options"].as_str().unwrap()));
+        menu.push_str(&format!("/enzimOS {flavor}\n    protocol: linux\n    path: boot():/vmlinuz-{flavor}\n    module_path: boot():/initramfs-{flavor}.img\n    cmdline: {}\n",enzimos_platform::json::string(&layout["boot_options"])?));
     }
     let bios_menu = output(&limine, "limine.conf", menu.as_bytes())?;
     outputs.push((limine.try_clone()?, "limine.conf".into(), bios_menu));

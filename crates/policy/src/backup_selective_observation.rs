@@ -14,7 +14,11 @@ pub(crate) fn decode<'a>(bytes: &'a [u8], request: &Value) -> Result<(Value, &'a
         bytes.len() >= 12 && bytes.len() <= LIMIT && &bytes[..8] == MAGIC,
         "selected output framing or bound",
     )?;
-    let size = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
+    let size = u32::from_be_bytes(
+        bytes[8..12]
+            .try_into()
+            .map_err(|_| enzimos_platform::Error("value out of range".into()))?,
+    ) as usize;
     require(
         (1..=HEADER_LIMIT).contains(&size) && size <= bytes.len() - 12,
         "selected output header bound",

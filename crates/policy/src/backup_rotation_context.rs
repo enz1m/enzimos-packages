@@ -94,7 +94,7 @@ impl Quiet {
                         && mount_identity::id(parent.as_fd(), true)? == guard.control_mount_id(),
                     "rotation quiescence original directory differs",
                 )?;
-                for (id, row) in value[key].as_object().unwrap() {
+                for (id, row) in enzimos_platform::json::object(&value[key])? {
                     let document = crate::control_record::Observation::open(
                         parent,
                         Path::new(&format!("{id}.json")),
@@ -680,7 +680,7 @@ impl<'a> Context<'a> {
         if self.record.value()?["phase"] == "copied" {
             self.phase("switching", authorize)?;
         }
-        let start = review["boundary"].as_u64().unwrap() as usize;
+        let start = enzimos_platform::json::unsigned(&review["boundary"])? as usize;
         for index in start..5 {
             self.recheck(authorize)?;
             match index {
@@ -745,7 +745,7 @@ impl<'a> Context<'a> {
         }
         self.authenticated_inventory(authorize)?;
         self.phase("switched", authorize)?;
-        let result = value!({"status":"rotation-switched","rotation":self.id,"points":self.record.value()?["copies"].as_object().unwrap().len(),
+        let result = value!({"status":"rotation-switched","rotation":self.id,"points":enzimos_platform::json::object(&self.record.value()?["copies"])?.len(),
             "retired_repository_kept":true,"automatic_backup_reapproval_required":true,"old_access_revoked":false});
         self.recheck(authorize)?;
         Ok(result)
@@ -756,7 +756,7 @@ impl<'a> Context<'a> {
         self.recheck(authorize)?;
         let observed = self.evidence(authorize)?;
         let record = self.record.value()?;
-        let phase = record["phase"].as_str().unwrap();
+        let phase = enzimos_platform::json::string(&record["phase"])?;
         let state = &observed["actual_boundary_state"];
         let mut material = value!({"record":record,"review_boot":crate::operation::boot_id()?});
         let action = match phase {
@@ -810,7 +810,7 @@ impl<'a> Context<'a> {
                 )?;
                 material["retired"] = self.repositories[2]
                     .as_ref()
-                    .unwrap()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?
                     .identity(&self.mount)?;
                 "discard"
             }

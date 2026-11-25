@@ -51,7 +51,9 @@ pub(crate) fn unmentioned(data: &Value, targets: &Value) -> Result<()> {
         .as_array()
         .filter(|v| (1..=64).contains(&v.len()))
         .ok_or_else(|| Error("original offline catalog target list bound".into()))?;
-    let root = targets.last().unwrap()["path"]
+    let root = targets
+        .last()
+        .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["path"]
         .as_str()
         .ok_or_else(|| Error("original offline final root path".into()))?;
     crate::identity::safe_id(root)?;
@@ -103,9 +105,7 @@ impl<'a, 's> Catalog<'a, 's> {
     pub(crate) fn require_registered_root(&self, identity: &Value) -> Result<()> {
         self.recheck()?;
         require(
-            self.record.value()?["generations"]
-                .as_object()
-                .unwrap()
+            enzimos_platform::json::object(&self.record.value()?["generations"])?
                 .values()
                 .any(|row| {
                     ["path", "id", "uuid"]

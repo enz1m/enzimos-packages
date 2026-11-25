@@ -350,9 +350,7 @@ impl Snapshot {
         require(
             record["intent"]["filesystem_uuid"] == self.guard.configuration["filesystem_uuid"]
                 && self.records["boot_retirement"].get(id).is_none()
-                && record["intent"]["steps"]
-                    .as_array()
-                    .unwrap()
+                && enzimos_platform::json::array(&record["intent"]["steps"])?
                     .iter()
                     .all(|s| {
                         matches!(
@@ -424,7 +422,9 @@ impl Snapshot {
         let id = records::text(record, "id")?;
         root_retirement_record::validate(record, id)?;
         let root_uuid = records::text(
-            record["targets"].as_array().unwrap().last().unwrap(),
+            enzimos_platform::json::array(&record["targets"])?
+                .last()
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
             "uuid",
         )?;
         require(

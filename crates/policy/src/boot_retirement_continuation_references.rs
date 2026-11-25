@@ -19,11 +19,11 @@ pub(super) struct References<'a> {
 impl<'a> References<'a> {
     pub(super) fn observe(guard: &'a Guard, receipt: &Observation) -> Result<Self> {
         let records = crate::transition_idle::inspect_boot_continuation(guard, receipt)?;
-        let id = receipt.value()?["intent"]["id"]
-            .as_str()
-            .unwrap()
+        let id = enzimos_platform::json::string(&receipt.value()?["intent"]["id"])?.to_owned();
+        let generation = id
+            .strip_prefix("boot-")
+            .ok_or_else(|| enzimos_platform::Error("unexpected name".into()))?
             .to_owned();
-        let generation = id.strip_prefix("boot-").unwrap().to_owned();
         identity::safe_id(&generation)?;
         let mut controls = Vec::new();
         for (folder, key) in [
@@ -102,9 +102,7 @@ impl<'a> References<'a> {
         // calculation. Every backend row and every other native receipt remains.
         let mut independent = self.records.clone();
         require(
-            independent["boot_retirement"]
-                .as_object_mut()
-                .unwrap()
+            enzimos_platform::json::object_mut(&mut independent["boot_retirement"])?
                 .remove(&self.id)
                 == Some(receipt.value()?.clone()),
             "selected original continuation receipt differs",
@@ -114,7 +112,7 @@ impl<'a> References<'a> {
                 .is_empty(),
             "independent concrete reference protects continuation candidate",
         )?;
-        for pin in self.pins.evidence()?["pins"].as_object().unwrap().values() {
+        for pin in enzimos_platform::json::object(&self.pins.evidence()?["pins"])?.values() {
             require(
                 pin["generation"] != self.generation,
                 "generation pin protects continuation candidate",
@@ -148,15 +146,12 @@ impl<'a> References<'a> {
                 == expected,
             "independent transition changed outside actual continuation publication",
         )?;
-        expected["boot_retirement"]
-            .as_object_mut()
-            .unwrap()
-            .remove(&self.id);
+        enzimos_platform::json::object_mut(&mut expected["boot_retirement"])?.remove(&self.id);
         require(
             crate::boot_retirement_references::protection(&expected, &self.generation)?.is_empty(),
             "independent reference protects owned continuation",
         )?;
-        for pin in self.pins.evidence()?["pins"].as_object().unwrap().values() {
+        for pin in enzimos_platform::json::object(&self.pins.evidence()?["pins"])?.values() {
             require(
                 pin["generation"] != self.generation,
                 "original pin protects owned continuation",

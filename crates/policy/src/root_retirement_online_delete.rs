@@ -78,12 +78,12 @@ pub(crate) fn action(record: &Value, states: &[State]) -> Result<Action> {
         record["schema"] == 1 && record.get("coordinator").is_none(),
         "staged coordinator receipts are deleted only by their offline boot",
     )?;
-    let targets = record["targets"].as_array().unwrap();
+    let targets = enzimos_platform::json::array(&record["targets"])?;
     require(
         states.len() == targets.len(),
         "Root target state count differs",
     )?;
-    let next = record["next_step"].as_u64().unwrap() as usize;
+    let next = enzimos_platform::json::unsigned(&record["next_step"])? as usize;
     let inflight = record["inflight"].as_u64().map(|n| n as usize);
     for (index, state) in states.iter().enumerate() {
         if Some(index) == inflight {
@@ -119,7 +119,7 @@ pub(crate) fn executing_owner(original: &Value, record: &Value) -> Result<()> {
         !birth.starts_with("superseded-"),
         "superseded Root receipts are not executed online",
     )?;
-    let targets = record["targets"].as_array().unwrap();
+    let targets = enzimos_platform::json::array(&record["targets"])?;
     require(
         targets.len() == 2
             && targets[0]["role"] == "history-store"
@@ -156,8 +156,13 @@ pub(crate) fn executing_owner(original: &Value, record: &Value) -> Result<()> {
 }
 /// No subvolume below the Root other than its still-present history.
 fn descendants(inventory: &Records, record: &Value, states: &[State]) -> Result<()> {
-    let targets = record["targets"].as_array().unwrap();
-    let root = crate::recovery_records::text(targets.last().unwrap(), "path")?;
+    let targets = enzimos_platform::json::array(&record["targets"])?;
+    let root = crate::recovery_records::text(
+        targets
+            .last()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?,
+        "path",
+    )?;
     for (path, row) in inventory {
         if path.starts_with(&format!("{root}/")) {
             require(
@@ -172,7 +177,7 @@ fn descendants(inventory: &Records, record: &Value, states: &[State]) -> Result<
 }
 /// The running Root is never a target, by path, ID or UUID.
 pub(crate) fn not_running(record: &Value, live: &Value) -> Result<()> {
-    for target in record["targets"].as_array().unwrap() {
+    for target in enzimos_platform::json::array(&record["targets"])? {
         require(
             target["path"] != live["path"]
                 && target["id"] != live["id"]
@@ -234,17 +239,13 @@ fn step(
             }
         }
         let records = inventory.records(authorize)?.clone();
-        let states = record["targets"]
-            .as_array()
-            .unwrap()
+        let states = enzimos_platform::json::array(&record["targets"])?
             .iter()
             .map(|target| state(&records, target))
             .collect::<Result<Vec<_>>>()?;
         descendants(&records, &record, &states)?;
         let chosen = action(&record, &states)?;
-        let present = record["targets"]
-            .as_array()
-            .unwrap()
+        let present = enzimos_platform::json::array(&record["targets"])?
             .iter()
             .zip(&states)
             .filter(|(_, state)| **state == State::Present)
@@ -421,8 +422,8 @@ pub fn abandon_locked(
     Ok(
         value!({"id":id,"status":"root-retirement-abandoned","phase_before":before["phase"],
         "next_step":after["next_step"],"inflight":after["inflight"],
-        "targets_possibly_remaining":after["targets"].as_array().unwrap()
-            [after["next_step"].as_u64().unwrap() as usize..]}),
+        "targets_possibly_remaining":enzimos_platform::json::array(&after["targets"])?
+            [enzimos_platform::json::unsigned(&after["next_step"])? as usize..]}),
     )
 }
 
@@ -463,9 +464,7 @@ mod tests {
         result
     }
     fn states(record: &Value, inventory: &Records) -> Result<Vec<State>> {
-        record["targets"]
-            .as_array()
-            .unwrap()
+        enzimos_platform::json::array(&record["targets"])?
             .iter()
             .map(|t| state(inventory, t))
             .collect()

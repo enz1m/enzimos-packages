@@ -84,7 +84,7 @@ pub(crate) fn root_binding(v: &Value) -> Result<()> {
     )?;
     let m = &v["mount"];
     json::fields(m, "mount_id unique_mount_id device root target fstype")?;
-    let path = v["configuration"]["root_subvol"].as_str().unwrap();
+    let path = enzimos_platform::json::string(&v["configuration"]["root_subvol"])?;
     let device = m["device"]
         .as_str()
         .ok_or_else(|| Error("credential Root device required".into()))?;
@@ -356,8 +356,8 @@ fn persist_inner(
             && [target.metadata()?, temp.metadata()?]
                 .iter()
                 .all(|m| files::identity(m) == files::identity(&held))
-            && held.dev() == copied["dev"].as_u64().unwrap()
-            && held.ino() == copied["ino"].as_u64().unwrap()
+            && held.dev() == enzimos_platform::json::unsigned(&copied["dev"])?
+            && held.ino() == enzimos_platform::json::unsigned(&copied["ino"])?
             && held.uid() == 0
             && held.gid() == 0
             && held.mode() & 0o7777 == 0o600

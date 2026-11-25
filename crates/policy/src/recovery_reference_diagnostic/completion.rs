@@ -81,7 +81,7 @@ pub(super) fn finish_active_graph(
             &birth["root"],
             &birth["history"],
         ];
-        identities.extend(plan["protected"].as_object().unwrap().values());
+        identities.extend(enzimos_platform::json::object(&plan["protected"])?.values());
         identities.extend(
             [&row["root"], &row["history"]]
                 .into_iter()
@@ -91,7 +91,7 @@ pub(super) fn finish_active_graph(
             let target = graph.root(identity, inventory)?;
             graph.link(&key, &target, "staging-root-dependency")?;
         }
-        for item in plan["material"]["files"].as_array().unwrap() {
+        for item in enzimos_platform::json::array(&plan["material"]["files"])? {
             let target = graph.artifact(
                 &format!("/enzimos/generations/{generation}/{}", text(item, "name")?),
                 Some(value!({"bytes":item["bytes"],"sha256":item["sha256"]})),
@@ -139,7 +139,11 @@ pub(super) fn finish_active_graph(
             graph.link(&key, &target, "activation-root")?;
         }
         if concluded.contains(id.as_str()) {
-            graph.nodes.get_mut(&key).unwrap()["phase"] = value!("concluded");
+            graph
+                .nodes
+                .get_mut(&key)
+                .ok_or_else(|| enzimos_platform::Error("missing element".into()))?["phase"] =
+                value!("concluded");
             continue;
         }
         let birth = &plan["source_birth"];
@@ -149,13 +153,13 @@ pub(super) fn finish_active_graph(
             &birth["snapshot"]["object"],
             &birth["history"],
         ];
-        identities.extend(plan["protected"].as_object().unwrap().values());
+        identities.extend(enzimos_platform::json::object(&plan["protected"])?.values());
         for identity in identities {
             let target = graph.root(identity, inventory)?;
             graph.link(&key, &target, "activation-source-dependency")?;
         }
         let generation = text(plan, "generation")?;
-        for item in plan["material"]["files"].as_array().unwrap() {
+        for item in enzimos_platform::json::array(&plan["material"]["files"])? {
             let target = graph.artifact(
                 &format!("/enzimos/generations/{generation}/{}", text(item, "name")?),
                 Some(value!({"bytes":item["bytes"],"sha256":item["sha256"]})),
@@ -332,9 +336,7 @@ pub(crate) fn finish_observation(
             tombstones.insert(text(&row[role], "uuid")?.to_owned(), row[role].clone());
         }
     }
-    let mut blockers: BTreeSet<String> = report["blockers"]
-        .as_array()
-        .unwrap()
+    let mut blockers: BTreeSet<String> = enzimos_platform::json::array(&report["blockers"])?
         .iter()
         .map(|b| {
             b.as_str()
@@ -372,7 +374,7 @@ pub(crate) fn finish_observation(
                 report["nodes"][key]["retired_historical"] = value!(true);
                 continue;
             }
-            let expected = node["expected"].as_array().unwrap();
+            let expected = enzimos_platform::json::array(&node["expected"])?;
             if expected.is_empty() {
                 continue;
             }

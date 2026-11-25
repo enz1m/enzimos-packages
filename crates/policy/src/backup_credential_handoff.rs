@@ -26,8 +26,18 @@ const WORKER: &str = "/usr/lib/enzimos-backend/enzimos-backup-worker";
 const FOLDER: &str = "credential-review-workers";
 fn named(path: &str) -> Result<File> {
     let path = Path::new(path);
-    let parent = files::directory(path.parent().unwrap(), Some(0))?;
-    files::open_relative(&parent, Path::new(path.file_name().unwrap()))
+    let parent = files::directory(
+        path.parent()
+            .ok_or_else(|| enzimos_platform::Error("missing parent".into()))?,
+        Some(0),
+    )?;
+    files::open_relative(
+        &parent,
+        Path::new(
+            path.file_name()
+                .ok_or_else(|| enzimos_platform::Error("missing filename".into()))?,
+        ),
+    )
 }
 pub struct Handoff {
     request: Value,
@@ -75,8 +85,8 @@ impl Handoff {
         )?;
         let actor = &request["context"]["caller"];
         let caller = Retained::open(
-            actor["pid"].as_u64().unwrap() as u32,
-            actor["start_ticks"].as_u64().unwrap(),
+            enzimos_platform::json::unsigned(&actor["pid"])? as u32,
+            enzimos_platform::json::unsigned(&actor["start_ticks"])?,
             0,
             &[PathBuf::from(BACKEND)],
         )?
@@ -90,7 +100,7 @@ impl Handoff {
         let image = named(WORKER)?;
         let worker = Retained::open(
             std::process::id(),
-            binding["worker"]["start_ticks"].as_u64().unwrap(),
+            enzimos_platform::json::unsigned(&binding["worker"]["start_ticks"])?,
             0,
             &[PathBuf::from(WORKER)],
         )?
@@ -278,7 +288,10 @@ impl Handoff {
         )?;
         let record = files::open_relative(
             &registry,
-            Path::new(&format!("{}.json", self.request["id"].as_str().unwrap())),
+            Path::new(&format!(
+                "{}.json",
+                enzimos_platform::json::string(&self.request["id"])?
+            )),
         )?;
         identity(&record, &proof["file"])?;
         require(
@@ -325,7 +338,7 @@ impl Handoff {
                 && proof["mount"] == self.source.control_mount_id(),
             "original enrollment registry changed/covered",
         )?;
-        let id = proof["id"].as_str().unwrap();
+        let id = enzimos_platform::json::string(&proof["id"])?;
         let name = format!("{id}.json");
         let named = files::open_relative(&directory, Path::new(&name))?;
         identity(&named, &proof["file"])?;
@@ -427,9 +440,7 @@ impl Handoff {
         )?;
         crate::backup_credential_record::validate(
             &record,
-            self.request["context"]["enrollment"]["id"]
-                .as_str()
-                .unwrap(),
+            enzimos_platform::json::string(&self.request["context"]["enrollment"]["id"])?,
         )?;
         self.recheck()?;
         Ok(record)

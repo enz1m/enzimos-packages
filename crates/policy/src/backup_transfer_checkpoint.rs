@@ -57,7 +57,7 @@ impl Checkpoint {
         self.sequence += 1;
         let challenge = value!({"schema":1,"kind":"captured-backup-transfer","id":request["id"],
             "request_sha256":json::fingerprint(request)?,"sequence":self.sequence,"nonce":files::random_hex(16)?});
-        let caller = request["context"]["caller"]["pid"].as_u64().unwrap() as u32;
+        let caller = enzimos_platform::json::unsigned(&request["context"]["caller"]["pid"])? as u32;
         self.channel
             .send(&json::canonical(&challenge)?, &[], Duration::from_secs(2))?;
         self.channel.wait_ready(
@@ -105,7 +105,7 @@ impl Checkpoint {
         report_ack(
             &response,
             &report,
-            request["context"]["caller"]["pid"].as_u64().unwrap() as u32,
+            enzimos_platform::json::unsigned(&request["context"]["caller"]["pid"])? as u32,
         )?;
         handoff.recheck()
     }

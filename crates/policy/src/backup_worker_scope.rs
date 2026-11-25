@@ -63,7 +63,7 @@ pub(crate) fn recheck(
     // An attached scope must not have been propagated to a namespace peer.
     require(row.optional.is_empty(), "worker mount propagation changed")?;
     let filesystem = crate::filesystem::observe(root.as_fd())?;
-    let uuid = request["mount"]["filesystem_uuid"].as_str().unwrap();
+    let uuid = enzimos_platform::json::string(&request["mount"]["filesystem_uuid"])?;
     require(
         filesystem["filesystem_uuid"] == uuid && filesystem["members"] == 1,
         "worker filesystem/member scope differs from reviewed destination",
@@ -84,8 +84,8 @@ pub(crate) fn recheck(
     )?;
     let device = &request["plan"]["destination"]["device"];
     let expected = (
-        device["major"].as_u64().unwrap() as u32,
-        device["minor"].as_u64().unwrap() as u32,
+        enzimos_platform::json::unsigned(&device["major"])? as u32,
+        enzimos_platform::json::unsigned(&device["minor"])? as u32,
     );
     require(
         crate::topology::btrfs_roots(uuid)? == vec![expected],
@@ -96,7 +96,7 @@ pub(crate) fn recheck(
         graph.json() == request["plan"]["destination"]["topology"],
         "worker destination topology changed",
     )?;
-    let source_uuid = source.configuration["filesystem_uuid"].as_str().unwrap();
+    let source_uuid = enzimos_platform::json::string(&source.configuration["filesystem_uuid"])?;
     let source_graph = crate::topology::mounted_btrfs(source_uuid)?.json();
     let destination_graph = graph.json();
     let leaves = |graph: &Value| -> Result<Vec<Value>> {

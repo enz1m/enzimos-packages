@@ -118,7 +118,12 @@ impl Object {
             Some(files::read_file(&file, role.limit(), Some(0), true)?)
         };
         let decoded = if role.configuration() {
-            let decoded = json::decode(public.as_ref().unwrap(), 32768)?;
+            let decoded = json::decode(
+                public
+                    .as_ref()
+                    .ok_or_else(|| enzimos_platform::Error("missing value".into()))?,
+                32768,
+            )?;
             endpoint::validate(&decoded)?;
             Some(decoded)
         } else {
@@ -313,7 +318,7 @@ impl Inventory {
             .objects
             .iter()
             .find(|(r, _)| *r == role)
-            .unwrap()
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?
             .1
             .as_ref())
     }
@@ -410,7 +415,7 @@ impl Inventory {
             index <= 5,
             "legacy metadata migration requires both original credentials",
         )?;
-        match legacy["phase"].as_str().unwrap() {
+        match enzimos_platform::json::string(&legacy["phase"])? {
             "initializing" | "copying" | "copied" => {
                 require(index == 0, "legacy phase moved before switching")?;
             }
@@ -441,7 +446,7 @@ impl Inventory {
                 }
             }
         }
-        let mut candidate = legacy.as_object().unwrap().clone();
+        let mut candidate = enzimos_platform::json::object(legacy)?.clone();
         candidate.remove("old_password_sha256");
         candidate.remove("new_password_sha256");
         candidate.insert("schema".into(), value!(2));
@@ -586,8 +591,10 @@ impl Object {
                 && names.insert(std::ffi::OsString::from(target.name())),
             "original remote rename membership",
         )?;
-        let old = CString::new(self.role.name()).unwrap();
-        let new = CString::new(target.name()).unwrap();
+        let old = CString::new(self.role.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
+        let new = CString::new(target.name())
+            .map_err(|_| enzimos_platform::Error("invalid C string".into()))?;
         authorize()?;
         self.recheck(guard)?;
         entry.recheck()?;
@@ -711,8 +718,16 @@ impl Inventory {
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<()> {
         self.recheck(guard)?;
-        let from = self.objects.iter().position(|(r, _)| *r == source).unwrap();
-        let to = self.objects.iter().position(|(r, _)| *r == target).unwrap();
+        let from = self
+            .objects
+            .iter()
+            .position(|(r, _)| *r == source)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
+        let to = self
+            .objects
+            .iter()
+            .position(|(r, _)| *r == target)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         require(
             from != to && self.objects[to].1.is_none(),
             "original remote rename destination slot occupied",
@@ -735,7 +750,11 @@ impl Inventory {
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<()> {
         self.recheck(guard)?;
-        let from = self.objects.iter().position(|(r, _)| *r == role).unwrap();
+        let from = self
+            .objects
+            .iter()
+            .position(|(r, _)| *r == role)
+            .ok_or_else(|| enzimos_platform::Error("missing element".into()))?;
         let object = self.objects[from].1.take().ok_or_else(|| {
             enzimos_platform::Error("original retired remote slot missing".into())
         })?;
@@ -773,8 +792,8 @@ pub fn staged_endpoint(current: &Value, staged: &Value) -> Result<()> {
             "remote rotation must keep the share and its account",
         )?;
     }
-    let old = current["folder"].as_str().unwrap();
-    let new = staged["folder"].as_str().unwrap();
+    let old = enzimos_platform::json::string(&current["folder"])?;
+    let new = enzimos_platform::json::string(&staged["folder"])?;
     require(
         old != new && !new.starts_with(&format!("{old}/")) && !old.starts_with(&format!("{new}/")),
         "remote rotation requires separate non-nested repositories",
