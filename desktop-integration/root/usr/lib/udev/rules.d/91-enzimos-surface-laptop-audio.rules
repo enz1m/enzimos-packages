@@ -1,0 +1,1 @@
+SUBSYSTEM=="sound", KERNEL=="card[0-9]*", ATTR{[dmi/id]sys_vendor}=="Microsoft Corporation", ATTR{[dmi/id]product_sku}=="Surface_Laptop", ATTRS{vendor}=="0x8086", ATTRS{device}=="0x9d71", ENV{ACP_PROFILE_SET}="/usr/share/enzimos-audio/surface-laptop/profile.conf"
