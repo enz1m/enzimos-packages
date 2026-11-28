@@ -167,7 +167,7 @@ pub(crate) fn stage_authorized<F: FnMut() -> Result<()>>(
             && matches!(std::fs::symlink_metadata(volume.path(Path::new(&format!("loader/entries/{entry}")))?),Err(e) if e.kind() == std::io::ErrorKind::NotFound),
         "existing recovery entry cannot be adopted",
     )?;
-    let one_shot = activation::efi_guard()?;
+    activation::efi_guard()?;
     let luks = luks_uuid(&idle.guard)?;
     let console = records::text(record, "options")?
         .split_whitespace()
@@ -196,7 +196,7 @@ pub(crate) fn stage_authorized<F: FnMut() -> Result<()>>(
     )?;
     boot_entries::menu(&next_bios)?;
     let next_loader = recovery_boot::replace_default(&loader, "default ", &entry)?;
-    let run = value!({"schema":1,"id":id,"phase":"staged","plan_sha256":digest,"flavor":flavor,"image":image,"created_boot":operation::boot_id()?,"entry":{"uefi_entry":entry,"uefi_previous":default,"uefi_mode":if one_shot {"one-shot"} else {"default"},"bios_title":title,"bios_previous":menu.selected,"bios_own":menu.entries.len()+1,"options":options},"result":null});
+    let run = value!({"schema":1,"id":id,"phase":"staged","plan_sha256":digest,"flavor":flavor,"image":image,"created_boot":operation::boot_id()?,"entry":{"uefi_entry":entry,"uefi_previous":default,"uefi_mode":"default","bios_title":title,"bios_previous":menu.selected,"bios_own":menu.entries.len()+1,"options":options},"result":null});
     records::run(&run, id)?;
     idle.recheck()?;
     images.unchanged()?;
@@ -261,33 +261,19 @@ pub(crate) fn stage_authorized<F: FnMut() -> Result<()>>(
     volume.writable()?;
     authorize()?;
     lock.recheck()?;
-    if one_shot {
-        operation::query(
-            "/usr/bin/bootctl",
-            &["--quiet", "set-oneshot", &entry],
-            Duration::from_secs(30),
-            65536,
-            &[0],
-        )?;
-        let path =
-            Path::new(activation::EFI).join(format!("LoaderEntryOneShot-{}", activation::GUID));
-        require(
-            boot_entries::efi_string(&files::read_kernel(&path, 8192)?)? == entry,
-            "recovery one-shot firmware readback differs",
-        )?;
-    } else {
-        files::atomic(
-            &volume.path(Path::new("loader/loader.conf"))?,
-            next_loader.as_bytes(),
-            files::public_file_mode(&volume.directory)?,
-            Some(0),
-            true,
-        )?;
-        require(
-            text(&volume, "loader/loader.conf")? == next_loader,
-            "recovery run UEFI default readback differs",
-        )?;
-    }
+    // LoaderEntryOneShot is shared by every systemd-boot instance in the firmware.
+    files::atomic_bounded(
+        &volume.path(Path::new("loader/loader.conf"))?,
+        next_loader.as_bytes(),
+        files::public_file_mode(&volume.directory)?,
+        Some(0),
+        true,
+        65536,
+    )?;
+    require(
+        text(&volume, "loader/loader.conf")? == next_loader,
+        "recovery run UEFI default readback differs",
+    )?;
     volume.directory.sync_all()?;
     volume.recheck()?;
     idle.recheck()?;
@@ -295,6 +281,6 @@ pub(crate) fn stage_authorized<F: FnMut() -> Result<()>>(
     authorize()?;
     lock.recheck()?;
     Ok(
-        value!({"status":"recovery-run-staged","id":id,"uefi_mode":if one_shot {"one-shot"} else {"default"},"reboot_required":true,"replay":false}),
+        value!({"status":"recovery-run-staged","id":id,"uefi_mode":"default","reboot_required":true,"replay":false}),
     )
 }
