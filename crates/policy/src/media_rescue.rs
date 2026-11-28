@@ -515,7 +515,7 @@ pub fn main() -> ! {
         match console.as_mut() {
             Ok(console) => {
                 console.say(&message);
-                let _ = console.ask("Press Enter to reboot into the retained system: ");
+                let _ = console.ask("Press Enter to reboot: ");
             }
             Err(_) => eprintln!("{message}"),
         }

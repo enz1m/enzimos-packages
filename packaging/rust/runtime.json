@@ -2,7 +2,7 @@
   "schema": 1,
   "component": "packages",
   "package_name": "enzimos-rust-packages",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "architecture": "x86_64",
   "profile": "rust-candidate",
   "automatic_activation": false,
