@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 //! Print-only resolution is bound to the original independently verified cohort.
 use crate::{operation, update_cohort, update_plan::Plan};
+use enzimos_platform::update_limits::MAX_PACKAGES;
 use enzimos_platform::{Error, Result, require};
 use serde_json::{Value, json};
 use std::{
@@ -11,6 +12,10 @@ pub(crate) fn candidates(body: &str, packages: &[Value]) -> Result<Vec<Value>> {
     require(
         body.len() <= 2 * 1024 * 1024 && !body.contains('\0') && body.lines().count() <= 16384,
         "update resolution output bound",
+    )?;
+    require(
+        !packages.is_empty() && packages.len() <= MAX_PACKAGES,
+        "resolution package count bound",
     )?;
     let allowed = packages
         .iter()
@@ -26,7 +31,7 @@ pub(crate) fn candidates(body: &str, packages: &[Value]) -> Result<Vec<Value>> {
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
     require(
-        !allowed.is_empty() && allowed.len() == packages.len() && allowed.len() <= 768,
+        allowed.len() == packages.len(),
         "resolution package set ambiguous",
     )?;
     let mut seen = BTreeSet::new();
@@ -69,4 +74,22 @@ pub(crate) fn resolve(plan: &Plan) -> Result<Vec<Value>> {
     )?;
     plan.recheck_before_mutation()?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_every_package_at_the_cohort_limit() {
+        let mut packages = (0..MAX_PACKAGES)
+            .map(|i| json!({"name":format!("package-{i}"),"version":"1-1"}))
+            .collect::<Vec<_>>();
+        let output = (0..MAX_PACKAGES)
+            .map(|i| format!("ENZIMOS_UPGRADE package-{i} 1-1\n"))
+            .collect::<String>();
+        assert_eq!(candidates(&output, &packages).unwrap(), packages);
+        packages.push(json!({"name":"over-limit","version":"1-1"}));
+        assert!(candidates(&output, &packages).is_err());
+    }
 }

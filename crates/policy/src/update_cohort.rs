@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 //! Independent, retained inspection of the closed offline update publication.
 use crate::{identity, package_archive, package_database, package_signature};
+use enzimos_platform::update_limits::{
+    MAX_COHORT_BYTES, MAX_COHORT_FILES, MAX_PACKAGE_BYTES, MAX_PACKAGES,
+};
 use enzimos_platform::{Error, Result, files, json, mount_identity, require, stream_copy};
 use serde_json::{Value, json as value};
 use std::{
@@ -70,7 +73,7 @@ pub(crate) fn metadata(document: &Value, at: i64) -> Result<BTreeMap<String, Val
         .as_object()
         .ok_or_else(|| Error("cohort files missing".into()))?;
     require(
-        rows.len() >= 3 && rows.len() <= 1537,
+        rows.len() >= 3 && rows.len() <= MAX_COHORT_FILES,
         "cohort member count bound",
     )?;
     let mut expected = BTreeSet::from(["verified.db".to_owned()]);
@@ -94,7 +97,7 @@ pub(crate) fn metadata(document: &Value, at: i64) -> Result<BTreeMap<String, Val
         } else if name.ends_with(".sig") {
             65536
         } else {
-            512 * 1024 * 1024
+            MAX_PACKAGE_BYTES
         };
         let bytes = row["bytes"]
             .as_u64()
@@ -116,8 +119,8 @@ pub(crate) fn metadata(document: &Value, at: i64) -> Result<BTreeMap<String, Val
     }
     require(
         archives > 0
-            && archives <= 768
-            && total <= 4 * 1024 * 1024 * 1024
+            && archives <= MAX_PACKAGES
+            && total <= MAX_COHORT_BYTES
             && rows.keys().cloned().collect::<BTreeSet<_>>() == expected,
         "cohort archive/signature/database set differs",
     )?;
@@ -209,7 +212,7 @@ impl Cohort {
         let document = json::decode(&body, 2 * 1024 * 1024)?;
         let expected = metadata(&document, now()?)?;
         require(
-            names(&packages, 1537)? == expected.keys().cloned().collect(),
+            names(&packages, MAX_COHORT_FILES)? == expected.keys().cloned().collect(),
             "cohort package member set changed",
         )?;
         let mut members = BTreeMap::new();
@@ -329,7 +332,8 @@ impl Cohort {
                 && shape(&self.packages, self.owner)? == self.packages_shape
                 && names(&self.directory, 2)?
                     == BTreeSet::from(["admission.json".into(), "packages".into()])
-                && names(&self.packages, 1537)? == self.members.keys().cloned().collect(),
+                && names(&self.packages, MAX_COHORT_FILES)?
+                    == self.members.keys().cloned().collect(),
             "original cohort directories or membership changed",
         )?;
         self.original(&self.directory, "admission.json", &self.admission)?;

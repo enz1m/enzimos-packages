@@ -37,7 +37,7 @@ fn write(path: &Path, bytes: &[u8]) {
     file.write_all(bytes).expect("test fixture");
     file.sync_all().expect("test fixture");
 }
-fn fixture(root: &Path) -> Value {
+fn fixture(root: &Path, count: usize) -> Value {
     let mut files = json!({});
     let mut database = tar::Builder::new(Vec::new());
     std::fs::create_dir(root.join("packages")).expect("test fixture");
@@ -47,7 +47,13 @@ fn fixture(root: &Path) -> Value {
         std::fs::Permissions::from_mode(0o700),
     )
     .expect("test fixture");
-    for (name, release) in [("linux", "6.18.1-arch1-1"), ("linux-lts", "6.12.99-1-lts")] {
+    for index in 0..count {
+        let extra = format!("fixture-{index:04}");
+        let (name, release) = match index {
+            0 => ("linux", "6.18.1-arch1-1"),
+            1 => ("linux-lts", "6.12.99-1-lts"),
+            _ => (extra.as_str(), "6.18.1-fixture"),
+        };
         let filename = format!("{name}-6.18.1-1-x86_64.pkg.tar.zst");
         let body = archive(name, release);
         let digest = enzimos_platform::json::sha256(&body);
@@ -100,7 +106,7 @@ fn directory() -> tempfile::TempDir {
 #[test]
 fn original_cohort_requires_exact_database_kernels_and_preserves_replacement_refusal() {
     let root = directory();
-    let document = fixture(root.path());
+    let document = fixture(root.path(), 2);
     let owner = enzimos_platform::process_identity::effective_uid();
     let source = Cohort::at(root.path(), owner).unwrap();
     assert_eq!(source.document(), &document);
@@ -122,4 +128,25 @@ fn original_cohort_requires_exact_database_kernels_and_preserves_replacement_ref
     // A separate fresh read can accept the same closed publication; the retained
     // source must still refuse to adopt its replaced member.
     Cohort::at(root.path(), owner).unwrap();
+}
+
+#[test]
+fn native_cohort_accepts_the_limit_and_rejects_one_more_archive() {
+    use enzimos_platform::update_limits::{MAX_COHORT_FILES, MAX_PACKAGES};
+    let root = directory();
+    let document = fixture(root.path(), MAX_PACKAGES);
+    assert_eq!(
+        document["files"].as_object().unwrap().len(),
+        MAX_COHORT_FILES
+    );
+    let owner = enzimos_platform::process_identity::effective_uid();
+    let cohort = Cohort::at(root.path(), owner).unwrap();
+    assert_eq!(cohort.packages_metadata().len(), MAX_PACKAGES);
+    cohort.recheck().unwrap();
+    drop(cohort);
+
+    let oversized = directory();
+    fixture(oversized.path(), MAX_PACKAGES + 1);
+    let error = Cohort::at(oversized.path(), owner).err().unwrap();
+    assert!(error.to_string().contains("cohort member count bound"));
 }

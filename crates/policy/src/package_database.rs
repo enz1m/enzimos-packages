@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 //! Bounded repository database inspection shared by delivery and native apply.
+use enzimos_platform::update_limits::MAX_PACKAGES;
 use enzimos_platform::{Error, Result, files, require};
 use serde_json::Value;
 use std::{
@@ -40,7 +41,7 @@ pub fn verify(file: &File, packages: &[Value]) -> Result<()> {
         "protected bounded database archive required",
     )?;
     require(
-        !packages.is_empty() && packages.len() <= 768,
+        !packages.is_empty() && packages.len() <= MAX_PACKAGES,
         "database package count bound",
     )?;
     for row in packages {

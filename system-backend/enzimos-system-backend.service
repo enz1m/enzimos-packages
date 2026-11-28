@@ -17,6 +17,7 @@ TimeoutStartSec=30
 TimeoutStopSec=10
 Restart=no
 LimitCORE=0
+LimitNOFILE=16384
 MemoryMax=768M
 TasksMax=64
 # No private mount namespace: Snapper must see the initial system namespace.

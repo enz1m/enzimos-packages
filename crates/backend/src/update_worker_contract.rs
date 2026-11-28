@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 //! Exact PID1-owned worker configuration is required before descriptor handoff.
+use enzimos_platform::update_limits::COHORT_NOFILE;
 use enzimos_platform::{Error, Result, require};
 use enzimos_policy::update_worker_record as record;
 use std::collections::HashMap;
@@ -171,6 +172,12 @@ pub fn properties_for(definition: &Definition) -> Result<Vec<(&'static str, Valu
             ("LimitNOFILESoft", Value::from(4096u64)),
         ]);
     }
+    if definition.executable == record::EXECUTABLE {
+        properties.extend([
+            ("LimitNOFILE", Value::from(COHORT_NOFILE)),
+            ("LimitNOFILESoft", Value::from(COHORT_NOFILE)),
+        ]);
+    }
     if definition.executable == BACKUP_EXECUTABLE {
         properties.extend([
             ("MemoryMax", Value::from(1024 * 1024 * 1024u64)),
@@ -298,6 +305,13 @@ pub fn validate_for(
                 && field::<u64>(service, "LimitNOFILE")? == 4096
                 && field::<u64>(service, "LimitNOFILESoft")? == 4096,
             "installer worker must retain the initial live namespace and disable core dumps",
+        )?;
+    }
+    if definition.executable == record::EXECUTABLE {
+        require(
+            field::<u64>(service, "LimitNOFILE")? == COHORT_NOFILE
+                && field::<u64>(service, "LimitNOFILESoft")? == COHORT_NOFILE,
+            "update worker descriptor bound changed",
         )?;
     }
     if definition.executable == BACKUP_EXECUTABLE {
