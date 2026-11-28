@@ -200,6 +200,24 @@ impl Block {
         block.recheck()?;
         Ok(block)
     }
+    pub(crate) fn same_physical_disk(&self, other: &Self) -> Result<()> {
+        self.recheck()?;
+        other.recheck()?;
+        require(
+            self.graph.leaves.len() == 1 && self.graph.leaves == other.graph.leaves,
+            "recovery boot and system volumes must share one physical disk",
+        )
+    }
+    pub(crate) fn owns_mounted_btrfs(&self, uuid: &str) -> Result<()> {
+        self.recheck()?;
+        let mounted = topology::mounted_btrfs(uuid)?;
+        require(
+            self.graph.leaves.len() == 1
+                && mounted == self.graph
+                && topology::btrfs_roots(uuid)? == [self.device],
+            "mounted recovery filesystem differs from the selected single-disk volume",
+        )
+    }
     pub(crate) fn recheck(&self) -> Result<()> {
         let named = std::fs::symlink_metadata(&self.path)?;
         require(

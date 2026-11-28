@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 //! Installer-media rescue from an independent RAM root; installed programs never run.
 use crate::{
-    media_auth, media_origin, media_plan, operation, recovery_bootstrap, recovery_devices, storage,
+    media_auth, media_origin, media_plan, operation, recovery_bootstrap,
+    recovery_devices::{self, Block},
+    storage,
     storage_runtime::IndependentGuard,
 };
 use enzimos_platform::{Error, Result, files, json, process, require};
@@ -226,24 +228,82 @@ fn tool(program: &str, args: &[&str]) -> Result<Vec<u8>> {
     )?;
     Ok(output.stdout)
 }
-fn probe(path: &str, tag: &str) -> Result<Option<String>> {
-    let output = process::run(
+fn probe(block: &Block, tag: &str) -> Result<Option<String>> {
+    block.recheck()?;
+    let output = process::run_with_fds(
         "/usr/bin/blkid",
-        &["-p", "-s", tag, "-o", "value", path],
+        &["-p", "-s", tag, "-o", "value", "@fd:0"],
         &[],
         Duration::from_secs(30),
         4096,
+        &[block.file.as_fd()],
     )?;
+    block.recheck()?;
     match output.status.code() {
         Some(0) => Ok(Some(
             String::from_utf8_lossy(&output.stdout).trim().to_owned(),
         )),
         Some(2) => Ok(None),
-        _ => Err(Error(format!("partition signature probe failed: {path}"))),
+        _ => Err(Error(
+            "retained recovery partition signature probe failed".into(),
+        )),
     }
 }
 fn mount(args: &[&str]) -> Result<()> {
     tool("/usr/bin/mount", args).map(|_| ())
+}
+
+fn mount_block(block: &Block, kind: &str, options: &str, target: &str) -> Result<()> {
+    block.recheck()?;
+    let output = process::run_with_fds(
+        "/usr/bin/mount",
+        &[
+            "--no-canonicalize",
+            "-t",
+            kind,
+            "-o",
+            options,
+            "@fd:0",
+            target,
+        ],
+        &[],
+        Duration::from_secs(120),
+        65536,
+        &[block.file.as_fd()],
+    )?;
+    require(
+        output.status.success(),
+        "selected recovery block mount failed",
+    )
+}
+
+fn boot_menu_matches(menu: &str, filesystem: &str, luks: Option<&str>) -> Result<()> {
+    let filesystem_root = format!("root=UUID={filesystem}");
+    let encrypted_root = luks.map(|uuid| format!("rd.luks.name={uuid}=enzimos-crypt"));
+    for entry in crate::boot_entries::menu(menu)?.entries {
+        let fields = crate::boot_entries::fields(&entry.text, true)?;
+        if fields.get("cmdline").is_some_and(|options| {
+            let mut words = options.split_whitespace();
+            let same_volume = words.any(|word| word == filesystem_root)
+                || encrypted_root.as_deref().is_some_and(|expected| {
+                    options.split_whitespace().any(|word| word == expected)
+                });
+            same_volume && crate::boot_options::subvolume_from_options(options).is_ok()
+        }) {
+            return Ok(());
+        }
+    }
+    Err(Error(
+        "recovery ESP has no boot entry for the selected filesystem".into(),
+    ))
+}
+
+fn root_options(read_only: bool) -> &'static str {
+    if read_only {
+        "ro,rescue=nologreplay,subvolid=5,nodiscard,nosuid,nodev"
+    } else {
+        "rw,subvolid=5,nodiscard,nosuid,nodev"
+    }
 }
 
 /// Mounts and the unlocked mapper this attempt owns; released in reverse order.
@@ -251,6 +311,43 @@ struct Owned {
     mounts: Vec<PathBuf>,
     mapper: bool,
 }
+impl Owned {
+    fn close_mounts(&mut self) -> Result<()> {
+        while let Some(target) = self.mounts.last() {
+            tool("/usr/bin/umount", &["--", target.to_str().unwrap()])?;
+            self.mounts.pop();
+        }
+        Ok(())
+    }
+
+    fn attach_views(
+        &mut self,
+        system: &Block,
+        esp: &Block,
+        config: &Value,
+        read_only: bool,
+    ) -> Result<()> {
+        system.same_physical_disk(esp)?;
+        let top = Path::new(IndependentGuard::TOP);
+        let esp_options = if read_only {
+            "ro,nosuid,nodev,noexec"
+        } else {
+            "rw,nosuid,nodev,noexec"
+        };
+        mount_block(esp, "vfat", esp_options, "/boot")?;
+        self.mounts.push("/boot".into());
+        for (role, target) in [("control", operation::CONTROL), ("authority", AUTHORITY)] {
+            let subvol = config[format!("{role}_subvol")]
+                .as_str()
+                .unwrap_or_default();
+            files::ensure_directory(Path::new(target), 0o700, 0)?;
+            mount(&["--bind", &top.join(subvol).to_string_lossy(), target])?;
+            self.mounts.push(target.into());
+        }
+        Ok(())
+    }
+}
+
 impl Drop for Owned {
     #[allow(unsafe_code, reason = "Linux syscall ABI (sync).")]
     fn drop(&mut self) {
@@ -272,15 +369,15 @@ impl Drop for Owned {
     }
 }
 
-fn unlock(console: &mut Console, source: &str) -> Result<String> {
-    let device = File::open(source)?;
+fn unlock(console: &mut Console, device: &Block) -> Result<String> {
     loop {
         let secret = console.secret("Disk password: ")?;
+        device.recheck()?;
         let result = process::recovery_cryptsetup(
             &["open", "--key-file", "-", "@fd:0", MAPPER],
             &secret,
             Duration::from_secs(120),
-            &[device.as_fd()],
+            &[device.file.as_fd()],
         )?;
         if result.status.success() {
             return Ok(format!("/dev/mapper/{MAPPER}"));
@@ -380,44 +477,52 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
     // No udev runs in this RAM root, so probe partition signatures directly.
     let mut candidates = Vec::new();
     for (path, size) in partitions(&listing)? {
-        if let Some(kind) = probe(&path, "TYPE")?
+        let Ok(block) = Block::open(Path::new(&path)) else {
+            continue;
+        };
+        if let Some(kind) = probe(&block, "TYPE")?
             && matches!(kind.as_str(), "crypto_LUKS" | "btrfs")
         {
-            candidates.push((path, kind, size));
+            candidates.push((block, kind, size));
         }
     }
     require(candidates.len() <= 64, "installation partition count bound")?;
     console.say("\nenzimOS installer rescue\nUnlock and authenticate an existing installation. No installed programs are executed.\n");
     let labels = candidates
         .iter()
-        .map(|(path, kind, size)| format!("{path}  {kind}  {size}"))
+        .map(|(block, kind, size)| format!("{}  {kind}  {size}", block.path.display()))
         .collect::<Vec<_>>();
-    let (path, kind, _) = &candidates[console.select(&labels, "system partition")?];
-    let source = if kind == "crypto_LUKS" {
-        let mapped = unlock(console, path)?;
+    let (selected, kind, _) = &candidates[console.select(&labels, "system partition")?];
+    selected.recheck()?;
+    let unlocked;
+    let system = if kind == "crypto_LUKS" {
+        let mapped = unlock(console, selected)?;
         owned.mapper = true;
-        mapped
+        unlocked = Block::open(&std::fs::canonicalize(&mapped)?)?;
+        selected.same_physical_disk(&unlocked)?;
+        &unlocked
     } else {
-        path.clone()
+        selected
     };
-    let filesystem = probe(&source, "UUID")?.unwrap_or_default();
+    let luks = if kind == "crypto_LUKS" {
+        let uuid = probe(selected, "UUID")?.unwrap_or_default();
+        crate::identity::uuid(&uuid)?;
+        Some(uuid)
+    } else {
+        None
+    };
+    let filesystem = probe(system, "UUID")?.unwrap_or_default();
     crate::identity::uuid(&filesystem)?;
     require(
-        probe(&source, "TYPE")?.as_deref() == Some("btrfs"),
+        probe(system, "TYPE")?.as_deref() == Some("btrfs"),
         "enzimOS Btrfs filesystem required",
     )?;
     let top = Path::new(IndependentGuard::TOP);
     files::ensure_directory(Path::new("/run/enzimos"), 0o700, 0)?;
     files::ensure_directory(top, 0o700, 0)?;
-    mount(&[
-        "-t",
-        "btrfs",
-        "-o",
-        "ro,subvolid=5,nodiscard,nosuid,nodev",
-        &source,
-        IndependentGuard::TOP,
-    ])?;
+    mount_block(system, "btrfs", root_options(true), IndependentGuard::TOP)?;
     owned.mounts.push(top.into());
+    system.owns_mounted_btrfs(&filesystem)?;
     let installations = installation(top, &filesystem)?;
     let names = installations
         .iter()
@@ -427,25 +532,14 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
     let root = top.join(name);
     authenticate(console, &root)?;
     let fstab = files::read(&root.join("etc/fstab"), 256 * 1024, Some(0), true)?;
-    let esp = esp_uuid(&String::from_utf8_lossy(&fstab))?;
+    let esp_id = esp_uuid(&String::from_utf8_lossy(&fstab))?;
+    let esp = Block::by_uuid(&esp_id, true)?;
+    require(
+        probe(&esp, "UUID")?.is_some_and(|uuid| uuid.eq_ignore_ascii_case(&esp_id)),
+        "selected recovery ESP filesystem changed",
+    )?;
     files::ensure_directory(Path::new("/boot"), 0o755, 0)?;
-    mount(&[
-        "-t",
-        "vfat",
-        "-o",
-        "ro,nosuid,nodev,noexec",
-        &format!("UUID={esp}"),
-        "/boot",
-    ])?;
-    owned.mounts.push("/boot".into());
-    for (role, target) in [("control", operation::CONTROL), ("authority", AUTHORITY)] {
-        let subvol = config[format!("{role}_subvol")]
-            .as_str()
-            .unwrap_or_default();
-        files::ensure_directory(Path::new(target), 0o700, 0)?;
-        mount(&["--bind", &top.join(subvol).to_string_lossy(), target])?;
-        owned.mounts.push(target.into());
-    }
+    owned.attach_views(system, &esp, config, true)?;
     let home = top.join(config["home_subvol"].as_str().unwrap_or_default());
     loop {
         console.say("\n1. Restore a system snapshot\n2. Open a recovery terminal / copy files to an external drive\n3. Reboot");
@@ -477,11 +571,34 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
         console.ask("Type RESTORE to continue: ")? == "RESTORE",
         "cancelled; no restoration performed",
     )?;
-    mount(&["-o", "remount,rw", IndependentGuard::TOP])?;
-    mount(&["-o", "remount,rw", "/boot"])?;
-    for target in [operation::CONTROL, AUTHORITY] {
-        mount(&["-o", "remount,bind,rw", target])?;
-    }
+    let volume = crate::boot_volume::Volume::observe()?;
+    let menu = volume.artifact(
+        Path::new("limine/limine.conf"),
+        crate::boot_entries::MAX_TEXT as u64,
+    )?;
+    let text = files::read_file(&menu.file, crate::boot_entries::MAX_TEXT, Some(0), true)?;
+    boot_menu_matches(
+        std::str::from_utf8(&text).map_err(|_| Error("recovery boot menu encoding".into()))?,
+        &filesystem,
+        luks.as_deref(),
+    )?;
+    menu.recheck()?;
+    drop(menu);
+    drop(volume);
+    owned.close_mounts()?;
+    system.same_physical_disk(&esp)?;
+    // Log replay is enabled only after the user confirms this retained installation.
+    mount_block(system, "btrfs", root_options(false), IndependentGuard::TOP)?;
+    owned.mounts.push(top.into());
+    system.owns_mounted_btrfs(&filesystem)?;
+    require(
+        installation(top, &filesystem)?
+            .iter()
+            .any(|(candidate, storage)| candidate == name && storage == config)
+            && files::read(&root.join("etc/fstab"), 256 * 1024, Some(0), true)? == fstab,
+        "installed storage or boot volume changed after log replay",
+    )?;
+    owned.attach_views(system, &esp, config, false)?;
     let plan = media_plan::prepare_locked(
         config,
         choice["birth"].as_str().unwrap_or_default(),
@@ -524,5 +641,34 @@ pub fn main() -> ! {
     loop {
         // SAFETY: pause takes no arguments.
         unsafe { libc::pause() };
+    }
+}
+
+#[cfg(test)]
+mod mount_tests {
+    use super::*;
+
+    #[test]
+    fn inspection_disables_log_replay_until_restore_is_confirmed() {
+        assert!(
+            root_options(true)
+                .split(',')
+                .any(|opt| opt == "rescue=nologreplay")
+        );
+        assert_eq!(root_options(true).split(',').next(), Some("ro"));
+        assert_eq!(root_options(false).split(',').next(), Some("rw"));
+        assert!(!root_options(false).contains("nologreplay"));
+    }
+    #[test]
+    fn foreign_esp_on_the_same_disk_cannot_authorize_writes() {
+        let foreign =
+            "default_entry: 1\n/Other Linux\n  cmdline: root=UUID=foreign rootflags=subvol=root\n";
+        let ours =
+            "default_entry: 1\n/enzimOS\n  cmdline: root=UUID=ours rootflags=subvol=enzimos-root\n";
+        let encrypted = "default_entry: 1\n/enzimOS\n  cmdline: root=/dev/mapper/enzimos-crypt rd.luks.name=own-luks=enzimos-crypt rootflags=subvol=enzimos-root\n";
+        assert!(boot_menu_matches(foreign, "ours", None).is_err());
+        assert!(boot_menu_matches(ours, "ours", None).is_ok());
+        assert!(boot_menu_matches(encrypted, "ours", Some("different-luks")).is_err());
+        assert!(boot_menu_matches(encrypted, "ours", Some("own-luks")).is_ok());
     }
 }
