@@ -7,7 +7,7 @@ use std::{
     ffi::CString,
     fs::File,
     os::{
-        fd::{AsRawFd, FromRawFd},
+        fd::{AsFd, AsRawFd, FromRawFd},
         unix::fs::MetadataExt,
     },
     path::{Path, PathBuf},
@@ -206,6 +206,26 @@ impl Block {
         require(
             self.graph.leaves.len() == 1 && self.graph.leaves == other.graph.leaves,
             "recovery boot and system volumes must share one physical disk",
+        )
+    }
+    pub(crate) fn linear_table(&self) -> Result<String> {
+        self.recheck()?;
+        let identity = crate::block::observe(self.file.as_fd())?;
+        let bytes = identity["bytes"].as_u64().unwrap_or_default();
+        require(
+            bytes > 0 && bytes.is_multiple_of(512),
+            "recovery block geometry",
+        )?;
+        let (major, minor) = self.device;
+        Ok(format!("0 {} linear {major}:{minor} 0", bytes / 512))
+    }
+    pub(crate) fn mapped_from(&self, backing: &Self, read_only: bool) -> Result<()> {
+        self.same_physical_disk(backing)?;
+        let identity = crate::block::observe(self.file.as_fd())?;
+        require(
+            self.graph.nodes.contains_key(&backing.device)
+                && identity["read_only"].as_bool() == Some(read_only),
+            "recovery mapping does not match the retained block or its access mode",
         )
     }
     pub(crate) fn owns_mounted_btrfs(&self, uuid: &str) -> Result<()> {

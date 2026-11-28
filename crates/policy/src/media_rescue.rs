@@ -21,6 +21,8 @@ use std::{
 use zeroize::Zeroizing;
 
 const MAPPER: &str = "enzimos-media-rescue";
+const INSPECTION: &str = "enzimos-media-inspection";
+const INSPECTION_OPTIONS: [&str; 2] = ["--readonly", "--disable-locks"];
 const AUTHORITY: &str = "/etc/pacman.d/gnupg";
 
 /// The attended display terminal, with a best-effort serial copy of everything
@@ -310,8 +312,60 @@ fn root_options(read_only: bool) -> &'static str {
 struct Owned {
     mounts: Vec<PathBuf>,
     mapper: bool,
+    inspection: bool,
 }
 impl Owned {
+    fn inspection_device(&mut self, device: &Block) -> Result<Block> {
+        // LUKS2 open can repair a header before verifying the password.
+        tool(
+            "/usr/bin/dmsetup",
+            &[
+                "create",
+                INSPECTION,
+                "--readonly",
+                "--noudevsync",
+                "--noudevrules",
+                "--addnodeoncreate",
+                "--uid",
+                "0",
+                "--gid",
+                "0",
+                "--mode",
+                "0600",
+                "--table",
+                &device.linear_table()?,
+            ],
+        )?;
+        self.inspection = true;
+        let mapped = mapped_device(INSPECTION)?;
+        mapped.mapped_from(device, true)?;
+        Ok(mapped)
+    }
+
+    fn close_mappings(&mut self) -> Result<()> {
+        if self.mapper {
+            let result = process::recovery_cryptsetup(
+                &["close", MAPPER],
+                &[],
+                Duration::from_secs(60),
+                &[],
+            )?;
+            require(
+                result.status.success(),
+                "recovery encryption mapping is busy",
+            )?;
+            self.mapper = false;
+        }
+        if self.inspection {
+            tool(
+                "/usr/bin/dmsetup",
+                &["remove", INSPECTION, "--noudevsync", "--noudevrules"],
+            )?;
+            self.inspection = false;
+        }
+        Ok(())
+    }
+
     fn close_mounts(&mut self) -> Result<()> {
         while let Some(target) = self.mounts.last() {
             tool("/usr/bin/umount", &["--", target.to_str().unwrap()])?;
@@ -362,25 +416,61 @@ impl Drop for Owned {
                 65536,
             );
         }
-        if self.mapper {
-            let _ =
-                process::recovery_cryptsetup(&["close", MAPPER], &[], Duration::from_secs(60), &[]);
-        }
+        let _ = self.close_mappings();
     }
 }
 
-fn unlock(console: &mut Console, device: &Block) -> Result<String> {
+fn mapped_device(name: &str) -> Result<Block> {
+    let output = tool(
+        "/usr/bin/dmsetup",
+        &[
+            "info",
+            "--columns",
+            "--noheadings",
+            "--separator",
+            ":",
+            "--options",
+            "major,minor",
+            name,
+        ],
+    )?;
+    let (major, minor) = std::str::from_utf8(&output)
+        .ok()
+        .and_then(|value| value.trim().split_once(':'))
+        .ok_or_else(|| Error("recovery mapping device number unavailable".into()))?;
+    let number = |part: &str| {
+        part.trim()
+            .parse::<u32>()
+            .map_err(|_| Error("invalid recovery mapping device number".into()))
+    };
+    Block::by_device((number(major)?, number(minor)?))
+}
+
+fn unlock(
+    console: &mut Console,
+    device: &Block,
+    owned: &mut Owned,
+    read_only: bool,
+) -> Result<Block> {
+    let mut arguments = vec!["open", "--type", "luks2", "--key-file", "-"];
+    if read_only {
+        arguments.extend(INSPECTION_OPTIONS);
+    }
+    arguments.extend(["@fd:0", MAPPER]);
     loop {
         let secret = console.secret("Disk password: ")?;
         device.recheck()?;
         let result = process::recovery_cryptsetup(
-            &["open", "--key-file", "-", "@fd:0", MAPPER],
+            &arguments,
             &secret,
             Duration::from_secs(120),
             &[device.file.as_fd()],
         )?;
         if result.status.success() {
-            return Ok(format!("/dev/mapper/{MAPPER}"));
+            owned.mapper = true;
+            let mapped = mapped_device(MAPPER)?;
+            mapped.mapped_from(device, read_only)?;
+            return Ok(mapped);
         }
         console.say("Disk password incorrect, or disk cannot be unlocked. Try again.");
     }
@@ -469,6 +559,7 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
     let mut owned = Owned {
         mounts: Vec::new(),
         mapper: false,
+        inspection: false,
     };
     let listing = tool(
         "/usr/bin/lsblk",
@@ -494,23 +585,24 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
         .collect::<Vec<_>>();
     let (selected, kind, _) = &candidates[console.select(&labels, "system partition")?];
     selected.recheck()?;
-    let unlocked;
-    let system = if kind == "crypto_LUKS" {
-        let mapped = unlock(console, selected)?;
-        owned.mapper = true;
-        unlocked = Block::open(&std::fs::canonicalize(&mapped)?)?;
-        selected.same_physical_disk(&unlocked)?;
-        &unlocked
-    } else {
-        selected
-    };
     let luks = if kind == "crypto_LUKS" {
+        require(
+            probe(selected, "VERSION")?.as_deref() == Some("2"),
+            "enzimOS LUKS2 volume required",
+        )?;
         let uuid = probe(selected, "UUID")?.unwrap_or_default();
         crate::identity::uuid(&uuid)?;
         Some(uuid)
     } else {
         None
     };
+    let mut unlocked = if luks.is_some() {
+        let inspection = owned.inspection_device(selected)?;
+        Some(unlock(console, &inspection, &mut owned, true)?)
+    } else {
+        None
+    };
+    let system = unlocked.as_ref().unwrap_or(selected);
     let filesystem = probe(system, "UUID")?.unwrap_or_default();
     crate::identity::uuid(&filesystem)?;
     require(
@@ -586,7 +678,22 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
     drop(menu);
     drop(volume);
     owned.close_mounts()?;
-    system.same_physical_disk(&esp)?;
+    drop(unlocked.take());
+    owned.close_mappings()?;
+    selected.same_physical_disk(&esp)?;
+    if let Some(expected) = luks.as_deref() {
+        require(
+            probe(selected, "UUID")?.as_deref() == Some(expected),
+            "recovery LUKS identity changed",
+        )?;
+        console.say("Unlock the selected disk again to apply the confirmed restore.");
+        unlocked = Some(unlock(console, selected, &mut owned, false)?);
+    }
+    let system = unlocked.as_ref().unwrap_or(selected);
+    require(
+        probe(system, "UUID")?.as_deref() == Some(filesystem.as_str()),
+        "recovery filesystem identity changed",
+    )?;
     // Log replay is enabled only after the user confirms this retained installation.
     mount_block(system, "btrfs", root_options(false), IndependentGuard::TOP)?;
     owned.mounts.push(top.into());
@@ -611,6 +718,7 @@ pub(crate) fn run(console: &mut Console) -> Result<Value> {
     })?;
     console.say(&format!("ENZIMOS_MEDIA_RESTORE_PASS {result}"));
     console.say("Restore complete. Rebooting into the recovered system.");
+    drop(unlocked);
     drop(owned);
     Ok(result)
 }
@@ -659,6 +767,62 @@ mod mount_tests {
         assert_eq!(root_options(false).split(',').next(), Some("rw"));
         assert!(!root_options(false).contains("nologreplay"));
     }
+
+    #[test]
+    #[ignore = "requires cryptsetup; uses a temporary regular file"]
+    fn inspection_does_not_repair_luks2_metadata() {
+        use std::os::unix::fs::FileExt;
+
+        let image = tempfile::NamedTempFile::new().unwrap();
+        image.as_file().set_len(32 * 1024 * 1024).unwrap();
+        let path = image.path().to_str().unwrap();
+        let cryptsetup = |args: &[&str]| {
+            let result = process::recovery_cryptsetup(
+                args,
+                b"public synthetic LUKS2 fixture password",
+                Duration::from_secs(15),
+                &[],
+            )
+            .unwrap();
+            assert!(result.status.success(), "{:?}", result.status);
+        };
+        cryptsetup(&[
+            "luksFormat",
+            "--type",
+            "luks2",
+            "--batch-mode",
+            "--pbkdf",
+            "pbkdf2",
+            "--pbkdf-force-iterations",
+            "1000",
+            "--key-file",
+            "-",
+            path,
+        ]);
+        // The LUKS2 primary binary header checksum begins at byte 448.
+        let mut before = [0; 512];
+        image.as_file().read_exact_at(&mut before, 0).unwrap();
+        before[448] ^= 1;
+        image
+            .as_file()
+            .write_all_at(&before[448..449], 448)
+            .unwrap();
+        let mut args = vec![
+            "open",
+            "--type",
+            "luks2",
+            "--test-passphrase",
+            "--key-file",
+            "-",
+        ];
+        args.extend(INSPECTION_OPTIONS);
+        args.push(path);
+        cryptsetup(&args);
+        let mut after = [0; 512];
+        image.as_file().read_exact_at(&mut after, 0).unwrap();
+        assert_eq!(before, after);
+    }
+
     #[test]
     fn foreign_esp_on_the_same_disk_cannot_authorize_writes() {
         let foreign =

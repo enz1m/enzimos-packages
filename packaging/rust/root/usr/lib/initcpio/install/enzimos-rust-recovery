@@ -6,7 +6,7 @@ build() {
     for file in /usr/lib/enzimos-native/enzimos-*; do add_binary "$file"; done
     add_full_dir /usr/lib/enzimos-native '*.conf'
     # bash, cp, ls, mkdir and sync serve the installer-media rescue terminal.
-    for tool in cryptsetup blkid findmnt mount umount lsblk modprobe kmod btrfs pacman sbsign sbverify objcopy bash cp ls mkdir sync; do
+    for tool in cryptsetup dmsetup blkid findmnt mount umount lsblk modprobe kmod btrfs pacman sbsign sbverify objcopy bash cp ls mkdir sync; do
         add_binary "/usr/bin/$tool"
     done
     # The distribution's UKI assembler remains an external Python dependency.
