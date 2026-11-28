@@ -2,7 +2,7 @@
 # Prebuilt Rust binaries only; no install hook or service activation.
 pkgname=enzimos-rust-packages
 pkgver=0.2.1
-pkgrel=3
+pkgrel=4
 pkgdesc='enzimOS native runtime binaries'
 arch=('x86_64')
 license=('MIT')
