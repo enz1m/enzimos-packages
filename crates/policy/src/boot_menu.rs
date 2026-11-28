@@ -126,8 +126,8 @@ fn menus(
         " loader /EFI/systemd/systemd-bootx64.efi",
         " graphics on",
         "}",
-        "dont_scan_dirs EFI/enzimos,EFI/systemd,EFI/BOOT",
-        "dont_scan_files vmlinuz-linux,vmlinuz-linux-lts",
+        "dont_scan_dirs +,enzimos-esp:EFI/enzimos,enzimos-esp:EFI/systemd,enzimos-esp:EFI/BOOT",
+        "dont_scan_files +,enzimos-esp:/vmlinuz-linux,enzimos-esp:/vmlinuz-linux-lts",
     ]);
     main.extend(tools(&[]));
     let (flavor, label, candidate) = if let Some(prefix) = default.strip_suffix("linux-lts.conf") {
@@ -256,4 +256,30 @@ pub fn render_live(volume: &crate::boot_volume::Volume, restore_pending: bool) -
     volume.directory(Path::new("loader/entries"))?;
     render(Path::new("/boot"), restore_pending)?;
     volume.recheck()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refind_excludes_duplicate_loaders_only_from_the_enzimos_esp() {
+        let material = menus("linux.conf", |_| Ok(true)).unwrap();
+        let menu = std::str::from_utf8(&material["refind.conf"]).unwrap();
+        assert!(menu.contains("scanfor manual,internal,external,optical"));
+        for directive in ["dont_scan_dirs", "dont_scan_files"] {
+            let exclusions = menu
+                .lines()
+                .find(|line| line.starts_with(directive))
+                .unwrap();
+            assert!(
+                exclusions
+                    .split_once("+,")
+                    .unwrap()
+                    .1
+                    .split(',')
+                    .all(|entry| { entry.starts_with("enzimos-esp:") })
+            );
+        }
+    }
 }
