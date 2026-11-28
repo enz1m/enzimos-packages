@@ -46,20 +46,29 @@ pub(crate) fn decode_info(bytes: &[u8], path: &str) -> Result<(Value, bool)> {
         number(288) & 1 != 0,
     ))
 }
+#[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
+fn read_info(fd: BorrowedFd<'_>, error: &str) -> Result<[u64; 63]> {
+    let mut buffer = [0u64; 63];
+    // BTRFS_IOC_GET_SUBVOL_INFO can return a positive value on success.
+    require(
+        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
+        // open.
+        unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } >= 0,
+        error,
+    )?;
+    Ok(buffer)
+}
 /// Subvolume identity of `fd` at `path`, and whether it is read-only.
 ///
 /// # Errors
 ///
 /// Fails when `fd` is not a Btrfs subvolume.
-#[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
+#[allow(
+    unsafe_code,
+    reason = "Interpret the initialized Btrfs ioctl buffer as bytes."
+)]
 pub fn observe(fd: BorrowedFd<'_>, path: &str) -> Result<(Value, bool)> {
-    let mut buffer = [0u64; 63];
-    require(
-        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
-        // open.
-        unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
-        "Btrfs subvolume identity unavailable",
-    )?;
+    let buffer = read_info(fd, "Btrfs subvolume identity unavailable")?;
     // The aligned buffer has the exact UAPI size; decoding does not borrow beyond it.
     decode_info(
         // SAFETY: `buffer` is 504 initialized bytes.
@@ -69,15 +78,12 @@ pub fn observe(fd: BorrowedFd<'_>, path: &str) -> Result<(Value, bool)> {
 }
 /// Kernel identity of the containing root, including top-level ID5. Directory
 /// inode256 alone does not distinguish different Btrfs subvolumes.
-#[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
+#[allow(
+    unsafe_code,
+    reason = "Interpret the initialized Btrfs ioctl buffer as bytes."
+)]
 pub(crate) fn containing_identity(fd: BorrowedFd<'_>) -> Result<Value> {
-    let mut buffer = [0u64; 63];
-    require(
-        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
-        // open.
-        unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
-        "Btrfs containing root identity unavailable",
-    )?;
+    let buffer = read_info(fd, "Btrfs containing root identity unavailable")?;
     // SAFETY: `buffer` is 504 initialized bytes.
     decode_containing_info(unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), 504) })
 }
@@ -108,15 +114,8 @@ pub(crate) fn decode_containing_info(bytes: &[u8]) -> Result<Value> {
 /// # Errors
 ///
 /// Fails when `fd` is not a subvolume or the time is out of range.
-#[allow(unsafe_code, reason = "Linux syscall ABI (ioctl).")]
 pub fn creation_time(fd: BorrowedFd<'_>) -> Result<i64> {
-    let mut buffer = [0u64; 63];
-    require(
-        // SAFETY: `buffer` is 504 bytes, the size encoded in the Btrfs ioctl number, and `fd` stays
-        // open.
-        unsafe { libc::ioctl(fd.as_raw_fd(), INFO, buffer.as_mut_ptr()) } == 0,
-        "Btrfs creation time unavailable",
-    )?;
+    let buffer = read_info(fd, "Btrfs creation time unavailable")?;
     // btrfs_ioctl_get_subvol_info_args.otime begins at byte 392.
     let seconds =
         i64::try_from(buffer[49]).map_err(|_| Error("Btrfs creation time bound".into()))?;
@@ -243,4 +242,27 @@ pub(crate) fn destroy_readonly_original(
         "original snapshot deletion refused or uncertain; no name fallback/retry",
     )?;
     sync(parent)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use enzimos_platform::{mount_identity, mountinfo};
+    use std::{fs::File, os::fd::AsFd, os::unix::fs::MetadataExt};
+
+    #[test]
+    fn reads_subvolume_info_on_the_running_btrfs_root() {
+        let root = File::open("/").unwrap();
+        let id = mount_identity::id(root.as_fd(), false).unwrap();
+        let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap();
+        let rows = mountinfo::parse(&mountinfo).unwrap();
+        if root.metadata().unwrap().ino() == 256
+            && rows
+                .iter()
+                .any(|row| row.id == id && row.filesystem == "btrfs")
+        {
+            let info = read_info(root.as_fd(), "Btrfs subvolume identity unavailable").unwrap();
+            assert!(info[0] == 5 || info[0] >= 256);
+        }
+    }
 }

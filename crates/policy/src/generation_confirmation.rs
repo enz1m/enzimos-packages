@@ -2,12 +2,24 @@
 //! Confirm a later, actually running managed boot without changing selection.
 use crate::{
     boot_entries, boot_options, boot_volume::Volume, catalog, generation_stage, namespaces,
-    operation, recovery_activation_runtime as activation, root_rebind_boot, subvolume,
-    transition_idle::Snapshot,
+    operation, recovery_activation_runtime as activation, root_rebind_boot, storage_runtime,
+    subvolume, transition_idle::Snapshot,
 };
-use enzimos_platform::{Error, Result, files, json, mount_identity, require, stream_copy};
+use enzimos_platform::{
+    Error, Result, files, json, mount_identity, mountinfo, require, stream_copy,
+};
 use serde_json::{Value, json as value};
-use std::{collections::BTreeMap, os::fd::AsFd, path::Path};
+use std::{
+    collections::BTreeMap,
+    os::fd::{AsFd, BorrowedFd},
+    path::Path,
+};
+
+fn running_root_mount(root: BorrowedFd<'_>, name: &str, rows: &[mountinfo::Row]) -> Result<u64> {
+    let legacy_id = mount_identity::id(root, false)?;
+    storage_runtime::mount_row(rows, "/", Some(&format!("/{name}")), legacy_id)?;
+    mount_identity::id(root, true)
+}
 
 /// Pure binding check; every supplied observation is measured by confirm_locked.
 ///
@@ -180,21 +192,7 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
     require(!readonly, "running generation root must be writable")?;
     let root_identity =
         value!({"path":name,"id":object["id"],"uuid":object["uuid"],"ownership":"not-established"});
-    let root_mount = mount_identity::id(root.as_fd(), true)?;
-    let rows = crate::storage_runtime::rows()?;
-    require(
-        rows.iter()
-            .filter(|row| {
-                row.target == "/"
-                    && row.id == root_mount
-                    && row.filesystem == "btrfs"
-                    && row.root == format!("/{name}")
-                    && row.options.split(',').any(|word| word == "rw")
-            })
-            .count()
-            == 1,
-        "actual root mount differs from publication",
-    )?;
+    let root_mount = running_root_mount(root.as_fd(), name, &storage_runtime::rows()?)?;
     let inventory = generation_stage::inventory(&root)?;
     let kernel = namespaces::kernel_release()?;
     // Both installed kernel bytes must agree, not merely uname's version string.
@@ -284,4 +282,36 @@ pub fn confirm_locked(_lock: &files::Lock) -> Result<Value> {
     transaction.data = next;
     transaction.commit()?;
     Ok(value!({"generation":generation,"confirmation":confirmation,"retirement_enabled":false}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+
+    #[test]
+    fn root_mountinfo_uses_legacy_id_and_kernel_checks_use_unique_id() {
+        let root = File::open("/").unwrap();
+        let legacy_id = mount_identity::id(root.as_fd(), false).unwrap();
+        let unique_id = mount_identity::id(root.as_fd(), true).unwrap();
+        assert_ne!(legacy_id, unique_id);
+        let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap();
+        let rows = mountinfo::parse(&mountinfo).unwrap();
+        assert!(
+            rows.iter()
+                .any(|row| row.target == "/" && row.id == legacy_id)
+        );
+        let fixture = |id| {
+            mountinfo::parse(&format!(
+                "{id} 1 0:32 /enzimos-root / rw - btrfs /dev/root rw"
+            ))
+            .unwrap()
+        };
+        assert_eq!(
+            running_root_mount(root.as_fd(), "enzimos-root", &fixture(legacy_id)).unwrap(),
+            unique_id
+        );
+        assert!(running_root_mount(root.as_fd(), "enzimos-root", &fixture(unique_id)).is_err());
+        assert!(running_root_mount(root.as_fd(), "other-root", &fixture(legacy_id)).is_err());
+    }
 }
